@@ -4360,11 +4360,13 @@ function TenderContractAnalysisBody({
                       <td>{displayValue(item.target_description, "—")}</td>
                       <td>
                         {item.match_decision === "matched"
-                          ? displayValue(
-                              item.matched_source_name,
-                              "Сопоставлен",
-                            )
-                          : "Соответствующий документ не установлен"}
+                          ? displayValue(item.matched_source_name, "Сопоставлен")
+                          : item.match_decision === "partially_matched"
+                            ? `Частично представлен: ${displayValue(
+                                (item.matched_source_names as string[] | undefined)?.join(", "),
+                                "документы не указаны",
+                              )}; полнота требует уточнения`
+                            : "Связь с загруженным документом не установлена"}
                       </td>
                       <td>
                         {displayValue(item.source_name, "Договор")}
@@ -4384,7 +4386,7 @@ function TenderContractAnalysisBody({
           </p>
           {referenceReview.status === "complete" &&
           attachmentReferences.some(
-            (item) => item.match_decision === "unresolved",
+            (item) => item.match_decision !== "matched",
           ) ? (
             <a
               className="button-link secondary"

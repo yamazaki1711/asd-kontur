@@ -128,7 +128,13 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
             (
                 str(item.get("matched_source_name") or "")
                 if str(item.get("match_decision")) == "matched"
-                else "Соответствующий документ не установлен"
+                else (
+                    "Частично представлен: "
+                    + ", ".join(str(name) for name in (item.get("matched_source_names") or []))
+                    + "; полнота требует уточнения"
+                    if str(item.get("match_decision")) == "partially_matched"
+                    else "Связь с загруженным документом не установлена"
+                )
             ),
             ", ".join(
                 part

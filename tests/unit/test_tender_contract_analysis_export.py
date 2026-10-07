@@ -174,7 +174,7 @@ def test_contract_reference_is_visible_in_editable_outputs_without_false_absence
     with zipfile.ZipFile(io.BytesIO(render_tender_contract_analysis_docx(view))) as package:
         report_xml = package.read("word/document.xml").decode("utf-8")
     assert "Annex C" in report_xml
-    assert "Соответствующий документ не установлен" in report_xml
+    assert "Связь с загруженным документом не установлена" in report_xml
     assert "не доказывает отсутствие приложения" in report_xml
     assert "CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED" not in report_xml
     rows = list(
@@ -183,6 +183,43 @@ def test_contract_reference_is_visible_in_editable_outputs_without_false_absence
     reference = next(row for row in rows if row["row_kind"] == "contract_reference")
     assert reference["source_locator_id"] == "locator-a"
     assert reference["state"] == "unresolved"
+
+
+def test_partial_contract_package_evidence_remains_a_clarification() -> None:
+    view = {
+        "status": "drafted",
+        "clauses": [],
+        "issues": [],
+        "disagreement_items": [],
+        "revised_clauses": [],
+        "deliverables": [],
+        "gaps": ["CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED"],
+        "attachment_references": [
+            {
+                "reference_id": "reference-package",
+                "source_quote": "project documentation package",
+                "target_description": "design package",
+                "kind": "drawing",
+                "match_decision": "partially_matched",
+                "matched_source_names": ["Foundation drawings", "Road drawings"],
+                "uncertainty": "Package completeness is unverified.",
+                "source_version_id": "source-contract",
+                "source_locator_id": "contract-locator",
+                "source_name": "Construction contract.docx",
+            }
+        ],
+    }
+    with zipfile.ZipFile(io.BytesIO(render_tender_contract_analysis_docx(view))) as package:
+        report_xml = package.read("word/document.xml").decode("utf-8")
+    assert "Частично представлен" in report_xml
+    assert "Foundation drawings" in report_xml
+    assert "полнота требует уточнения" in report_xml
+    rows = list(
+        csv.DictReader(io.StringIO(render_tender_contract_analysis_csv(view).decode("utf-8-sig")))
+    )
+    reference = next(row for row in rows if row["row_kind"] == "contract_reference")
+    assert reference["state"] == "partially_matched"
+    assert reference["recommendation"]
 
 
 def test_contract_only_input_declares_unperformed_project_cross_checks() -> None:

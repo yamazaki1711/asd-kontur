@@ -804,7 +804,7 @@ class ProductSpineService:
             [
                 item
                 for item in references
-                if isinstance(item, dict) and item.get("match_decision") == "unresolved"
+                if isinstance(item, dict) and item.get("match_decision") != "matched"
             ]
         )
         digest = "sha256:" + hashlib.sha256(data).hexdigest()

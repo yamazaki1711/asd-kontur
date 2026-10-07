@@ -742,7 +742,7 @@ class TenderContractAnalysisRepository:
             gaps.append("CONTRACT_REFERENCE_REVIEW_FAILED")
         if len(active_inventory) > 64:
             gaps.append("CONTRACT_REFERENCE_INVENTORY_LIMIT")
-        if any(item["match_decision"] == "unresolved" for item in attachment_references):
+        if any(item["match_decision"] != "matched" for item in attachment_references):
             gaps.append("CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED")
         if results and not issues:
             gaps.append("CONTRACT_RISKS_NOT_IDENTIFIED_IN_COMPLETED_BATCHES")
@@ -906,7 +906,10 @@ class TenderContractAnalysisRepository:
                 "reviewed_batches": len(reference_results),
                 "scheduled_batches": len({str(job["batch_digest"]) for job in reference_jobs}),
                 "unresolved_references": sum(
-                    item["match_decision"] == "unresolved" for item in attachment_references
+                    item["match_decision"] != "matched" for item in attachment_references
+                ),
+                "partially_matched_references": sum(
+                    item["match_decision"] == "partially_matched" for item in attachment_references
                 ),
             },
             "issues": issues,
@@ -1207,6 +1210,7 @@ def _empty_candidate_projection(*, status: str, gaps: list[str]) -> dict[str, An
             "reviewed_batches": 0,
             "scheduled_batches": 0,
             "unresolved_references": 0,
+            "partially_matched_references": 0,
         },
         "coherence_review": {
             "status": "not_applicable",

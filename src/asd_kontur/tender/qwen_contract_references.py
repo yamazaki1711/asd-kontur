@@ -17,12 +17,12 @@ from typing import cast
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-CONTRACT_REFERENCE_PROFILE = "qwen-contract-references-v2"
+CONTRACT_REFERENCE_PROFILE = "qwen-contract-references-v3"
 CONTRACT_REFERENCE_CONTRACT = "contract-references-candidate@1.0.0"
 _REFERENCE_KINDS = frozenset(
     {"attachment", "technical_assignment", "schedule", "estimate", "drawing", "other"}
 )
-_MATCH_DECISIONS = frozenset({"matched", "unresolved"})
+_MATCH_DECISIONS = frozenset({"matched", "partially_matched", "unresolved"})
 _MAX_CONTEXT_CHARS = 9_000
 _MAX_INVENTORY = 64
 _REFERENCE_SIGNAL = re.compile(
@@ -205,7 +205,9 @@ def parse_contract_references(
         kind = str(item.get("kind") or "")
         decision = str(item.get("match_decision") or "")
         source_id = item.get("matched_source_version_id")
+        source_ids = item.get("matched_source_version_ids", [])
         confidence = item.get("confidence")
+        uncertainty = str(item.get("uncertainty") or "").strip() or None
         if (
             locator not in allowed_text
             or not quote
@@ -217,7 +219,17 @@ def parse_contract_references(
             or isinstance(confidence, bool)
             or not 0 <= float(confidence) <= 1
             or (decision == "matched" and str(source_id or "") not in inventory)
-            or (decision == "unresolved" and source_id is not None)
+            or (decision != "matched" and source_id is not None)
+            or not isinstance(source_ids, list)
+            or len(source_ids) > 8
+            or any(
+                not isinstance(candidate, str) or candidate not in inventory
+                for candidate in source_ids
+            )
+            or len(set(source_ids)) != len(source_ids)
+            or (decision == "matched" and source_ids)
+            or (decision == "unresolved" and source_ids)
+            or (decision == "partially_matched" and (not source_ids or not uncertainty))
         ):
             raise QwenSemanticFailure("qwen_contract_reference_invalid_item")
         identity = (locator, quote.casefold())
@@ -233,8 +245,10 @@ def parse_contract_references(
                 "match_decision": decision,
                 "matched_source_version_id": str(source_id) if source_id is not None else None,
                 "matched_source_name": inventory[str(source_id)] if source_id is not None else None,
+                "matched_source_version_ids": source_ids,
+                "matched_source_names": [inventory[candidate] for candidate in source_ids],
                 "confidence": float(confidence),
-                "uncertainty": str(item.get("uncertainty") or "").strip() or None,
+                "uncertainty": uncertainty,
             }
         )
     return output
@@ -252,13 +266,18 @@ def _prompt(rows: list[dict[str, object]], inventory: Mapping[str, Mapping[str, 
         "приложения, техническое задание, графики, сметы, чертежи и другие документы, "
         "от которых зависит исполнение условия. source_quote — непрерывная дословная цитата "
         "из одного source_locator_id. matched допустим только когда конкретный документ "
-        "в INVENTORY убедительно соответствует ссылке; иначе unresolved. "
+        "в INVENTORY убедительно соответствует ссылке целиком. partially_matched "
+        "допустим только для ссылки на комплект документов, когда один или несколько "
+        "конкретных загруженных файлов убедительно относятся к этому комплекту, но "
+        "полнота комплекта не доказана; перечисли их идентификаторы и объясни предел "
+        "сопоставления в uncertainty. Иначе unresolved. "
         "Не выбирай документ лишь потому, что тема похожа. Не придумывай название, номер "
         "или идентификатор. Верни только JSON вида "
         '{"references":[{"source_locator_id":"id","source_quote":"точная цитата",'
         '"target_description":"что требуется","kind":"attachment|technical_assignment|'
-        'schedule|estimate|drawing|other","match_decision":"matched|unresolved",'
-        '"matched_source_version_id":null,"confidence":0.0,"uncertainty":null}]}.'
+        'schedule|estimate|drawing|other","match_decision":"matched|partially_matched|unresolved",'
+        '"matched_source_version_id":null,"matched_source_version_ids":[],"confidence":0.0,'
+        '"uncertainty":null}]}.'
         "\nCONTEXT:\n"
         + json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
         + "\nINVENTORY:\n"

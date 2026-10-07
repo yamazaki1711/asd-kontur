@@ -154,6 +154,71 @@ def test_unresolved_reference_is_not_declared_missing() -> None:
     assert result[0]["matched_source_name"] is None
 
 
+def test_package_reference_can_be_partially_grounded_without_claiming_completeness() -> None:
+    result = parse_contract_references(
+        json.dumps(
+            {
+                "references": [
+                    {
+                        "source_locator_id": "contract-8",
+                        "source_quote": "project documentation package",
+                        "target_description": "design package",
+                        "kind": "drawing",
+                        "match_decision": "partially_matched",
+                        "matched_source_version_id": None,
+                        "matched_source_version_ids": ["design-a", "design-b"],
+                        "confidence": 0.8,
+                        "uncertainty": (
+                            "Two admitted volumes are identified; "
+                            "package completeness is unverified."
+                        ),
+                    }
+                ]
+            }
+        ),
+        allowed_text={"contract-8": "Execute work under the project documentation package."},
+        inventory={"design-a": "Foundation drawings", "design-b": "Road drawings"},
+    )
+    assert result[0]["matched_source_names"] == ["Foundation drawings", "Road drawings"]
+    assert result[0]["match_decision"] == "partially_matched"
+
+
+@pytest.mark.parametrize(
+    "source_ids,uncertainty",
+    [
+        ([], "Package completeness is unverified."),
+        (["outside-inventory"], "Package completeness is unverified."),
+        (["design-a", "design-a"], "Package completeness is unverified."),
+        (["design-a"], None),
+    ],
+)
+def test_partial_package_refuses_unsupported_or_unexplained_evidence(
+    source_ids: list[str], uncertainty: str | None
+) -> None:
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_reference_invalid_item"):
+        parse_contract_references(
+            json.dumps(
+                {
+                    "references": [
+                        {
+                            "source_locator_id": "contract-8",
+                            "source_quote": "project documentation package",
+                            "target_description": "design package",
+                            "kind": "drawing",
+                            "match_decision": "partially_matched",
+                            "matched_source_version_id": None,
+                            "matched_source_version_ids": source_ids,
+                            "confidence": 0.8,
+                            "uncertainty": uncertainty,
+                        }
+                    ]
+                }
+            ),
+            allowed_text={"contract-8": "Execute work under the project documentation package."},
+            inventory={"design-a": "Foundation drawings"},
+        )
+
+
 def test_output_exhaustion_splits_only_the_bounded_input(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

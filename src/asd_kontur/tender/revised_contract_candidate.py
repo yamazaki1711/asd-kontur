@@ -185,7 +185,7 @@ def render_revised_contract_source_package(
         (
             item
             for item in _records(view.get("attachment_references"))
-            if item.get("match_decision") == "unresolved"
+            if item.get("match_decision") != "matched"
         ),
         key=lambda item: (
             str(item.get("source_name") or ""),
@@ -359,6 +359,7 @@ def render_unresolved_reference_register(
             "Страница/лист",
             "Дословная ссылка",
             "Какой документ требуется установить",
+            "Частично сопоставленные файлы",
             "Причина неопределённости",
             "Идентификатор источника",
         )
@@ -370,6 +371,7 @@ def render_unresolved_reference_register(
             str(item.get("source_page") or ""),
             str(item.get("source_quote") or ""),
             str(item.get("target_description") or ""),
+            ", ".join(str(name) for name in (item.get("matched_source_names") or [])),
             str(item.get("uncertainty") or ""),
             str(item.get("source_locator_id") or ""),
         )

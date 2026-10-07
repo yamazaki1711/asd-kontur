@@ -275,8 +275,9 @@ def test_revised_contract_package_lists_unresolved_references_without_claiming_a
                 "source_locator_id": "locator-a",
                 "source_quote": "technical assignment",
                 "target_description": "Technical assignment",
-                "uncertainty": "Several candidate files",
-                "match_decision": "unresolved",
+                "uncertainty": "Only one of several referenced volumes is admitted",
+                "match_decision": "partially_matched",
+                "matched_source_names": ["Volume A"],
             },
             {
                 "reference_id": "reference-c",
@@ -305,7 +306,10 @@ def test_revised_contract_package_lists_unresolved_references_without_claiming_a
     rows = list(csv.DictReader(io.StringIO(register.decode("utf-8-sig"))))
     assert [row["Идентификатор источника"] for row in rows] == ["locator-a", "locator-b"]
     assert rows[1]["Дословная ссылка"] == "'=Appendix B governs scope"
-    assert rows[0]["Причина неопределённости"] == "Several candidate files"
+    assert rows[0]["Причина неопределённости"] == (
+        "Only one of several referenced volumes is admitted"
+    )
+    assert rows[0]["Частично сопоставленные файлы"] == "Volume A"
     assert manifest["unresolved_reference_count"] == 2
     assert manifest["unresolved_references"] == {
         "entry": "unresolved-references.csv",

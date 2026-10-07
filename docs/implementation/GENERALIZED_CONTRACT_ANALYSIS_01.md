@@ -1,5 +1,32 @@
 # Generalized Contract Analysis 01
 
+## Partial contract-package evidence — 2026-10-08 source checkpoint
+
+The autonomous v2 reviewer finished seven of seven batches. It found 39
+contract-document references: three exact admitted-source matches and 36
+unresolved links. A bounded read of model uncertainty showed a generic
+representation gap: a contract can reference a whole design/document package,
+while the task could previously persist only one exact file match or an
+unresolved link. Individual admitted volumes do not prove that the whole
+package was supplied.
+
+Profile `qwen-contract-references-v3` therefore permits a third decision,
+`partially_matched`, only for package-level references. Qwen must name up to
+eight admitted source-version IDs and state why completeness remains uncertain.
+The deterministic validator rejects invented, duplicate or unexplained source
+identities. The contract view, editable report, unresolved-reference register
+and UI show those files as partial evidence while retaining the clarification
+gap; partial evidence is never counted as a complete match. Migration
+`0141_contract_reference_partial_package` permits v3 results without rewriting
+v1/v2 history and guards downgrade after accepted v3 output.
+
+This is a generic source-relationship mechanism, not a claim that this owner's
+contract appendices are complete. Focused checks passed 87/87, including
+changed-name package examples and fail-closed invalid outputs. The isolated
+PostgreSQL migration roundtrip passed 1/1; frontend typecheck, lint and build
+passed. Public deployment and live v3 interpretation are not yet claimed in
+this source checkpoint.
+
 ## Source-located contract-reference inventory — 2026-10-08 source checkpoint
 
 The v1 autonomous reference reviewer received a roster of admitted filenames

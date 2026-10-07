@@ -102,7 +102,7 @@ def render_tender_contract_analysis_csv(view: Mapping[str, Any]) -> bytes:
                 state=item.get("match_decision", ""),
                 recommendation=(
                     "Verify referenced document against admitted contract package"
-                    if item.get("match_decision") == "unresolved"
+                    if item.get("match_decision") != "matched"
                     else ""
                 ),
             )
