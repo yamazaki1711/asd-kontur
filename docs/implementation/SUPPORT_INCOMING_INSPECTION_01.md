@@ -438,3 +438,25 @@ The isolated regression covers field-only admission, subsequent design upload,
 worker access and source selection; no project-specific inference or public
 project data repair was used. This boundary does not by itself qualify all
 Support, Tender, Audit or Restoration outcomes.
+
+This boundary was deployed from exact source SHA
+`c4c12d302e80af7019080b582e166d5b77084c6d` on 2026-10-08.
+The pre-migration public backup is private at
+`~/.asd-kontur/public-demo/backups/0139-field-role-c4c12d3/pre-migration.dump`
+with SHA-256 `7b73fd68e7bfc2a62f64360f3bd9dddf10345ce7a2f2ff1b20d5345928dc30fb`.
+It restored on separate PostgreSQL :5544 and passed 0138 → 0139,
+0139 → 0138 and 0138 → 0139. The exact archived release passed 28/28
+focused isolated PostgreSQL/worker/API cases plus frontend typecheck,
+lint and build; 4/4 private launchd staging passed. After the familiar
+immediate bootout/bootstrap race, one bounded bootstrap retry started all
+four supervised application roles on the new SHA. Public API readiness
+reports `0139_field_document_project_role_boundary`; frontend HTTP 200 and
+the unauthenticated balance-route 401 passed. The retained real workspace
+still has 21 source versions, zero material-use confirmations and zero
+material applications. The normalized platform-only data fingerprint stayed
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+Qwen PID 9105 and NTD worker PID 1356 remained running. Prior plists remain
+private under
+`~/.asd-kontur/public-demo/launchd-backups/20261008-pre-c4c12d3-field-role/`.
+An authenticated owner-browser upload and full product acceptance remain
+unverified.
