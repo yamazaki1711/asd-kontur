@@ -249,3 +249,16 @@ of decisions. This is a professional requirement-to-decision view, not a
 work-readiness or KS/payment approval. Isolated PostgreSQL/API checks and
 frontend typecheck/lint pass; this follow-up is not in the public release
 named above until a separate controlled cutover.
+
+The read model also distinguishes a current decision from immutable history.
+A later inspection, batch/work version, admission decision or superseded
+work-material requirement makes the old decision historical in the Support
+view. The requirement table uses only current decisions and never treats an
+old `admitted` row as permission to use material after its basis changes.
+This is a deterministic projection; the historical row is preserved for
+traceability and deletion remains workspace-scoped.
+The Support writer independently rechecks the current batch/work versions,
+latest preflight, current work-material requirement and active grant immediately
+before appending a decision; the application-role precheck is not the sole
+authority boundary. No claim is made that this replaces later material
+application, consumption balance or document/payment prerequisites.

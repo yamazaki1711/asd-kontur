@@ -3235,7 +3235,10 @@ function MaterialAdmissionPanel({ workspaceId }: { workspaceId: string }) {
                             Number(item.work_instance_version),
                       ),
                     )
-                    .filter((decision) => decision !== undefined);
+                    .filter(
+                      (decision): decision is NonNullable<typeof decision> =>
+                        decision?.current_decision === true,
+                    );
                   return (
                     <tr key={String(item.material_requirement_id)}>
                       <td>
@@ -3262,7 +3265,7 @@ function MaterialAdmissionPanel({ workspaceId }: { workspaceId: string }) {
                                 ["decisions", "batches"].includes(name),
                               )
                             ? "История показана не полностью"
-                            : "Нет решения о допуске"}
+                            : "Нет действующего решения о допуске"}
                       </td>
                     </tr>
                   );
@@ -3571,6 +3574,9 @@ function MaterialAdmissionPanel({ workspaceId }: { workspaceId: string }) {
                 {outcomeLabels[String(item.outcome)] ??
                   "Решение требует проверки"}{" "}
                 — {String(item.decided_at)}
+                {item.current_decision === true
+                  ? " (действующее основание)"
+                  : " (историческое решение — проверить заново)"}
                 {Array.isArray(item.reason_codes) && item.reason_codes.length
                   ? `; причины: ${item.reason_codes.map((code) => reasonLabels[String(code)] ?? "неизвестная причина").join(", ")}`
                   : ""}

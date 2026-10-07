@@ -299,6 +299,8 @@ def test_material_admission_requires_bound_basis_and_survives_api_reload(
     accepted = service.record(**command)
     assert accepted["outcome"] == "admitted"
     assert accepted["reason_codes"] == []
+    current = service.context(owner_identity_id=owner, workspace_id=tenant.workspace_id)
+    assert current["decisions"][0]["current_decision"] is True
     assert service.record(**command)["admission_id"] == accepted["admission_id"]
     with pytest.raises(MaterialAdmissionError, match="idempotency_conflict"):
         service.record(**{**command, "delivered_quantity": Decimal("13.000")})
@@ -372,6 +374,9 @@ def test_material_admission_requires_bound_basis_and_survives_api_reload(
     )
     assert quarantined["outcome"] == "quarantined"
     assert "INCOMING_CONTROL_NONCONFORMING" in quarantined["reason_codes"]
+    after_failure = service.context(owner_identity_id=owner, workspace_id=tenant.workspace_id)
+    assert after_failure["decisions"][0]["current_decision"] is True
+    assert after_failure["decisions"][1]["current_decision"] is False
 
     with postgres_environment.owner_engine.begin() as connection:
         connection.execute(
@@ -391,6 +396,8 @@ def test_material_admission_requires_bound_basis_and_survives_api_reload(
         )
     with pytest.raises(MaterialAdmissionError, match="work_material_not_specified"):
         service.record(**{**command, "idempotency_key": "material-obsolete-work-requirement"})
+    after_change = service.context(owner_identity_id=owner, workspace_id=tenant.workspace_id)
+    assert all(item["current_decision"] is False for item in after_change["decisions"])
 
     transition(
         PostgresLifecycleRepository(postgres_environment.lifecycle_engine),

@@ -138,10 +138,50 @@ class MaterialAdmissionService:
                     "ORDER BY g.grant_id LIMIT 201"
                 ),
                 "decisions": (
-                    "SELECT admission_id,material_batch_id,material_batch_version,work_instance_id,"
-                    "work_instance_version,outcome,reason_codes,admitted_at AS decided_at "
-                    "FROM workspace.support_material_admissions WHERE organization_id=:o AND "
-                    "workspace_id=:w ORDER BY admitted_at DESC,admission_id DESC LIMIT 201"
+                    "SELECT a.admission_id,a.material_batch_id,a.material_batch_version,"
+                    "a.work_instance_id,a.work_instance_version,a.outcome,a.reason_codes,"
+                    "a.admitted_at AS decided_at,"
+                    "(a.material_batch_version=(SELECT max(b.version) FROM "
+                    "workspace.material_batch_versions b WHERE b.organization_id=a.organization_id "
+                    "AND b.workspace_id=a.workspace_id AND "
+                    "b.material_batch_id=a.material_batch_id) "
+                    "AND a.work_instance_version=(SELECT max(wi.version) FROM "
+                    "workspace.work_instance_versions wi WHERE "
+                    "wi.organization_id=a.organization_id "
+                    "AND wi.workspace_id=a.workspace_id AND "
+                    "wi.work_instance_id=a.work_instance_id) "
+                    "AND a.incoming_control_id=(SELECT p.preflight_id FROM "
+                    "workspace.support_incoming_inspection_preflights p WHERE "
+                    "p.organization_id=a.organization_id AND p.workspace_id=a.workspace_id "
+                    "AND p.material_batch_id=a.material_batch_id AND "
+                    "p.material_batch_version=a.material_batch_version "
+                    "ORDER BY p.submitted_at DESC,p.preflight_id DESC LIMIT 1) "
+                    "AND a.admission_id=(SELECT d.admission_id FROM "
+                    "workspace.support_material_admissions d WHERE "
+                    "d.organization_id=a.organization_id "
+                    "AND d.workspace_id=a.workspace_id AND d.material_batch_id=a.material_batch_id "
+                    "AND d.work_instance_id=a.work_instance_id ORDER BY d.admitted_at DESC,"
+                    "d.admission_id DESC LIMIT 1) "
+                    "AND EXISTS(SELECT 1 FROM workspace.material_requirement_versions r "
+                    "JOIN workspace.material_batch_versions b ON "
+                    "b.organization_id=r.organization_id AND b.workspace_id=r.workspace_id "
+                    "AND b.material_batch_id=a.material_batch_id AND "
+                    "b.version=a.material_batch_version AND "
+                    "b.material_class_id=r.material_class_id AND "
+                    "b.material_class_version=r.material_class_version WHERE "
+                    "r.organization_id=a.organization_id AND r.workspace_id=a.workspace_id "
+                    "AND r.work_instance_id=a.work_instance_id AND "
+                    "r.work_instance_version=a.work_instance_version AND "
+                    "r.applicability='applicable' AND "
+                    "r.status IN ('required','conditional','satisfied') AND "
+                    "r.version=(SELECT max(rv.version) FROM "
+                    "workspace.material_requirement_versions rv "
+                    "WHERE rv.organization_id=r.organization_id AND rv.workspace_id=r.workspace_id "
+                    "AND rv.material_requirement_id=r.material_requirement_id))) "
+                    "AS current_decision "
+                    "FROM workspace.support_material_admissions a WHERE a.organization_id=:o "
+                    "AND a.workspace_id=:w ORDER BY a.admitted_at DESC,"
+                    "a.admission_id DESC LIMIT 201"
                 ),
             }
             result: dict[str, Any] = {}
@@ -470,6 +510,45 @@ class MaterialAdmissionService:
             )
             if current_grant != professional_grant_version:
                 raise MaterialAdmissionError("material_admission_professional_grant_unavailable")
+            latest_versions = session.execute(
+                sa.text(
+                    "SELECT (SELECT max(version) FROM workspace.material_batch_versions WHERE "
+                    "organization_id=:o AND workspace_id=:w AND material_batch_id=:batch),"
+                    "(SELECT max(version) FROM workspace.work_instance_versions WHERE "
+                    "organization_id=:o AND workspace_id=:w AND work_instance_id=:work)"
+                ),
+                {"o": organization_id, "w": workspace_id, "batch": material_batch_id,
+                 "work": work_instance_id},
+            ).one()
+            if (
+                latest_versions[0] != material_batch_version
+                or latest_versions[1] != work_instance_version
+            ):
+                raise MaterialAdmissionError("material_admission_source_version_stale")
+            current_requirement = session.scalar(
+                sa.text(
+                    "SELECT 1 FROM workspace.material_requirement_versions r WHERE "
+                    "r.organization_id=:o AND r.workspace_id=:w AND r.work_instance_id=:work "
+                    "AND r.work_instance_version=:work_version AND r.material_class_id=:class "
+                    "AND r.material_class_version=:class_version AND "
+                    "r.applicability='applicable' AND "
+                    "r.status IN ('required','conditional','satisfied') AND "
+                    "r.version=(SELECT max(v.version) FROM "
+                    "workspace.material_requirement_versions v "
+                    "WHERE v.organization_id=r.organization_id AND v.workspace_id=r.workspace_id "
+                    "AND v.material_requirement_id=r.material_requirement_id) LIMIT 1"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "work": work_instance_id,
+                    "work_version": work_instance_version,
+                    "class": batch["material_class_id"],
+                    "class_version": batch["material_class_version"],
+                },
+            )
+            if current_requirement != 1:
+                raise MaterialAdmissionError("material_admission_work_material_not_specified")
             prior = (
                 session.execute(
                     sa.text(
