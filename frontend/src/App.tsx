@@ -6132,6 +6132,9 @@ export function ProjectEngineeringResult({
   const description = (project.description ?? {}) as Record<string, unknown>;
   const location = (project.location ?? {}) as Record<string, unknown>;
   const foundation = (project.foundation ?? {}) as Record<string, unknown>;
+  const projectAmbiguities = Array.isArray(project.ambiguities)
+    ? (project.ambiguities as Record<string, unknown>[])
+    : [];
 
   if (!Object.keys(model).length) return null;
   if (section === "general") {
@@ -6159,6 +6162,39 @@ export function ProjectEngineeringResult({
               {displayValue(project.status, "Сформировано частично")}
             </StatusPill>
           </div>
+          {projectAmbiguities.length > 0 ? (
+            <section aria-label="Несогласованные сведения об объекте">
+              <h3>Сведения об объекте требуют уточнения</h3>
+              {projectAmbiguities.map((ambiguity, ambiguityIndex) => {
+                const alternatives = Array.isArray(ambiguity.alternatives)
+                  ? (ambiguity.alternatives as Record<string, unknown>[])
+                  : [];
+                const fieldLabel =
+                  ambiguity.field === "purpose"
+                    ? "Назначение объекта"
+                    : ambiguity.field === "object_name" || ambiguity.field === "project_name"
+                      ? "Наименование объекта"
+                      : "Характеристика объекта";
+                return (
+                  <div key={`${String(ambiguity.field)}-${String(ambiguityIndex)}`}>
+                    <p>{fieldLabel}: в документах приведены разные сведения.</p>
+                    <ul>
+                      {alternatives.map((alternative, alternativeIndex) => (
+                        <li key={`${String(alternative.value)}-${String(alternativeIndex)}`}>
+                          {displayValue(alternative.value)} —{" "}
+                          <ProjectSourceLinks
+                            locatorIds={alternative.source_locator_ids}
+                            workspaceId={workspaceId}
+                            modeSlug={modeSlug}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </section>
+          ) : null}
           <div className="metrics">
             <Metric
               label="Сооружения и участки"

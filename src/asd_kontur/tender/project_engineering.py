@@ -2086,6 +2086,7 @@ def _project_overview(
     verified = definition.get("fields")
     verified = dict(verified) if isinstance(verified, Mapping) else {}
     grouped: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))
+    ambiguities: list[dict[str, Any]] = []
     for raw in fields:
         row = dict(raw)
         key = str(row.get("label") or row.get("field_key") or "")
@@ -2127,6 +2128,33 @@ def _project_overview(
             # A tie between independent source groups is unresolved evidence,
             # not a license to publish whichever wording happens to be longer.
             if independent_sources <= runner_up_sources:
+                ambiguities.append(
+                    {
+                        "field": keys[0],
+                        "alternatives": [
+                            {
+                                "value": max(
+                                    candidate_rows,
+                                    key=lambda row: len(
+                                        str(row.get("normalized_value") or row.get("value") or "")
+                                    ),
+                                ).get("normalized_value")
+                                or candidate_rows[0].get("value"),
+                                "source_count": len(
+                                    {str(row.get("source_version_id")) for row in candidate_rows}
+                                ),
+                                "source_locator_ids": sorted(
+                                    {
+                                        str(row.get("source_locator_id"))
+                                        for row in candidate_rows
+                                        if row.get("source_locator_id")
+                                    }
+                                ),
+                            }
+                            for _, candidate_rows in ranked
+                        ],
+                    }
+                )
                 return None
         representative = max(
             rows,
@@ -2182,6 +2210,7 @@ def _project_overview(
         "description": description,
         "location": location,
         "foundation": foundation,
+        "ambiguities": ambiguities,
         "status": "Установлено частично"
         if not (name and purpose and composition)
         else "Установлено",

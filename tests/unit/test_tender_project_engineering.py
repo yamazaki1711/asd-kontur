@@ -3871,6 +3871,23 @@ def test_project_overview_uses_project_purpose_but_does_not_pick_tied_conflicts(
     )
     assert conflicted["purpose"] is None
     assert "Назначение объекта" in conflicted["missing_information"]
+    assert conflicted["ambiguities"] == [
+        {
+            "field": "purpose",
+            "alternatives": [
+                {
+                    "value": "Build a quay",
+                    "source_count": 1,
+                    "source_locator_ids": ["b1"],
+                },
+                {
+                    "value": "Repair a quay",
+                    "source_count": 1,
+                    "source_locator_ids": ["a1"],
+                },
+            ],
+        }
+    ]
 
 
 def test_project_status_becomes_established_after_composition_is_assembled() -> None:
