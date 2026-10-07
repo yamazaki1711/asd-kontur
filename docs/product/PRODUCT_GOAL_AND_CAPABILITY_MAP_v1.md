@@ -259,6 +259,19 @@ The DOCX reopened and converted to a 36-page PDF; three sampled pages were
 visually inspected. This is not all-page or browser acceptance, a new
 engineering conclusion, a participation decision, or a mode PASS.
 
+The 7 October Tender continuation reached release
+`85628fda3a1cbb69bde78bcee3b164cefb767b12` without a schema change.
+The earlier `199a6b1` checkpoint added an optional contractor-supplied cost
+build-up; the live owner's decision remains insufficient-input because no
+company/cost assessment was supplied. The later checkpoint corrected a generic
+material-scope false-positive path: multiple distinct item-property values on
+one side are now an unresolved item-mapping question, not automatically a
+single material mismatch. In the owner's read-only projection, one of seven
+material comparisons moved to that ambiguity state while one independently
+single-valued material mismatch remains. The owner workspace was not reset or
+manually reprocessed; Qwen and NTD processes were not restarted. These are
+professional-quality improvements, not FFC-02 acceptance.
+
 For each row, the detailed acceptance record must additionally name the
 tested release, delivered release, actual observed result and remaining
 blocker. Until that evidence exists, implementation or a passing unit test is
