@@ -30,6 +30,16 @@ source clause, the table says the clause/document need clarification rather
 than manufacturing a locator. A changed-source test and read-only render of
 the live structured view confirmed that first-page risks are now traceable.
 
+Exact follow-up source `bfd0e76067cf2c599fd59e3cf504ec889fa26bbc`
+is deployed to the same four supervised roles from
+`~/.asd-kontur/public-demo/releases/20261008-bfd0e76-contract-risk-sources`.
+The exact release passed 70/70 focused contract/report tests and Ruff; its
+frontend source/build and migration are unchanged. The cutover occurred with
+no queued, leased or running durable job. API readiness passed; Qwen and NTD
+retained their PIDs and the platform-data fingerprint remained
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+The owner-authenticated browser download remains unverified.
+
 ## Bounded acceptance
 
 A changed-contract unit case verifies the professional section order and that
