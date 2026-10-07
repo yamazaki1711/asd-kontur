@@ -61,6 +61,10 @@ from asd_kontur.support.field_commands import (
     SupportFieldCommandError,
     SupportFieldCommandService,
 )
+from asd_kontur.support.incoming_inspection_postgres import (
+    IncomingInspectionError,
+    IncomingInspectionRepository,
+)
 from asd_kontur.support.production_postgres import SupportProductionError
 from asd_kontur.support.release_readiness import (
     SupportReleaseReadinessService,
@@ -109,6 +113,8 @@ from .schemas import (
     FormIdPackageRequest,
     GenerationStartView,
     HealthView,
+    IncomingInspectionRequest,
+    IncomingInspectionView,
     JobCancellationRequest,
     JobView,
     KnowledgeStatusView,
@@ -203,6 +209,7 @@ class ApplicationContainer:
             else None
         )
         self.support_scope_readiness = SupportScopeReadinessService(engine)
+        self.incoming_inspections = IncomingInspectionRepository(engine)
         self.support_release_readiness = SupportReleaseReadinessService(
             engine, self.support_command_engine
         )
@@ -364,6 +371,13 @@ def _install_middleware(app: FastAPI) -> None:
     ) -> JSONResponse:
         status_code = 404 if exc.code.endswith("not_found") else 409
         return _error(request, exc.code, status_code)
+
+    @app.exception_handler(IncomingInspectionError)
+    async def incoming_inspection_error(
+        request: Request, exc: IncomingInspectionError
+    ) -> JSONResponse:
+        status_code = 404 if str(exc).endswith("not_found") else 409
+        return _error(request, str(exc), status_code)
 
     @app.exception_handler(SupportFieldCommandError)
     async def support_field_command_error(
@@ -1615,6 +1629,44 @@ def _api_router() -> APIRouter:
             work_package_id=work_package_id,
         )
         return SupportProductionView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/incoming-inspections",
+        response_model=IncomingInspectionView,
+        status_code=201,
+        tags=["support-production"],
+    )
+    def submit_incoming_inspection(
+        request: Request,
+        workspace_id: UUID,
+        payload: IncomingInspectionRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> IncomingInspectionView:
+        value = _container(request).incoming_inspections.submit(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            material_name=payload.material_name,
+            batch_reference=payload.batch_reference,
+            checks=[check.model_dump() for check in payload.checks],
+            idempotency_key=payload.idempotency_key,
+        )
+        return IncomingInspectionView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/support/incoming-inspections",
+        response_model=list[IncomingInspectionView],
+        tags=["support-production"],
+    )
+    def list_incoming_inspections(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> list[IncomingInspectionView]:
+        values = _container(request).incoming_inspections.list(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return [IncomingInspectionView(**jsonable_encoder(value)) for value in values]
 
     @router.get(
         "/workspaces/{workspace_id}/support/contract-execution-conditions.csv",

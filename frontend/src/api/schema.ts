@@ -1251,6 +1251,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/support/incoming-inspections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Incoming Inspections */
+        get: operations["list_incoming_inspections_api_v1_workspaces__workspace_id__support_incoming_inspections_get"];
+        put?: never;
+        /** Submit Incoming Inspection */
+        post: operations["submit_incoming_inspection_api_v1_workspaces__workspace_id__support_incoming_inspections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/processes": {
         parameters: {
             query?: never;
@@ -1347,6 +1365,23 @@ export interface paths {
         put?: never;
         /** Review Contract Revision */
         post: operations["review_contract_revision_api_v1_workspaces__workspace_id__tender_contract_revisions__candidate_id__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tender/contract-unresolved-references.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Contract References Export */
+        get: operations["tender_contract_references_export_api_v1_workspaces__workspace_id__tender_contract_unresolved_references_csv_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1965,6 +2000,58 @@ export interface components {
              * @enum {string}
              */
             status: "live" | "ready" | "not_ready";
+        };
+        /** IncomingInspectionCheck */
+        IncomingInspectionCheck: {
+            /**
+             * Basis
+             * @default
+             */
+            basis: string;
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "quality_documents" | "specified_standard" | "marking" | "visual_condition" | "shelf_life" | "delivery_quantity" | "storage_conditions" | "incoming_log";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "passed" | "failed" | "pending" | "not_applicable";
+        };
+        /** IncomingInspectionRequest */
+        IncomingInspectionRequest: {
+            /** Batch Reference */
+            batch_reference: string;
+            /** Checks */
+            checks: components["schemas"]["IncomingInspectionCheck"][];
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Material Name */
+            material_name: string;
+        };
+        /** IncomingInspectionView */
+        IncomingInspectionView: {
+            /** Batch Reference */
+            batch_reference: string;
+            /** Material Name */
+            material_name: string;
+            /** Payload Digest */
+            payload_digest: string;
+            /**
+             * Preflight Id
+             * Format: uuid
+             */
+            preflight_id: string;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
         };
         /** JobCancellationRequest */
         JobCancellationRequest: {
@@ -5885,6 +5972,74 @@ export interface operations {
             };
         };
     };
+    list_incoming_inspections_api_v1_workspaces__workspace_id__support_incoming_inspections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomingInspectionView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_incoming_inspection_api_v1_workspaces__workspace_id__support_incoming_inspections_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IncomingInspectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomingInspectionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     configure_support_scope_api_v1_workspaces__workspace_id__support_processes_post: {
         parameters: {
             query?: never;
@@ -6071,6 +6226,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContractRevisionReviewView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_contract_references_export_api_v1_workspaces__workspace_id__tender_contract_unresolved_references_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

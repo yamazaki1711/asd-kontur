@@ -914,6 +914,7 @@ class PostgresWorkspaceStorageAdapter:
         "workspace.support_offline_reconciliations",
         "workspace.support_offline_observations",
         "workspace.support_control_results",
+        "workspace.support_incoming_inspection_preflights",
         "workspace.support_material_admissions",
         "workspace.support_work_readiness_evaluations",
         "workspace.support_professional_grants",

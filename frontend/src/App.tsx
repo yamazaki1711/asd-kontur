@@ -2620,6 +2620,7 @@ function SupportProductionPage() {
       title="Исполнительная документация"
       lead="Требования к документам, состав комплекта, реестр и подготовка поддержанных форм."
     >
+      <IncomingInspectionPanel workspaceId={workspaceId} />
       <QueryState query={production}>
         {(value) => (
           <SupportProductionBody
@@ -2668,6 +2669,89 @@ function SupportProductionPage() {
         )}
       </QueryState>
     </Page>
+  );
+}
+
+const INCOMING_INSPECTION_CHECKS = [
+  ["quality_documents", "Паспорта и сертификаты", "Документ"],
+  ["specified_standard", "Соответствие стандарту или ТУ", "Документ"],
+  ["marking", "Маркировка партии", "Осмотр"],
+  ["visual_condition", "Визуальное состояние", "Осмотр"],
+  ["shelf_life", "Срок годности", "Документ и осмотр"],
+  ["delivery_quantity", "Количество по накладной", "Документ и осмотр"],
+  ["storage_conditions", "Условия хранения", "Осмотр"],
+  ["incoming_log", "Запись в журнале входного контроля", "Учёт"],
+] as const;
+
+type IncomingInspectionCheck = components["schemas"]["IncomingInspectionCheck"];
+
+function IncomingInspectionPanel({ workspaceId }: { workspaceId: string }) {
+  const queryClient = useQueryClient();
+  const [materialName, setMaterialName] = useState("");
+  const [batchReference, setBatchReference] = useState("");
+  const [requestKey, setRequestKey] = useState(() => globalThis.crypto.randomUUID());
+  const [checks, setChecks] = useState<IncomingInspectionCheck[]>(
+    INCOMING_INSPECTION_CHECKS.map(([key]) => ({ key, state: "pending", basis: "" })),
+  );
+  const records = useQuery({
+    queryKey: ["support-incoming-inspections", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/support/incoming-inspections",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  const submit = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/incoming-inspections",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: {
+            material_name: materialName,
+            batch_reference: batchReference,
+            checks,
+            idempotency_key: requestKey,
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["support-incoming-inspections", workspaceId],
+      });
+    },
+  });
+  const updateCheck = (key: IncomingInspectionCheck["key"], patch: Partial<IncomingInspectionCheck>) => {
+    setChecks((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item));
+    setRequestKey(globalThis.crypto.randomUUID());
+  };
+  return (
+    <section className="panel">
+      <h2>Входной контроль материалов</h2>
+      <p>Лист предварительной проверки партии. Заполнение не означает приёмку материала или разрешение на применение: фактический осмотр и решение остаются за ответственным лицом.</p>
+      <form onSubmit={(event) => { event.preventDefault(); submit.mutate(); }}>
+        <div className="form-row">
+          <label>Материал или изделие<input required minLength={2} maxLength={200} value={materialName} onChange={(event) => { setMaterialName(event.target.value); setRequestKey(globalThis.crypto.randomUUID()); }} /></label>
+          <label>Партия / накладная<input required maxLength={200} value={batchReference} onChange={(event) => { setBatchReference(event.target.value); setRequestKey(globalThis.crypto.randomUUID()); }} /></label>
+        </div>
+        <div className="table-wrap"><table><thead><tr><th>Проверка</th><th>Тип</th><th>Состояние</th><th>Основание / замечание</th></tr></thead><tbody>
+          {INCOMING_INSPECTION_CHECKS.map(([key, label, kind]) => {
+            const check = checks.find((item) => item.key === key)!;
+            return <tr key={key}><td>{label}</td><td>{kind}</td><td><select value={check.state} onChange={(event) => updateCheck(key, { state: event.target.value as IncomingInspectionCheck["state"] })}><option value="pending">Не проверено</option><option value="passed">Соответствует</option><option value="failed">Несоответствие</option><option value="not_applicable">Неприменимо</option></select></td><td><input aria-label={`Основание: ${label}`} maxLength={600} value={check.basis} onChange={(event) => updateCheck(key, { basis: event.target.value })} /></td></tr>;
+          })}
+        </tbody></table></div>
+        <button type="submit" disabled={submit.isPending}>Сохранить лист проверки</button>
+        {submit.error ? <p role="alert">Не удалось сохранить проверку: {String(submit.error)}</p> : null}
+      </form>
+      {records.data?.length ? <div><h3>Сохранённые проверки</h3><ul>{records.data.map((record) => {
+        const result = record.result as { outcome?: string; actions?: { check_key: string; action: string }[] };
+        return <li key={record.preflight_id}><details><summary><strong>{record.material_name}</strong> — {record.batch_reference}: {result.outcome === "nonconforming" ? "Несоответствие — изолировать партию" : result.outcome === "incomplete" ? "Проверка не завершена" : "Подготовлено к решению ответственного лица"}</summary><p>Материал не допущен к применению этим листом. Решение принимает ответственное лицо после проверки подтверждений и фактического осмотра.</p>{result.actions?.length ? <ul>{result.actions.map((action) => <li key={`${action.check_key}:${action.action}`}>{INCOMING_INSPECTION_CHECKS.find(([key]) => key === action.check_key)?.[1] ?? action.check_key}: {action.action === "isolate_batch_and_resolve_nonconformity" ? "изолировать партию и устранить несоответствие" : action.action === "perform_or_obtain_check" ? "выполнить проверку или получить документ" : "указать подтверждение либо основание неприменимости"}</li>)}</ul> : null}</details></li>;
+      })}</ul></div> : <p>Сохранённых проверок пока нет.</p>}
+    </section>
   );
 }
 

@@ -1344,6 +1344,129 @@
         "title": "HealthView",
         "type": "object"
       },
+      "IncomingInspectionCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "basis": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Basis",
+            "type": "string"
+          },
+          "key": {
+            "enum": [
+              "quality_documents",
+              "specified_standard",
+              "marking",
+              "visual_condition",
+              "shelf_life",
+              "delivery_quantity",
+              "storage_conditions",
+              "incoming_log"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "passed",
+              "failed",
+              "pending",
+              "not_applicable"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "state"
+        ],
+        "title": "IncomingInspectionCheck",
+        "type": "object"
+      },
+      "IncomingInspectionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_reference": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Batch Reference",
+            "type": "string"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/IncomingInspectionCheck"
+            },
+            "maxItems": 8,
+            "minItems": 8,
+            "title": "Checks",
+            "type": "array"
+          },
+          "idempotency_key": {
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "material_name": {
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Material Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "material_name",
+          "batch_reference",
+          "checks",
+          "idempotency_key"
+        ],
+        "title": "IncomingInspectionRequest",
+        "type": "object"
+      },
+      "IncomingInspectionView": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_reference": {
+            "title": "Batch Reference",
+            "type": "string"
+          },
+          "material_name": {
+            "title": "Material Name",
+            "type": "string"
+          },
+          "payload_digest": {
+            "title": "Payload Digest",
+            "type": "string"
+          },
+          "preflight_id": {
+            "format": "uuid",
+            "title": "Preflight Id",
+            "type": "string"
+          },
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "preflight_id",
+          "material_name",
+          "batch_reference",
+          "payload_digest",
+          "result",
+          "submitted_at"
+        ],
+        "title": "IncomingInspectionView",
+        "type": "object"
+      },
       "JobCancellationRequest": {
         "additionalProperties": false,
         "properties": {
@@ -8954,6 +9077,120 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/support/incoming-inspections": {
+      "get": {
+        "operationId": "list_incoming_inspections_api_v1_workspaces__workspace_id__support_incoming_inspections_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IncomingInspectionView"
+                  },
+                  "title": "Response List Incoming Inspections Api V1 Workspaces  Workspace Id  Support Incoming Inspections Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Incoming Inspections",
+        "tags": [
+          "support-production"
+        ]
+      },
+      "post": {
+        "operationId": "submit_incoming_inspection_api_v1_workspaces__workspace_id__support_incoming_inspections_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncomingInspectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncomingInspectionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Incoming Inspection",
+        "tags": [
+          "support-production"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/support/processes": {
       "post": {
         "operationId": "configure_support_scope_api_v1_workspaces__workspace_id__support_processes_post",
@@ -9263,6 +9500,47 @@
           }
         },
         "summary": "Review Contract Revision",
+        "tags": [
+          "tender"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/tender/contract-unresolved-references.csv": {
+      "get": {
+        "operationId": "tender_contract_references_export_api_v1_workspaces__workspace_id__tender_contract_unresolved_references_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Contract References Export",
         "tags": [
           "tender"
         ]

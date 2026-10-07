@@ -499,6 +499,31 @@ class SupportProductionView(ApiModel):
     authority_layers: dict[str, str]
 
 
+class IncomingInspectionCheck(ApiModel):
+    key: Literal[
+        "quality_documents", "specified_standard", "marking", "visual_condition",
+        "shelf_life", "delivery_quantity", "storage_conditions", "incoming_log",
+    ]
+    state: Literal["passed", "failed", "pending", "not_applicable"]
+    basis: str = Field(default="", max_length=600)
+
+
+class IncomingInspectionRequest(ApiModel):
+    material_name: str = Field(min_length=2, max_length=200)
+    batch_reference: str = Field(min_length=1, max_length=200)
+    checks: list[IncomingInspectionCheck] = Field(min_length=8, max_length=8)
+    idempotency_key: str = Field(min_length=8, max_length=200)
+
+
+class IncomingInspectionView(ApiModel):
+    preflight_id: UUID
+    material_name: str
+    batch_reference: str
+    payload_digest: str
+    result: dict[str, Any]
+    submitted_at: datetime
+
+
 class ContractObligationReviewRequest(ApiModel):
     candidate_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
     action: Literal["confirmed", "rejected"]
