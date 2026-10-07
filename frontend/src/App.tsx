@@ -2987,6 +2987,17 @@ function TenderContractAnalysisBody({
             Несопоставленная ссылка требует проверки состава. Она сама по себе
             не доказывает, что приложение отсутствует.
           </p>
+          {referenceReview.status === "complete" &&
+          attachmentReferences.some(
+            (item) => item.match_decision === "unresolved",
+          ) ? (
+            <a
+              className="button-link secondary"
+              href={`/api/v1/workspaces/${workspaceId}/tender/contract-unresolved-references.csv`}
+            >
+              Скачать реестр несопоставленных договорных документов (CSV)
+            </a>
+          ) : null}
         </section>
       ) : null}
       <div className="candidate-actions">

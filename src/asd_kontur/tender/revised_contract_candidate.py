@@ -191,7 +191,7 @@ def render_revised_contract_source_package(
         ),
     )
     unresolved_register = (
-        _render_unresolved_reference_register(unresolved_references)
+        render_unresolved_reference_register(unresolved_references)
         if unresolved_references
         else None
     )
@@ -342,7 +342,7 @@ def _render_change_register(rows: Sequence[tuple[str, ...]]) -> bytes:
     return ("\ufeff" + output.getvalue()).encode("utf-8")
 
 
-def _render_unresolved_reference_register(
+def render_unresolved_reference_register(
     references: Sequence[Mapping[str, Any]],
 ) -> bytes:
     """Make Qwen's unresolved contract references actionable without claiming absence."""

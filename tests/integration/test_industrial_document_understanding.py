@@ -327,6 +327,11 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
         assert exported.status_code == 200, exported.text
         assert exported.headers["content-type"] == "text/csv; charset=utf-8"
         assert "DRAFT_CONTRACT_SOURCE_UNAVAILABLE" in exported.content.decode("utf-8-sig")
+        references = owner.get(
+            f"/api/v1/workspaces/{workspace_id}/tender/contract-unresolved-references.csv"
+        )
+        assert references.status_code == 409, references.text
+        assert references.json()["error"]["code"] == "contract_reference_review_incomplete"
         report = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.docx")
         assert report.status_code == 200, report.text
         assert report.headers["content-type"] == (
@@ -348,6 +353,10 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
         assert "Обоснованные предложения" in protocol_xml
         hidden_export = other.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv")
         assert hidden_export.status_code == 404, hidden_export.text
+        hidden_references = other.get(
+            f"/api/v1/workspaces/{workspace_id}/tender/contract-unresolved-references.csv"
+        )
+        assert hidden_references.status_code == 404, hidden_references.text
         hidden_report = other.get(
             f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.docx"
         )

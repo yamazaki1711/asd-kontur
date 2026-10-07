@@ -1168,6 +1168,29 @@ def _api_router() -> APIRouter:
         )
 
     @router.get(
+        "/workspaces/{workspace_id}/tender/contract-unresolved-references.csv",
+        tags=["tender"],
+    )
+    def tender_contract_references_export(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.tender_contract_references_export(
+            owner_identity_id=principal.owner_identity_id, workspace_id=workspace_id
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
+    @router.get(
         "/workspaces/{workspace_id}/tender/contract-analysis.docx",
         tags=["tender"],
         response_class=Response,

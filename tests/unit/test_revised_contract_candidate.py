@@ -18,7 +18,10 @@ from pypdf import PdfReader, PdfWriter
 import asd_kontur.tender.revised_contract_candidate as revised_contract_module
 from asd_kontur.application_spine.services import ProductSpineService
 from asd_kontur.tender.contract_analysis_report import render_tender_disagreement_protocol_docx
-from asd_kontur.tender.contract_analysis_view import _select_primary_revised_contract_source
+from asd_kontur.tender.contract_analysis_view import (
+    TenderContractAnalysisError,
+    _select_primary_revised_contract_source,
+)
 from asd_kontur.tender.contract_revision_selection import (
     contract_revision_fingerprint,
     select_contract_revisions,
@@ -323,6 +326,48 @@ def test_revised_contract_package_lists_unresolved_references_without_claiming_a
         )
         == package
     )
+
+
+def test_standalone_contract_reference_register_requires_completed_review() -> None:
+    view: dict[str, Any] = {
+        "reference_review": {"status": "complete"},
+        "attachment_references": [
+            {
+                "reference_id": "first",
+                "source_name": "contract.docx",
+                "source_page": 4,
+                "source_locator_id": "source-locator",
+                "source_quote": "See Appendix C",
+                "target_description": "Appendix C",
+                "match_decision": "unresolved",
+                "uncertainty": "No exact source match",
+            },
+            {
+                "reference_id": "second",
+                "source_name": "contract.docx",
+                "source_page": 5,
+                "source_locator_id": "matched-locator",
+                "source_quote": "See schedule",
+                "target_description": "Schedule",
+                "match_decision": "matched",
+            },
+        ],
+    }
+    service = ProductSpineService.__new__(ProductSpineService)
+    service._tender_contract_analysis = SimpleNamespace(latest=lambda **kwargs: view)
+    export = service.tender_contract_references_export(
+        owner_identity_id="owner", workspace_id=UUID(int=4401)
+    )
+    rows = list(csv.DictReader(io.StringIO(b"".join(export.chunks).decode("utf-8-sig"))))
+    assert export.media_type == "text/csv; charset=utf-8"
+    assert len(rows) == 1
+    assert rows[0]["Идентификатор источника"] == "source-locator"
+    assert rows[0]["Какой документ требуется установить"] == "Appendix C"
+    view["reference_review"] = {"status": "in_progress"}
+    with pytest.raises(TenderContractAnalysisError, match="contract_reference_review_incomplete"):
+        service.tender_contract_references_export(
+            owner_identity_id="owner", workspace_id=UUID(int=4401)
+        )
 
 
 def test_product_service_exports_mixed_docx_contract_and_pdf_appendix() -> None:

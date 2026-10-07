@@ -49,7 +49,10 @@ from asd_kontur.tender.contract_analysis_report import (
     render_tender_contract_analysis_docx,
     render_tender_disagreement_protocol_docx,
 )
-from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
+from asd_kontur.tender.contract_analysis_view import (
+    TenderContractAnalysisError,
+    TenderContractAnalysisRepository,
+)
 from asd_kontur.tender.contract_revision_review import (
     ContractRevisionReviewError,
     ContractRevisionReviewRepository,
@@ -81,6 +84,7 @@ from asd_kontur.tender.revised_contract_candidate import (
     RevisedContractCandidateError,
     render_revised_contract_candidate_docx,
     render_revised_contract_source_package,
+    render_unresolved_reference_register,
 )
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
 from asd_kontur.tender.structure_identity_schedule import (
@@ -759,6 +763,38 @@ class ProductSpineService:
             len(data),
             digest,
             f"tender-contract-analysis-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def tender_contract_references_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export only completed, source-linked unresolved contract references."""
+
+        view = self._tender_contract_analysis.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        review = view.get("reference_review")
+        if not isinstance(review, dict) or review.get("status") != "complete":
+            raise TenderContractAnalysisError("contract_reference_review_incomplete")
+        references = view.get("attachment_references")
+        if not isinstance(references, list):
+            raise TenderContractAnalysisError("contract_reference_review_incomplete")
+        data = render_unresolved_reference_register(
+            [
+                item
+                for item in references
+                if isinstance(item, dict) and item.get("match_decision") == "unresolved"
+            ]
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-contract-unresolved-references-{workspace_id}.csv",
             0,
             len(data),
             (data,),
