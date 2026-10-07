@@ -817,7 +817,10 @@ def _contract_issue_rows(contract: Mapping[str, Any]) -> list[dict[str, Any]]:
         rows.append(
             {
                 "clause_label": str(
-                    clause.get("clause_key") or clause.get("locator_label") or "Пункт не указан"
+                    clause.get("display_clause_ref")
+                    or clause.get("clause_key")
+                    or clause.get("locator_label")
+                    or "Пункт не указан"
                 ),
                 "source_text": str(clause.get("source_text") or "Исходная редакция не извлечена"),
                 "description": str(issue.get("description") or issue.get("subject") or ""),
@@ -857,7 +860,10 @@ def _contract_proposed_change_rows(contract: Mapping[str, Any]) -> list[dict[str
         rows.append(
             {
                 "clause_label": str(
-                    clause.get("clause_key") or clause.get("locator_label") or "Пункт не указан"
+                    clause.get("display_clause_ref")
+                    or clause.get("clause_key")
+                    or clause.get("locator_label")
+                    or "Пункт не указан"
                 ),
                 "source_text": str(clause.get("source_text") or "Исходная редакция не извлечена"),
                 "proposed_text": str(item.get("proposed_clause_text") or ""),

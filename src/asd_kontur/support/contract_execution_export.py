@@ -39,7 +39,7 @@ def render_contract_execution_conditions_csv(
         if item.get("review_state") != "confirmed" or not item.get("source_locator_id"):
             continue
         values = {
-            "clause_key": item.get("clause_key"),
+            "clause_key": item.get("display_clause_ref") or item.get("clause_key"),
             "category": item.get("category"),
             "responsible_party": item.get("party"),
             "required_action": item.get("obligation"),

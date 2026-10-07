@@ -522,7 +522,8 @@ test("contract analysis refreshes as supervised work publishes clauses", async (
             : [
                 {
                   clause_id: "clause-1",
-                  clause_key: "4.2",
+                  clause_key: "clause_3",
+                  display_clause_ref: "Пункт без номера (стр./лист 2)",
                   source_text: "Payment follows acceptance.",
                   source_name: "changed-contract.docx",
                   source_page: 2,
@@ -562,6 +563,10 @@ test("contract analysis refreshes as supervised work publishes clauses", async (
   ).toBeVisible();
   await expect(page.getByText("Pay for accepted work.")).toBeVisible();
   await expect(page.getByText("Submit an acceptance act.")).toBeVisible();
+  await expect(
+    page.getByText("Пункт без номера (стр./лист 2)").first(),
+  ).toBeVisible();
+  await expect(page.getByText("clause_3")).toHaveCount(0);
   expect(reads).toBeGreaterThanOrEqual(2);
 });
 

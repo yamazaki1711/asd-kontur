@@ -22,6 +22,7 @@ def test_contract_obligations_keep_party_condition_and_source() -> None:
                 {
                     "clause_id": "payment-4",
                     "clause_key": "4.2",
+                    "display_clause_ref": "Пункт без номера (стр./лист 3)",
                     "source_version_id": "source-a",
                     "source_locator_id": "locator-a",
                     "source_name": "contract.docx",
@@ -47,6 +48,7 @@ def test_contract_obligations_keep_party_condition_and_source() -> None:
     assert len(rows) == 2
     assert {row["party"] for row in rows} == {"customer", "contractor"}
     assert all(row["source_locator_id"] == "locator-a" for row in rows)
+    assert all(row["display_clause_ref"] == "Пункт без номера (стр./лист 3)" for row in rows)
     assert all(row["condition"] == "After acceptance." for row in rows)
     assert all(
         row["authority"] == "qwen_extracted_candidate_requires_contract_review" for row in rows
@@ -171,6 +173,7 @@ def test_editable_execution_register_excludes_unreviewed_and_unproven_work() -> 
             {
                 "review_state": "confirmed",
                 "clause_key": "4.2",
+                "display_clause_ref": "Пункт без номера (стр./лист 3)",
                 "category": "payment",
                 "party": "customer",
                 "obligation": "=unsafe formula",
@@ -193,6 +196,7 @@ def test_editable_execution_register_excludes_unreviewed_and_unproven_work() -> 
     )
     rows = list(csv.DictReader(io.StringIO(content.decode("utf-8-sig"))))
     assert len(rows) == 1
+    assert rows[0]["clause_key"] == "Пункт без номера (стр./лист 3)"
     assert rows[0]["required_action"] == "'=unsafe formula"
     assert rows[0]["source_version_id"] == source_id
     assert rows[0]["source_locator_id"] == "locator-a"

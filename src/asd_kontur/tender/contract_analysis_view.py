@@ -14,6 +14,7 @@ from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import (
     QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
 )
+from asd_kontur.tender.clause_reference import display_clause_reference
 from asd_kontur.tender.qwen_contract_analysis import (
     CONTRACT_ANALYSIS_PROFILE,
     contract_commercial_narrative_without_unverified_authority,
@@ -554,27 +555,27 @@ class TenderContractAnalysisRepository:
                 clause_ids[clause_ref] = clause_id
                 clause_source_by_ref[clause_ref] = str(clause.get("source_text") or "")
                 locator_ids = [str(value) for value in clause.get("source_locator_ids") or ()]
-                clauses.append(
-                    {
-                        "clause_id": clause_id,
-                        "clause_version": 1,
-                        "clause_key": clause_ref,
-                        "locator_label": str(clause.get("section") or ""),
-                        "authority_layer": "qwen_contract_candidate",
-                        "source_version_id": str(result["source_version_id"]),
-                        "source_name": source_name_by_id.get(str(result["source_version_id"])),
-                        "source_locator_id": locator_ids[0] if locator_ids else None,
-                        "source_locator_ids": locator_ids,
-                        "source_page": (
-                            locator_page_by_id.get(locator_ids[0]) if locator_ids else None
-                        ),
-                        "source_text": clause.get("source_text"),
-                        "category": clause.get("category"),
-                        "customer_obligation": clause.get("customer_obligation"),
-                        "contractor_obligation": clause.get("contractor_obligation"),
-                        "condition": clause.get("condition"),
-                    }
-                )
+                projected_clause = {
+                    "clause_id": clause_id,
+                    "clause_version": 1,
+                    "clause_key": clause_ref,
+                    "locator_label": str(clause.get("section") or ""),
+                    "authority_layer": "qwen_contract_candidate",
+                    "source_version_id": str(result["source_version_id"]),
+                    "source_name": source_name_by_id.get(str(result["source_version_id"])),
+                    "source_locator_id": locator_ids[0] if locator_ids else None,
+                    "source_locator_ids": locator_ids,
+                    "source_page": (
+                        locator_page_by_id.get(locator_ids[0]) if locator_ids else None
+                    ),
+                    "source_text": clause.get("source_text"),
+                    "category": clause.get("category"),
+                    "customer_obligation": clause.get("customer_obligation"),
+                    "contractor_obligation": clause.get("contractor_obligation"),
+                    "condition": clause.get("condition"),
+                }
+                projected_clause["display_clause_ref"] = display_clause_reference(projected_clause)
+                clauses.append(projected_clause)
             for risk in manifest.get("risks") or ():
                 if not isinstance(risk, dict):
                     continue

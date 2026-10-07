@@ -88,6 +88,7 @@ def test_assistant_contract_projection_keeps_professional_facts_not_process_ids(
                 {
                     "clause_id": str(clause_id),
                     "clause_key": "8.4",
+                    "display_clause_ref": "Пункт без номера (стр./лист 17)",
                     "locator_label": "Payment",
                     "source_name": "Draft agreement RA-62.docx",
                     "source_page": 17,
@@ -141,7 +142,7 @@ def test_assistant_contract_projection_keeps_professional_facts_not_process_ids(
         "referenced_document_count": 1,
         "unresolved_reference_count": 1,
     }
-    assert projected["contractor_risks"][0]["clause"] == "8.4"
+    assert projected["contractor_risks"][0]["clause"] == "Пункт без номера (стр./лист 17)"
     assert projected["contractor_risks"][0]["source_locator_ids"] == [str(locator_id)]
     assert projected["proposed_revisions"][0]["contractor_wording"].startswith("Pay accepted")
     assert projected["referenced_documents"][0]["match_state"] == "unresolved"

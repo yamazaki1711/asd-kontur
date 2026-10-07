@@ -2364,7 +2364,7 @@ def _assistant_contract_analysis(view: Mapping[str, Any], *, limit: int = 24) ->
 
     def professional_clause(clause: Mapping[str, Any]) -> dict[str, Any]:
         return {
-            "clause": clause.get("clause_key"),
+            "clause": clause.get("display_clause_ref") or clause.get("clause_key"),
             "section": clause.get("locator_label"),
             "source_document": clause.get("source_name"),
             "source_page": clause.get("source_page"),
@@ -2383,7 +2383,7 @@ def _assistant_contract_analysis(view: Mapping[str, Any], *, limit: int = 24) ->
             {
                 "kind": issue.get("subject") or issue.get("issue_kind"),
                 "severity": issue.get("severity"),
-                "clause": clause.get("clause_key"),
+                "clause": clause.get("display_clause_ref") or clause.get("clause_key"),
                 "source_document": clause.get("source_name"),
                 "source_page": clause.get("source_page"),
                 "risk_mechanism": issue.get("risk_mechanism"),
@@ -2403,7 +2403,7 @@ def _assistant_contract_analysis(view: Mapping[str, Any], *, limit: int = 24) ->
         issue = issue_by_id.get(str(disagreement.get("issue_id")), {})
         proposed_revisions.append(
             {
-                "clause": clause.get("clause_key"),
+                "clause": clause.get("display_clause_ref") or clause.get("clause_key"),
                 "source_document": clause.get("source_name"),
                 "source_page": clause.get("source_page"),
                 "customer_wording": disagreement.get("replacement_source_text")

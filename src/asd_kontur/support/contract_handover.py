@@ -58,6 +58,7 @@ def contract_obligation_handover(
                     "candidate_digest": candidate_digest,
                     "clause_id": clause_id,
                     "clause_key": str(clause.get("clause_key") or ""),
+                    "display_clause_ref": clause.get("display_clause_ref"),
                     "party": party,
                     "category": str(clause.get("category") or ""),
                     "obligation": obligation,

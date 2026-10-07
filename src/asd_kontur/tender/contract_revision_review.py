@@ -66,6 +66,7 @@ def revision_review_candidates(view: dict[str, Any]) -> list[dict[str, Any]]:
                 "source_locator_id": source_locator_id,
                 "source_clause_id": str(revision.get("source_clause_id")),
                 "clause_key": str(clause.get("clause_key") or ""),
+                "display_clause_ref": clause.get("display_clause_ref"),
                 "revised_text": revised_text,
                 "review_state": "unreviewed",
             }

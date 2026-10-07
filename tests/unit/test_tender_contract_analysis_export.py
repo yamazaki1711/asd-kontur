@@ -6,9 +6,9 @@ import io
 import zipfile
 
 from asd_kontur.application_spine.services import _contract_cross_check_coverage
+from asd_kontur.tender.clause_reference import display_clause_reference
 from asd_kontur.tender.contract_analysis_export import render_tender_contract_analysis_csv
 from asd_kontur.tender.contract_analysis_report import (
-    _display_clause_reference,
     render_tender_contract_analysis_docx,
     render_tender_disagreement_protocol_docx,
 )
@@ -16,27 +16,27 @@ from asd_kontur.tender.contract_analysis_report import (
 
 def test_contract_report_uses_only_source_supported_clause_references() -> None:
     assert (
-        _display_clause_reference(
+        display_clause_reference(
             {"source_text": "4.7. Оплата производится", "clause_key": "clause_3"}
         )
         == "4.7"
     )
     assert (
-        _display_clause_reference({"source_text": "Оплата производится", "clause_key": "п. 8.2"})
+        display_clause_reference({"source_text": "Оплата производится", "clause_key": "п. 8.2"})
         == "Пункт без номера — см. источник"
     )
     assert (
-        _display_clause_reference(
+        display_clause_reference(
             {"source_text": "Выезд на объект", "clause_key": "clause_3", "source_page": 12}
         )
         == "Пункт без номера (стр./лист 12)"
     )
     assert (
-        _display_clause_reference({"source_text": "Выезд на объект", "clause_key": "batch-1"})
+        display_clause_reference({"source_text": "Выезд на объект", "clause_key": "batch-1"})
         == "Пункт без номера — см. источник"
     )
     assert (
-        _display_clause_reference(
+        display_clause_reference(
             {
                 "source_text": "Выезд на объект",
                 "clause_key": "payment.acceptance",
@@ -293,6 +293,7 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
                 "clause_id": "clause-independent-7",
                 "clause_version": 2,
                 "clause_key": "payment.acceptance",
+                "display_clause_ref": "Пункт без номера (стр./лист 12)",
                 "source_name": "Changed-contract-terms.docx",
                 "source_page": 12,
                 "source_version_id": "source-independent-91",
@@ -378,6 +379,9 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
     issue_row = next(row for row in csv_rows if row["row_kind"] == "issue")
     assert issue_row["trigger_text"] == "Customer accepts work after its internal review."
     assert issue_row["adverse_effect_text"] == ("Payment is due only after Customer acceptance.")
+    clause_row = next(row for row in csv_rows if row["row_kind"] == "source_clause")
+    assert clause_row["clause_key"] == "Пункт без номера (стр./лист 12)"
+    assert not any(row["clause_key"] == "payment.acceptance" for row in csv_rows)
 
     with zipfile.ZipFile(io.BytesIO(content)) as package:
         assert "word/document.xml" in package.namelist()

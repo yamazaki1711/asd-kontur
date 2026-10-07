@@ -226,6 +226,11 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
         }
         clauses = view.get("clauses")
         assert isinstance(clauses, list)
+        assert all(isinstance(item.get("display_clause_ref"), str) for item in clauses)
+        assert all(
+            not str(item.get("display_clause_ref")).startswith(("clause_", "batch-"))
+            for item in clauses
+        )
         assert any("9.2." in str(item.get("source_text")) for item in clauses)
         risks = view.get("issues")
         assert isinstance(risks, list)
