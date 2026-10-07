@@ -1282,3 +1282,26 @@ workspace produced a valid ZIP with two DOCX files, revision counts 3 and 2,
 and no corrupt ZIP member (121,083 bytes). This exercised deterministic
 assembly from persisted Qwen results and admitted source bytes; it did not
 alter the owner's project or prove browser download/all-page visual quality.
+
+## 2026-10-07 multi-source contract package release
+
+Release `6443023bce026b6988044b5e79f4d14bacd5c55c` is pinned at
+`~/.asd-kontur/public-demo/releases/20261007-6443023-contract-package-v1`.
+The four staged application-role plists passed the new executable/argument,
+SHA and migration-head preflight before cutover. The API, document worker,
+project orchestrator and assistant worker run from that pinned release; Qwen
+and NTD were not restarted. The public database remains at
+`0129_contract_reference_review` with no new migration. The local readiness
+API returned HTTP 200, the new built frontend asset returned HTTP 200, and
+unauthenticated access to the new ZIP endpoint returned HTTP 401.
+
+The deployed owner-scoped service reports 7/7 effective contract-reference
+batches complete, 34 references, and 31 unresolved admitted-document matches.
+It exposes an `exact_source_package_available` candidate. A read-only
+render through the pinned service produced a valid ZIP containing the two
+admitted DOCX contract sources with 3 and 2 exact revisions respectively;
+the manifest carries the 31 unresolved references and only the remaining
+package-relevant gap. This is a draft for human/legal review, not a signed or
+agreed contract. The in-app browser was unavailable to this session, so an
+authenticated browser download and all-page Word-compatible visual inspection
+remain unverified. `ProductReady=false`.
