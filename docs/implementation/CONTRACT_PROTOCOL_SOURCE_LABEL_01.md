@@ -65,3 +65,15 @@ overall table width. A read-only owner-scoped render reopened as two pages;
 both pages were visually inspected and remain readable. No project fact or
 proposal was changed, and no Qwen job was submitted for this deterministic
 integrity correction.
+
+Exact follow-up source `b8a7bf33d5c32a4f870ff49733e7219d24459d1b`
+is deployed to all four supervised application roles from
+`~/.asd-kontur/public-demo/releases/20261008-b8a7bf3-contract-protocol-identity`.
+The exact release passed 71/71 focused contract/report tests and Ruff. The
+frontend source/build and public migration `0141_contract_reference_partial_package`
+were unchanged. No queued, leased or running durable job was interrupted.
+API readiness passed; Qwen and NTD retained their PIDs and the platform-only
+data fingerprint remained
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+Authenticated owner-browser download remains unverified because no connected
+browser was available.
