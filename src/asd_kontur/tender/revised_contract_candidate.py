@@ -13,6 +13,9 @@ from collections.abc import Mapping, Sequence
 from typing import Any, cast
 from xml.etree import ElementTree as ET
 
+from pypdf import PdfReader
+from pypdf.errors import PdfReadError
+
 from asd_kontur.tender.clause_reference import display_clause_reference
 from asd_kontur.tender.qwen_contract_analysis import contract_proposed_wording_has_placeholder
 
@@ -22,6 +25,7 @@ _CONTENT_TYPES_NS = "http://schemas.openxmlformats.org/package/2006/content-type
 _OFFICE_DOCUMENT_REL = (
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
 )
+_DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 _MARKUP_COMPATIBILITY_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 _TEXT = f"{{{_WORD_NS}}}t"
 _PARAGRAPH = f"{{{_WORD_NS}}}p"
@@ -36,6 +40,19 @@ _CLAUSE_NUMBER = re.compile(r"^(?P<prefix>\s*(?P<number>\d+(?:\.\d+){1,5})\.?\s+
 
 class RevisedContractCandidateError(ValueError):
     """A full revised contract cannot be produced without changing unsupported content."""
+
+
+def _validate_unchanged_pdf(content: bytes) -> None:
+    """Check readability without changing a source appendix or implying editability."""
+
+    if not content.startswith(b"%PDF-"):
+        raise RevisedContractCandidateError("revised_contract_source_pdf_invalid")
+    try:
+        reader = PdfReader(io.BytesIO(content), strict=False)
+        if reader.is_encrypted or len(reader.pages) < 1:
+            raise RevisedContractCandidateError("revised_contract_source_pdf_invalid")
+    except (PdfReadError, ValueError, OSError) as exc:
+        raise RevisedContractCandidateError("revised_contract_source_pdf_invalid") from exc
 
 
 def render_revised_contract_source_package(
@@ -88,25 +105,40 @@ def render_revised_contract_source_package(
         original = source.get("content")
         if not isinstance(original, bytes):
             raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
-        try:
-            with zipfile.ZipFile(io.BytesIO(original)) as package:
-                if package.testzip() is not None or "word/document.xml" not in package.namelist():
-                    raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
-                _require_office_document_relationship(package.read("_rels/.rels"))
-                _require_word_content_type(package.read("[Content_Types].xml"))
-                _parse_source_document(package.read("word/document.xml"))
-        except (zipfile.BadZipFile, KeyError) as exc:
-            raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
         selected = revisions_by_source.get(source_id, [])
-        output = (
-            render_revised_contract_candidate_docx(
-                original,
-                {"clauses": list(clauses.values()), "revised_clauses": selected},
+        media_type = str(source.get("media_type") or _DOCX_MEDIA_TYPE)
+        if media_type == "application/pdf":
+            if selected:
+                raise RevisedContractCandidateError("revised_contract_pdf_revision_unsupported")
+            _validate_unchanged_pdf(original)
+            output = original
+            entry_name = f"contract-source-{ordinal:02d}.pdf"
+            editable = False
+        elif media_type == _DOCX_MEDIA_TYPE:
+            try:
+                with zipfile.ZipFile(io.BytesIO(original)) as package:
+                    if (
+                        package.testzip() is not None
+                        or "word/document.xml" not in package.namelist()
+                    ):
+                        raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
+                    _require_office_document_relationship(package.read("_rels/.rels"))
+                    _require_word_content_type(package.read("[Content_Types].xml"))
+                    _parse_source_document(package.read("word/document.xml"))
+            except (zipfile.BadZipFile, KeyError) as exc:
+                raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
+            output = (
+                render_revised_contract_candidate_docx(
+                    original,
+                    {"clauses": list(clauses.values()), "revised_clauses": selected},
+                )
+                if selected
+                else original
             )
-            if selected
-            else original
-        )
-        entry_name = f"contract-source-{ordinal:02d}.docx"
+            entry_name = f"contract-source-{ordinal:02d}.docx"
+            editable = True
+        else:
+            raise RevisedContractCandidateError("revised_contract_source_format_unsupported")
         files.append((entry_name, output))
         for revision in selected:
             clause = clauses[
@@ -138,6 +170,8 @@ def render_revised_contract_source_package(
                 "source_version_id": source_id,
                 "source_name": str(source.get("safe_display_name") or ""),
                 "entry": entry_name,
+                "media_type": media_type,
+                "editable": editable,
                 "revision_count": len(selected),
                 "original_sha256": hashlib.sha256(original).hexdigest(),
                 "candidate_sha256": hashlib.sha256(output).hexdigest(),
@@ -151,8 +185,9 @@ def render_revised_contract_source_package(
         "contract": "revised-contract-source-package@1.0.0",
         "status": "human_review_candidate",
         "warning": (
-            "Candidate only; no approval or signature. Check unresolved references and "
-            "cross-clause coherence before agreement."
+            "Candidate only; no approval or signature. Unchanged PDF appendices are "
+            "not editable. Check unresolved references and cross-clause coherence "
+            "before agreement."
         ),
         "coherence_review": {
             "status": str(coherence.get("status") or "not_performed"),
@@ -164,6 +199,9 @@ def render_revised_contract_source_package(
         "unresolved_reference_count": sum(
             item.get("match_decision") == "unresolved"
             for item in _records(view.get("attachment_references"))
+        ),
+        "unchanged_pdf_appendix_count": sum(
+            item["media_type"] == "application/pdf" for item in manifest_sources
         ),
         "analysis_gaps": [
             str(item)

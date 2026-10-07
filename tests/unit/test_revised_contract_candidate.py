@@ -13,6 +13,7 @@ from uuid import UUID
 from xml.etree import ElementTree as ET
 
 import pytest
+from pypdf import PdfReader, PdfWriter
 
 import asd_kontur.tender.revised_contract_candidate as revised_contract_module
 from asd_kontur.application_spine.services import ProductSpineService
@@ -66,6 +67,14 @@ def _source_docx(*paragraphs: str) -> bytes:
     with zipfile.ZipFile(output, "w") as package:
         _write_minimal_docx_package(package, document)
         package.writestr("custom/untouched.bin", b"exact-untouched-package-member")
+    return output.getvalue()
+
+
+def _source_pdf() -> bytes:
+    output = io.BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=595, height=842)
+    writer.write(output)
     return output.getvalue()
 
 
@@ -169,6 +178,208 @@ def test_revised_contract_package_applies_two_sources_and_preserves_unchanged_do
         "potential_conflict_count": 0,
     }
     assert manifest["analysis_gaps"] == ["CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED"]
+
+
+def test_revised_contract_package_carries_unchanged_pdf_appendix_without_editability_claim() -> (
+    None
+):
+    original_clause = "4.2. Payment depends on acceptance."
+    pdf = _source_pdf()
+    package = render_revised_contract_source_package(
+        [
+            {
+                "source_version_id": "contract-a",
+                "safe_display_name": "construction-contract.docx",
+                "content": _source_docx(original_clause),
+            },
+            {
+                "source_version_id": "appendix-b",
+                "safe_display_name": "schedule-appendix.pdf",
+                "media_type": "application/pdf",
+                "content": pdf,
+            },
+        ],
+        {
+            "clauses": [
+                {
+                    "clause_id": "payment-1",
+                    "clause_version": 1,
+                    "source_version_id": "contract-a",
+                    "source_text": original_clause,
+                }
+            ],
+            "revised_clauses": [
+                {
+                    "source_clause_id": "payment-1",
+                    "source_clause_version": 1,
+                    "revised_text": "4.2. Payment follows documented acceptance.",
+                }
+            ],
+        },
+    )
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        assert archive.namelist() == [
+            "contract-source-01.docx",
+            "contract-source-02.pdf",
+            "change-register.csv",
+            "manifest.json",
+        ]
+        assert _paragraphs(archive.read("contract-source-01.docx")) == [
+            "4.2. Payment follows documented acceptance."
+        ]
+        retained_pdf = archive.read("contract-source-02.pdf")
+        manifest = json.loads(archive.read("manifest.json"))
+    assert retained_pdf == pdf
+    assert len(PdfReader(io.BytesIO(retained_pdf)).pages) == 1
+    assert manifest["unchanged_pdf_appendix_count"] == 1
+    assert manifest["sources"][1]["editable"] is False
+    assert manifest["sources"][1]["original_sha256"] == manifest["sources"][1]["candidate_sha256"]
+
+
+def test_product_service_exports_mixed_docx_contract_and_pdf_appendix() -> None:
+    primary_id = str(UUID(int=3701))
+    appendix_id = str(UUID(int=3702))
+    original_clause = "4.2. Payment depends on acceptance."
+    pdf = _source_pdf()
+    payloads = {primary_id: _source_docx(original_clause), appendix_id: pdf}
+
+    def source_by_id(**values: object) -> dict[str, object]:
+        source_id = str(values["source_version_id"])
+        return {
+            "object_key": source_id,
+            "media_type": (
+                "application/pdf"
+                if source_id == appendix_id
+                else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+            "safe_display_name": ("schedule.pdf" if source_id == appendix_id else "contract.docx"),
+        }
+
+    service = ProductSpineService.__new__(ProductSpineService)
+    service._repository = SimpleNamespace(get_workspace_source_object=source_by_id)  # type: ignore[assignment]
+    service._object_store = _ObjectStoreByKey(payloads)  # type: ignore[assignment]
+    view = {
+        "assessment": {
+            "sources": [
+                {"source_version_id": primary_id},
+                {"source_version_id": appendix_id},
+            ]
+        },
+        "revised_contracts": [{"source_contract_version_id": primary_id}],
+        "clauses": [
+            {
+                "clause_id": "payment-1",
+                "clause_version": 1,
+                "source_version_id": primary_id,
+                "source_text": original_clause,
+            }
+        ],
+        "revised_clauses": [
+            {
+                "source_clause_id": "payment-1",
+                "source_clause_version": 1,
+                "revised_text": "4.2. Payment follows documented acceptance.",
+            }
+        ],
+    }
+
+    package, source_count = service._render_revised_contract_source_package(
+        owner_identity_id="owner:changed", workspace_id=UUID(int=37), view=view
+    )
+    assert source_count == 2
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        assert archive.read("contract-source-02.pdf") == pdf
+        assert _paragraphs(archive.read("contract-source-01.docx")) == [
+            "4.2. Payment follows documented acceptance."
+        ]
+
+    payloads[primary_id] = pdf
+    original_source_by_id = service._repository.get_workspace_source_object
+    service._repository = SimpleNamespace(  # type: ignore[assignment]
+        get_workspace_source_object=lambda **values: {
+            **original_source_by_id(**values),
+            "media_type": "application/pdf",
+            "safe_display_name": "contract.pdf",
+        }
+    )
+    with pytest.raises(RevisedContractCandidateError, match="source_format_unsupported"):
+        service._render_revised_contract_source_package(
+            owner_identity_id="owner:changed", workspace_id=UUID(int=37), view=view
+        )
+
+
+@pytest.mark.parametrize("pdf", [b"not-a-pdf", b"%PDF-1.4\ninvalid"])
+def test_revised_contract_package_rejects_unreadable_pdf_appendix(pdf: bytes) -> None:
+    with pytest.raises(RevisedContractCandidateError, match="source_pdf_invalid"):
+        render_revised_contract_source_package(
+            [
+                {"source_version_id": "contract-a", "content": _source_docx("1. Contract.")},
+                {
+                    "source_version_id": "appendix-b",
+                    "media_type": "application/pdf",
+                    "content": pdf,
+                },
+            ],
+            {
+                "clauses": [
+                    {
+                        "clause_id": "c1",
+                        "clause_version": 1,
+                        "source_version_id": "contract-a",
+                        "source_text": "1. Contract.",
+                    }
+                ],
+                "revised_clauses": [
+                    {
+                        "source_clause_id": "c1",
+                        "source_clause_version": 1,
+                        "revised_text": "1. Revised contract.",
+                    }
+                ],
+            },
+        )
+
+
+def test_revised_contract_package_refuses_to_apply_revision_to_pdf_appendix() -> None:
+    with pytest.raises(RevisedContractCandidateError, match="pdf_revision_unsupported"):
+        render_revised_contract_source_package(
+            [
+                {"source_version_id": "contract-a", "content": _source_docx("1. Contract.")},
+                {
+                    "source_version_id": "appendix-b",
+                    "media_type": "application/pdf",
+                    "content": _source_pdf(),
+                },
+            ],
+            {
+                "clauses": [
+                    {
+                        "clause_id": "contract-clause",
+                        "clause_version": 1,
+                        "source_version_id": "contract-a",
+                        "source_text": "1. Contract.",
+                    },
+                    {
+                        "clause_id": "appendix-clause",
+                        "clause_version": 1,
+                        "source_version_id": "appendix-b",
+                        "source_text": "Appendix condition.",
+                    },
+                ],
+                "revised_clauses": [
+                    {
+                        "source_clause_id": "contract-clause",
+                        "source_clause_version": 1,
+                        "revised_text": "1. Revised contract.",
+                    },
+                    {
+                        "source_clause_id": "appendix-clause",
+                        "source_clause_version": 1,
+                        "revised_text": "Revised appendix condition.",
+                    },
+                ],
+            },
+        )
 
 
 def test_reviewed_package_carries_matching_editable_protocol() -> None:

@@ -991,18 +991,28 @@ class ProductSpineService:
             )
             media_type = str(source["media_type"])
             safe_display_name = str(source["safe_display_name"])
-            if media_type != (
+            is_docx = media_type == (
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            ) and not (
+            ) or (
                 media_type == "application/octet-stream"
                 and safe_display_name.lower().endswith(".docx")
-            ):
+            )
+            is_pdf = media_type == "application/pdf" or (
+                media_type == "application/octet-stream"
+                and safe_display_name.lower().endswith(".pdf")
+            )
+            if not is_docx and (not is_pdf or str(source_id) == primary_id):
                 raise RevisedContractCandidateError("revised_contract_source_format_unsupported")
             with self._object_store.open(str(source["object_key"])) as source_file:
                 package_sources.append(
                     {
                         "source_version_id": str(source_id),
                         "safe_display_name": safe_display_name,
+                        "media_type": (
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            if is_docx
+                            else "application/pdf"
+                        ),
                         "content": source_file.read(),
                     }
                 )
