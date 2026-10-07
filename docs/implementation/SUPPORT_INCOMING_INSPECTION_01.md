@@ -109,3 +109,17 @@ The broader isolated Python unit/integration gate for this source checkpoint
 finished with 1,544 passed and two skipped in 127.88 seconds; frontend
 typecheck and production build also passed. This qualification is not a
 four-mode product-readiness result.
+
+## Actionable register wording follow-up
+
+The editable incoming-inspection CSV previously exported internal English
+state/kind codes and omitted the corrective action even though the Support UI
+showed actions. The generic renderer now uses Russian professional labels,
+includes the action for each failed or incomplete check, and rejects unknown
+or duplicated checklist identities instead of publishing a corrupted register.
+Every row still explicitly states that the batch is not admitted for use. Eight
+focused unit tests and both isolated PostgreSQL integration tests passed.
+This is a usable register correction, not a material-admission decision: the
+current real workspace has no registered material batches or active
+professional grants, and the application does not infer either from a
+preflight. ProductReady remains false.
