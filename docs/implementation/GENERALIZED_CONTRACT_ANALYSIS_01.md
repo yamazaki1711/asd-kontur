@@ -1155,3 +1155,6 @@ code despite verified signing and a targeted quarantine-attribute removal.
 The local bundled ONLYOFFICE x2t converter also returned an `open` error on
 a trivial synthetic DOCX, so its failure is not evidence that the generated
 contract file is malformed. All-page visual qualification remains open.
+macOS Quick Look rendered the first page of the real revised-contract candidate
+locally; the title, body text and first two sections are legible in that
+thumbnail. This is first-page evidence only, not an all-page layout pass.
