@@ -247,8 +247,8 @@ states explicitly that admission does not prove actual application or
 quantity sufficiency; truncated histories cannot be presented as an absence
 of decisions. This is a professional requirement-to-decision view, not a
 work-readiness or KS/payment approval. Isolated PostgreSQL/API checks and
-frontend typecheck/lint pass; this follow-up is not in the public release
-named above until a separate controlled cutover.
+frontend typecheck/lint pass. This follow-up was subsequently included in the
+controlled public cutover recorded below.
 
 The read model also distinguishes a current decision from immutable history.
 A later inspection, batch/work version, admission decision or superseded
@@ -262,3 +262,25 @@ latest preflight, current work-material requirement and active grant immediately
 before appending a decision; the application-role precheck is not the sole
 authority boundary. No claim is made that this replaces later material
 application, consumption balance or document/payment prerequisites.
+
+## Current public checkpoint — 2026-10-07
+
+The requirement-by-work view and current-versus-historical admission projection
+were deployed together as exact source SHA
+`04c178c54c2006ea3c37eee6a2603fb4cdcb0125`, with unchanged public
+migration `0136_support_material_admission_basis`. All four supervised
+application roles (`api`, `worker`, `assistant-worker`,
+`project-orchestrator`) are pinned to that release and running. Qwen and NTD
+workers were not restarted. The API readiness check reports the same migration;
+the served OpenAPI is structurally identical to the built v2.3 artifact (87
+routes), whose SHA-256 is
+`3c2fe23cf36e3474dc7897fc16d9088dd90e6365f901d613656914f8bfdc8af3`.
+The frontend returns HTTP 200. The real workspace retains its 21 source
+versions. No public material admission was manufactured. The full platform
+data fingerprint remains
+`ff6e99703e35fa28887ed16571aa62f552649ccd8027b60305691155f863e3da`.
+The prior four launchd plists are backed up privately under
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-04c178c-material-currentness/`.
+Focused exact-release tests passed 35/35; frontend typecheck, lint and build
+passed. Authenticated owner-screen acceptance and real field-material evidence
+remain unavailable, so Support and `ProductReady` remain incomplete.
