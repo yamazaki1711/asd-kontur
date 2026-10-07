@@ -27,6 +27,15 @@ Waiting for full service disappearance and then bootstrapping succeeded.
 Release health does not prove an authenticated owner download; no real owner
 obligation was confirmed merely for qualification. `ProductReady=false`.
 
+The reusable source-side deployment guard
+`tools/wait_launchd_service_stopped.py` now observes a selected application
+role until launchd has fully removed it, with a bounded timeout. Use it after
+`launchctl bootout` and before `launchctl bootstrap`; a `SIGTERMed` state does
+not count as stopped. It does not stop/start services or inspect secret
+environment values. A deterministic test covers the observed 18-second drain
+and timeout. This guard is not a substitute for the release preflight, queue
+drain, backup, readiness checks or rollback procedure.
+
 ## 2026-10-07 confirmed execution-conditions schedule
 
 The Support production view now separates reviewed contract candidates from
