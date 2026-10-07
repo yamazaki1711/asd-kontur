@@ -21,11 +21,29 @@ gap; partial evidence is never counted as a complete match. Migration
 v1/v2 history and guards downgrade after accepted v3 output.
 
 This is a generic source-relationship mechanism, not a claim that this owner's
-contract appendices are complete. Focused checks passed 87/87, including
-changed-name package examples and fail-closed invalid outputs. The isolated
-PostgreSQL migration roundtrip passed 1/1; frontend typecheck, lint and build
-passed. Public deployment and live v3 interpretation are not yet claimed in
-this source checkpoint.
+contract appendices are complete. The exact release
+`1389e28f482eac95f549f7c8bb970e669800841e` is deployed under
+`~/.asd-kontur/public-demo/releases/20261008-1389e28-contract-partial-package`
+with public migration `0141_contract_reference_partial_package`. A private
+pre-migration backup was restored to a separate PostgreSQL database and tested
+through upgrade/downgrade/re-upgrade before the controlled public migration.
+The four application launchd roles are pinned to that release; Qwen PID 9105
+and NTD worker PID 1356 were not restarted. The API readiness response reports
+the new migration and the frontend returns HTTP 200. The platform-only
+fingerprint remains
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+
+The supervised orchestrator scheduled seven v3 Qwen batches without a
+developer queue action. The first persisted batch contained one
+`partially_matched` reference and six unresolved references, and the
+owner-scoped contract view presented that one partial match with a still-open
+clarification gap. The other six batches were still running/queued at this
+checkpoint; no final v3 result is claimed. Focused checks passed 87/87 and
+exact-release PostgreSQL integration/migration checks passed 4/4. Frontend
+typecheck, lint and build passed. A changed-name editable Word report rendered
+to one readable A4 page with the partial-package warning intact. The previous
+application plists are backed up under
+`~/.asd-kontur/public-demo/launchd-backups/20261008-pre-1389e28-contract-partial-package/`.
 
 ## Source-located contract-reference inventory — 2026-10-08 source checkpoint
 
