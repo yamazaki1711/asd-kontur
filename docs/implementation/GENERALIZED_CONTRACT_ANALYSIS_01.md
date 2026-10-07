@@ -2119,3 +2119,11 @@ remained unchanged. The temporary exact-ID manifest and confirmation journal
 were removed after verification. This cleanup did not delete the real project
 or any platform knowledge. The cleanup-client extension is a source checkpoint,
 not a newly deployed application release.
+
+This is active-store cleanup, not a claim that historical backups are sanitized.
+The full-database pre-0134 backup above was taken before deletion and can still
+contain this control workspace alongside the real owner project and global
+platform knowledge; older backups may also contain it. Mixed backups were
+preserved under the no-unsafe-generic-backup-deletion rule. Backup retention
+and sanitization require an exact inventory and approved policy before
+zero-remnant deletion can be claimed.
