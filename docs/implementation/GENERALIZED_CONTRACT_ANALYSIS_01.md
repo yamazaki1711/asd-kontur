@@ -13,6 +13,20 @@ agreement. An isolated unit check covers exclusion, source retention and
 formula safety; the browser check covers the visible download route. The
 declared OpenAPI route matches the runtime-generated schema, 81/81 paths.
 
+Release `c24a9e3531ad4ff77711905b7fdeb13588661863` is pinned at
+`~/.asd-kontur/public-demo/releases/20261007-c24a9e3-contract-condition-register-v1`.
+The four application launchd roles report that SHA; API readiness and the
+built frontend asset returned HTTP 200. The new export rejects unauthenticated
+requests with HTTP 401. The public database remains at migration
+`0130_contract_obligation_review` and there were zero queued/running jobs at
+cutover. Qwen/NTD were not restarted. The previous plists are saved at
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-c24a9e3-contract-condition-register/`.
+The project orchestrator needed roughly 20 seconds to drain after bootout;
+bootstrap attempted during its `SIGTERMed` state returned launchd error 5.
+Waiting for full service disappearance and then bootstrapping succeeded.
+Release health does not prove an authenticated owner download; no real owner
+obligation was confirmed merely for qualification. `ProductReady=false`.
+
 ## 2026-10-07 confirmed execution-conditions schedule
 
 The Support production view now separates reviewed contract candidates from
