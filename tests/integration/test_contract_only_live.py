@@ -1,0 +1,240 @@
+"""Opt-in isolated contract-only journey with the persistent local Qwen runtime.
+
+The corpus is synthetic and changed-party. It never uses the public database or
+manually creates successor jobs; the ordinary orchestrator and worker decide
+what runs. This is an integration qualification, not a release-readiness claim.
+"""
+
+# ruff: noqa: RUF001 -- Synthetic Russian contract clauses contain Cyrillic.
+
+from __future__ import annotations
+
+import io
+import json
+import os
+import time
+import urllib.request
+import zipfile
+from pathlib import Path
+from uuid import UUID
+from xml.sax.saxutils import escape
+
+import pytest
+import sqlalchemy as sa
+from fastapi.testclient import TestClient
+
+from asd_kontur.application_spine.config import SessionProfile, SpineSettings
+from asd_kontur.application_spine.orchestrator import ProjectOrchestrator
+from asd_kontur.application_spine.postgres import SpinePostgresRepository
+from asd_kontur.application_spine.worker import DocumentWorker
+from asd_kontur.web_app import create_app
+
+from .conftest import PostgreSQLEnvironment
+
+pytestmark = [
+    pytest.mark.postgres,
+    pytest.mark.skipif(
+        os.environ.get("ASD_RUN_LIVE_CONTRACT_ONLY") != "1",
+        reason="Set ASD_RUN_LIVE_CONTRACT_ONLY=1 for the bounded local-Qwen journey",
+    ),
+]
+
+_WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+_DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _contract_docx() -> bytes:
+    paragraphs = (
+        "ДОГОВОР СТРОИТЕЛЬНОГО ПОДРЯДА",
+        "ООО Северный Берег (Заказчик) и ООО Теплоконтур (Подрядчик) заключили договор.",
+        "1.1. Подрядчик реконструирует участок тепловой сети "
+        "по переданной Заказчиком документации.",
+        "7.4. Заказчик оплачивает принятые работы после поступления средств от инвестора. "
+        "До поступления указанных средств обязанность Заказчика по оплате не возникает.",
+        "9.2. Подрядчик устраняет за свой счёт недостатки работ, возникшие по его вине, "
+        "в течение гарантийного срока 24 месяца со дня приёмки.",
+    )
+    body = "".join(
+        f'<w:p><w:r><w:t xml:space="preserve">{escape(value)}</w:t></w:r></w:p>'
+        for value in paragraphs
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<w:document xmlns:w="{_WORD_NS}"><w:body>{body}</w:body></w:document>'
+    )
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/word/document.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.'
+        'wordprocessingml.document.main+xml"/></Types>'
+    )
+    target = io.BytesIO()
+    with zipfile.ZipFile(target, "w") as package:
+        package.writestr("[Content_Types].xml", content_types)
+        package.writestr("word/document.xml", document)
+    return target.getvalue()
+
+
+def _qwen_idle() -> bool:
+    request = urllib.request.Request("http://127.0.0.1:8790/health", method="GET")
+    with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(
+        request, timeout=5
+    ) as response:
+        value = json.load(response)
+    return isinstance(value, dict) and value.get("status") == "QWEN_READY_IDLE"
+
+
+def test_contract_only_upload_autonomously_reaches_editable_outputs(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    if not _qwen_idle():
+        pytest.skip("Persistent Qwen is occupied; do not compete with owner processing")
+    objects = tmp_path / "objects"
+    archives = tmp_path / "archives"
+    objects.mkdir()
+    archives.mkdir()
+    settings = SpineSettings(
+        database_url=postgres_environment.application_engine.url.render_as_string(
+            hide_password=False
+        ),
+        lifecycle_database_url=postgres_environment.lifecycle_engine.url.render_as_string(
+            hide_password=False
+        ),
+        worker_database_url=postgres_environment.document_worker_engine.url.render_as_string(
+            hide_password=False
+        ),
+        destruction_database_url=postgres_environment.destruction_engine.url.render_as_string(
+            hide_password=False
+        ),
+        object_store_root=objects,
+        archive_store_root=archives,
+        session_profile=SessionProfile.DEVELOPMENT_LOOPBACK,
+        audit_pepper="synthetic-contract-only-acceptance-pepper",
+        max_file_bytes=4 * 1024 * 1024,
+        max_batch_bytes=8 * 1024 * 1024,
+    )
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="synthetic-contract-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Synthetic contract owner",
+    )
+    repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+    orchestrator = ProjectOrchestrator(repository)
+    with TestClient(app) as client:
+        login = client.post(
+            "/api/v1/session/login",
+            json={
+                "username": "synthetic-contract-owner",
+                "password": "Synthetic-Owner-Password-42!",
+            },
+        )
+        assert login.status_code == 200, login.text
+        csrf = client.cookies.get("asd_csrf")
+        assert csrf
+        headers = {"X-CSRF-Token": csrf}
+        created = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Heat network contract-only qualification"},
+            headers=headers,
+        )
+        assert created.status_code == 201, created.text
+        workspace = created.json()
+        workspace_id = UUID(workspace["workspace_id"])
+        organization_id = UUID(workspace["organization_id"])
+        upload = client.post(
+            f"/api/v1/workspaces/{workspace_id}/documents",
+            files=[("files", ("agreement.docx", _contract_docx(), _DOCX_MIME))],
+            headers=headers,
+        )
+        assert upload.status_code == 202, upload.text
+
+        worker = DocumentWorker(
+            repository,
+            app.state.container.object_store,
+            worker_identity="isolated-contract-only-worker",
+            lease_seconds=30,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+        )
+        deadline = time.monotonic() + 900
+        next_sweep_at = 0.0
+        last_outcome_at = time.monotonic()
+        seen_jobs: dict[str, int] = {}
+        view: dict[str, object] = {}
+        while time.monotonic() < deadline:
+            if time.monotonic() >= next_sweep_at:
+                sweep = orchestrator.run_once()
+                assert not sweep.scope_failures, sweep.scope_failures
+                next_sweep_at = time.monotonic() + 30
+            outcome = worker.run_once()
+            if outcome is not None:
+                seen_jobs[outcome.outcome_code] = seen_jobs.get(outcome.outcome_code, 0) + 1
+                last_outcome_at = time.monotonic()
+            response = client.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+            assert response.status_code == 200, response.text
+            view = response.json()
+            revisions = view.get("revised_contracts") or []
+            if (
+                view.get("disagreement_items")
+                and isinstance(revisions, list)
+                and any(
+                    isinstance(item, dict)
+                    and item.get("package_state") == "exact_source_package_available"
+                    for item in revisions
+                )
+            ):
+                break
+            if time.monotonic() - last_outcome_at > 45:
+                with postgres_environment.owner_engine.connect() as connection:
+                    active_jobs = connection.scalar(
+                        sa.text(
+                            "SELECT count(*) FROM workspace.durable_jobs WHERE "
+                            "organization_id=:o AND workspace_id=:w AND "
+                            "state IN ('queued','leased','running')"
+                        ),
+                        {"o": organization_id, "w": workspace_id},
+                    )
+                if active_jobs == 0:
+                    break
+            if outcome is None:
+                time.sleep(0.5)
+
+        issue_rows = view.get("issues")
+        assert view.get("disagreement_items"), {
+            "status": view.get("status"),
+            "issues": len(issue_rows) if isinstance(issue_rows, list) else 0,
+            "revised_contracts": view.get("revised_contracts"),
+            "gaps": view.get("gaps"),
+            "jobs": seen_jobs,
+        }
+        clauses = view.get("clauses")
+        assert isinstance(clauses, list)
+        assert any("9.2." in str(item.get("source_text")) for item in clauses)
+        risks = view.get("issues")
+        assert isinstance(risks, list)
+        assert any("7.4." in str(item.get("source_text")) for item in clauses)
+        assert not any("9.2." in str(item.get("trigger_text")) for item in risks)
+        for suffix in ("disagreement-protocol.docx", "revised-contract-package.zip"):
+            artifact = client.get(f"/api/v1/workspaces/{workspace_id}/tender/{suffix}")
+            assert artifact.status_code == 200, (suffix, artifact.text[:300])
+            assert artifact.content
+        package = client.get(
+            f"/api/v1/workspaces/{workspace_id}/tender/revised-contract-package.zip"
+        )
+        with zipfile.ZipFile(io.BytesIO(package.content)) as archive:
+            assert archive.testzip() is None
+            assert "manifest.json" in archive.namelist()
+        with postgres_environment.owner_engine.connect() as connection:
+            contract_jobs = connection.scalar(
+                sa.text(
+                    "SELECT count(*) FROM workspace.durable_jobs WHERE "
+                    "organization_id=:o AND workspace_id=:w AND job_kind='CONTRACT_ANALYSIS' "
+                    "AND state='succeeded'"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            )
+        assert contract_jobs and contract_jobs > 0

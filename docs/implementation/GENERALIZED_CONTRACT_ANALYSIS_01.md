@@ -1,5 +1,30 @@
 # Generalized Contract Analysis 01
 
+## 2026-10-07 contract-only live integration qualification
+
+An opt-in isolated PostgreSQL acceptance now uploads one changed-party synthetic
+construction contract DOCX without PD/RD, runs the application's ordinary
+orchestrator and document worker against the persistent local Qwen process, and
+requires a grounded payment-risk disagreement, no risk on an ordinary defect
+warranty, an editable protocol DOCX, and a valid revised-contract ZIP. It
+creates no workspace in the owner's public database and does not insert
+precomputed Qwen conclusions or manually create successor jobs.
+
+The second bounded run passed in 160.27 seconds: the ordinary pipeline
+completed contract analysis, the API returned both artifacts, and the ZIP
+integrity check passed. The persistent Qwen completion counter rose from 878
+to 881 during the run. The first diagnostic run was interrupted at 189.66
+seconds after accepted semantic output appeared but before the artifact
+condition had been observed; no owner workload was interrupted. The test now
+terminates early if the isolated job queue becomes quiescent without the
+deliverables, while retaining a 900-second ceiling. Command:
+`ASD_RUN_LIVE_CONTRACT_ONLY=1 ASD_TEST_DATABASE_URL=<isolated PostgreSQL admin URL> .venv/bin/pytest -q tests/integration/test_contract_only_live.py`.
+
+This establishes one controlled contract-only professional path, not a full
+contract-capability or four-mode acceptance. The qualification is source-code
+only at this checkpoint; the deployed release remains `18bf2a2`. The public
+database, NTD worker, and owner project were not mutated for this test.
+
 ## 2026-10-07 bounded live-model and progressive-view checkpoint
 
 The reusable contract-analysis task was exercised against the existing,
