@@ -235,6 +235,18 @@ those selected contexts. A complete legal coherence review, authenticated
 browser acceptance and the remaining contract obligations are still open;
 FFC-01 remains `PARTIAL` and `ProductReady=false`.
 
+Release `3fa4596a4505c080a82bbd9d4fd74d90ab1a5a77` adds a fail-closed
+editable-contract output boundary: source DOCX packages must have a valid
+Office main-document relationship and content type, and an unresolved
+placeholder cannot become a proposed or exported clause. A bounded local-Qwen
+repair may replace a placeholder with source-safe non-numeric wording; otherwise
+the risk remains without a false completed revision. One isolated changed-party
+contract-only run passed the full intake-to-output route in 185.32 seconds;
+both resulting one-page DOCX artifacts opened and every page was visually
+inspected after PDF rendering. This does not establish contract-wide legal
+coherence, negotiated term authority, authenticated owner-browser acceptance,
+or FFC-01 PASS.
+
 The FFC-02 partial delivery is pinned to application release
 `81af71af3d12a988dbd2100d664233272bc20f09` on migration
 `0131_contract_revision_review`. A read-only render of the current real

@@ -1991,5 +1991,16 @@ pages rendered and were visually inspected, and neither revised output had an
 unresolved placeholder. No numerical deadline was invented. The resulting
 non-numeric wording is still a negotiation candidate requiring qualified
 review, not a fully agreed payment term. The full isolated Python gate passed
-1,501 tests with two skips; mypy and ruff passed. The source fix is not a
-deployed release until an exact-SHA cutover is separately recorded.
+1,501 tests with two skips; mypy and ruff passed. The exact-SHA application
+release is `3fa4596a4505c080a82bbd9d4fd74d90ab1a5a77`, still on migration
+`0133_contract_coherence_review`. All four application roles were rolled after
+preflight with no real-workspace job leased or running. The assistant-worker's
+first immediate launchd bootstrap returned error 5 after a successful bootout;
+the next bootstrap succeeded once the old process had exited, before any other
+role was rolled. API readiness then passed, and the Qwen and NTD PIDs were
+unchanged. A read-only owner-workspace projection under the new source code
+still exposed five proposed revisions, so the guard did not silently remove
+the existing candidate package. Authenticated browser download remains
+unverified. The revised document is an editable negotiation candidate; the
+owner must still choose commercially acceptable terms and obtain qualified
+legal review before treating it as a complete agreed contract.
