@@ -488,6 +488,23 @@ def _relationship_pair_key(left: object, right: object) -> tuple[str, str]:
     return (left_value, right_value) if left_value <= right_value else (right_value, left_value)
 
 
+def _one_unlocated_scope_pair_candidate(
+    design: Mapping[str, Any], commercial: Mapping[str, Any]
+) -> bool:
+    """Select bounded semantic context, never infer a shared work location."""
+
+    design_hints = tuple(design.get("facility_hints") or ())
+    commercial_hints = tuple(commercial.get("facility_hints") or ())
+    if sorted((len(design_hints), len(commercial_hints))) != [0, 1]:
+        return False
+    if not design.get("deterministic_family_hint") or (
+        design.get("deterministic_family_hint") != commercial.get("deterministic_family_hint")
+    ):
+        return False
+    affinity = _relationship_pair_affinity(design, commercial)
+    return bool(affinity[0] or affinity[2])
+
+
 def _cross_document_work_batches(
     rows: Iterable[Mapping[str, Any]],
     *,
@@ -507,6 +524,7 @@ def _cross_document_work_batches(
     """
 
     attempted_pairs = attempted_pairs or set()
+    rows = list(rows)
     groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for raw in rows:
         row = dict(raw)
@@ -548,6 +566,33 @@ def _cross_document_work_batches(
         ),
         reverse=True,
     )
+    # A priced row can omit a facility while its design counterpart identifies
+    # one. Exact-location grouping cannot admit that pair for semantic review.
+    # Keep this lane behind the stronger location groups and require lexical
+    # affinity; it grants Qwen context, not a same-scope decision.
+    fallback_by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for raw in rows:
+        row = dict(raw)
+        family = str(row.get("deterministic_family_hint") or "")
+        side = document_comparison_side(row.get("document_role"), row.get("document"))
+        if (
+            family
+            and side in {"design", "commercial"}
+            and len(row.get("facility_hints") or ()) <= 1
+        ):
+            row["comparison_side"] = side
+            fallback_by_family[family].append(row)
+    for family, values in sorted(fallback_by_family.items()):
+        if any(
+            _one_unlocated_scope_pair_candidate(design, commercial)
+            and _relationship_pair_key(design.get("candidate_id"), commercial.get("candidate_id"))
+            not in attempted_pairs
+            for design in values
+            for commercial in values
+            if design["comparison_side"] == "design"
+            and commercial["comparison_side"] == "commercial"
+        ):
+            eligible.append((("one-unlocated", "", family), values))
     batches: list[list[dict[str, Any]]] = []
     selected_ids: set[str] = set()
     eligible_pairs: list[list[tuple[dict[str, Any], dict[str, Any]]]] = []
@@ -566,6 +611,10 @@ def _cross_document_work_batches(
             for commercial in ordered
             if design.get("comparison_side") == "design"
             and commercial.get("comparison_side") == "commercial"
+            and (
+                _key[0] != "one-unlocated"
+                or _one_unlocated_scope_pair_candidate(design, commercial)
+            )
             and _relationship_pair_key(design.get("candidate_id"), commercial.get("candidate_id"))
             not in attempted_pairs
         ]
@@ -677,6 +726,8 @@ def _bounded_scope_context_rows(
         else:
             continue
         row["_comparison_side"] = side
+        row["facility_hints"] = [facility] if facility else []
+        row["document_role"] = professional_role
         groups[key].append(row)
 
     selected_ids: set[str] = set()
@@ -707,12 +758,52 @@ def _bounded_scope_context_rows(
         if selected_group_count >= max_batches:
             break
 
+    if selected_group_count < max_batches:
+        fallback_by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for values in groups.values():
+            for value in values:
+                fallback_by_family[str(value["deterministic_family_hint"])].append(value)
+        for family in sorted(fallback_by_family):
+            values = fallback_by_family[family]
+            pairs = [
+                (design, commercial)
+                for design in values
+                for commercial in values
+                if design["_comparison_side"] == "design"
+                and commercial["_comparison_side"] == "commercial"
+                and _one_unlocated_scope_pair_candidate(design, commercial)
+                and _relationship_pair_key(
+                    design.get("candidate_id"), commercial.get("candidate_id")
+                )
+                not in attempted_pairs
+                and all(
+                    str(value.get("candidate_id") or "") not in selected_ids
+                    for value in (design, commercial)
+                )
+            ]
+            if not pairs:
+                continue
+            selected_pair = max(
+                pairs,
+                key=lambda pair: (
+                    _relationship_pair_affinity(*pair),
+                    str(pair[0].get("candidate_id") or ""),
+                    str(pair[1].get("candidate_id") or ""),
+                ),
+            )
+            selected_ids.update(str(value.get("candidate_id") or "") for value in selected_pair)
+            selected_group_count += 1
+            if selected_group_count >= max_batches:
+                break
+
     selected_scope = []
     for values in groups.values():
         for value in values:
             if str(value.get("candidate_id") or "") not in selected_ids:
                 continue
             value.pop("_comparison_side", None)
+            value.pop("facility_hints", None)
+            value.pop("document_role", None)
             selected_scope.append(value)
     return [*ordinary, *selected_scope]
 

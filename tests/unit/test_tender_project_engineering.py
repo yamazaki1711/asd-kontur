@@ -3227,6 +3227,52 @@ def test_reciprocal_exact_work_pair_authorizes_different_source_wording() -> Non
     assert {value["classification"] for value in comparisons} == {"MATCH"}
 
 
+def test_one_reviewed_pair_does_not_certify_two_grouped_design_operations() -> None:
+    reason = "Both rows describe the same installation of the eastern cable tray."
+    common = {
+        "facility_id": "terminal-v",
+        "facility": "Terminal V",
+        "family_key": "structural_steel",
+    }
+    design = {
+        **common,
+        "work_scope_id": "design-cable-trays",
+        "candidate_ids": ["design-east", "design-west"],
+        "work_scope_assertions": [
+            {
+                "source_candidate_id": "design-east",
+                "related_candidate_id": "estimate-east",
+                "scope_compatibility": "SAME_SCOPE",
+                "normalized_operation": "Install eastern cable tray",
+                "reason": reason,
+            }
+        ],
+        "document_roles": ["РД"],
+        "source_locator_ids": ["design-east-source", "design-west-source"],
+    }
+    commercial = {
+        **common,
+        "work_scope_id": "estimate-cable-trays",
+        "candidate_ids": ["estimate-east"],
+        "work_scope_assertions": [
+            {
+                "source_candidate_id": "estimate-east",
+                "related_candidate_id": "design-east",
+                "scope_compatibility": "SAME_SCOPE",
+                "normalized_operation": "Install eastern cable tray",
+                "reason": reason,
+            }
+        ],
+        "document_roles": ["Смета"],
+        "source_locator_ids": ["estimate-east-source"],
+    }
+
+    comparisons = _scope_comparisons([design, commercial])
+
+    assert {value["classification"] for value in comparisons} == {"PARTIAL_SCOPE_MATCH"}
+    assert all("design-west-source" in value["source_locator_ids"] for value in comparisons)
+
+
 def test_reciprocal_different_scope_rejects_false_work_match() -> None:
     reason = "Проектная строка описывает фермы, коммерческая — связи покрытия."
     common = {
@@ -3899,7 +3945,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v86"
+    assert model["model_version"] == "project-engineering-model-v87"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

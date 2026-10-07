@@ -281,7 +281,7 @@ def test_contract_context_default_bounds_strict_output_to_eight_locators() -> No
 def _work_batch_row(
     candidate_id: str,
     *,
-    facility: str,
+    facility: str | None,
     family: str,
     document_role: str,
     wording: str,
@@ -295,7 +295,7 @@ def _work_batch_row(
         "document": f"Документ {candidate_id}",
         "page": 1,
         "scope": "",
-        "facility_hints": [facility],
+        "facility_hints": [facility] if facility else [],
         "deterministic_family_hint": family,
         "nearby_context": wording,
         "nearby_context_locator_ids": [],
@@ -447,6 +447,36 @@ def test_cross_document_work_batches_do_not_mix_scope_or_one_sided_rows() -> Non
 
     assert batches == []
     assert selected == set()
+
+
+def test_cross_document_work_batches_review_one_unlocated_side_without_asserting_match() -> None:
+    rows = [
+        _work_batch_row(
+            "design-pipe",
+            facility="Pump House Delta",
+            family="pipeline",
+            document_role="Рабочая документация",
+            wording="Install pressure pipeline DN200",
+        ),
+        _work_batch_row(
+            "commercial-pipe",
+            facility=None,
+            family="pipeline",
+            document_role="Смета",
+            wording="Pressure pipeline DN200 installation",
+        ),
+    ]
+
+    batches, selected = _cross_document_work_batches(rows, batch_size=8, max_batches=1)
+
+    assert [[value["candidate_id"] for value in batch] for batch in batches] == [
+        ["design-pipe", "commercial-pipe"]
+    ]
+    assert selected == {"design-pipe", "commercial-pipe"}
+    assert all(value["analysis_task"] == "CROSS_DOCUMENT_SCOPE_MATCHING" for value in batches[0])
+
+    unrelated = dict(rows[1], wording="Dismantle cable trays")
+    assert _cross_document_work_batches([rows[0], unrelated], batch_size=8, max_batches=1)[0] == []
 
 
 def test_cross_document_work_batches_preserve_quantity_context_bound() -> None:
@@ -627,6 +657,50 @@ def test_scope_context_is_bounded_before_source_context_loading() -> None:
         "commercial-alpha",
         "ordinary-unresolved",
     }
+
+
+def test_scope_context_retains_one_unlocated_counterpart_for_qwen() -> None:
+    rows = [
+        {
+            "candidate_id": "design-road-drain",
+            "source_version_id": "source-design",
+            "source_role": "project_documentation",
+            "wording": "Монтаж дренажной трубы под дорогой",
+            "deterministic_family_hint": "pipeline",
+            "scope_comparison_context_only": True,
+            "prior_resolution": {"facility": "Дорога Р"},
+        },
+        {
+            "candidate_id": "commercial-road-drain",
+            "source_version_id": "source-commercial",
+            "source_role": "local_estimate",
+            "wording": "Укладка дренажной трубы",
+            "deterministic_family_hint": "pipeline",
+            "scope_comparison_context_only": True,
+            "prior_resolution": {},
+        },
+    ]
+
+    selected = _bounded_scope_context_rows(
+        rows,
+        source_display_names={},
+        source_role_contexts={},
+        attempted_pairs=set(),
+        max_batches=1,
+    )
+    assert {value["candidate_id"] for value in selected} == {
+        "design-road-drain",
+        "commercial-road-drain",
+    }
+
+    selected_after_review = _bounded_scope_context_rows(
+        rows,
+        source_display_names={},
+        source_role_contexts={},
+        attempted_pairs={("commercial-road-drain", "design-road-drain")},
+        max_batches=1,
+    )
+    assert selected_after_review == []
 
 
 def test_scope_context_skips_an_exact_pair_already_attempted() -> None:

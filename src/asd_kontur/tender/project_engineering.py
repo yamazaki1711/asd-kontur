@@ -30,7 +30,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v86"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v87"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -5426,7 +5426,10 @@ def _work_pair_scope_compatibility(
         return None
     left_assertions = _work_assertions_by_pair(left)
     right_assertions = _work_assertions_by_pair(right)
-    decisions: list[bool] = []
+    matched_left: set[str] = set()
+    matched_right: set[str] = set()
+    match_counts: dict[str, int] = defaultdict(int)
+    reviewed = False
     for left_id in sorted(left_ids):
         for right_id in sorted(right_ids):
             direct = left_assertions.get((left_id, right_id))
@@ -5438,13 +5441,18 @@ def _work_pair_scope_compatibility(
                 for key in ("scope_compatibility", "normalized_operation", "reason")
             ):
                 continue
-            decisions.append(
-                direct.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE.value
-                and bool(_normalized(direct.get("normalized_operation")))
-            )
-    if not decisions:
+            reviewed = True
+            if direct.get("scope_compatibility") != ScopeCompatibility.SAME_SCOPE.value or not (
+                _normalized(direct.get("normalized_operation"))
+            ):
+                return False
+            matched_left.add(left_id)
+            matched_right.add(right_id)
+            match_counts[left_id] += 1
+            match_counts[right_id] += 1
+    if not reviewed or matched_left != left_ids or matched_right != right_ids:
         return None
-    return all(decisions)
+    return None if any(count > 1 for count in match_counts.values()) else True
 
 
 def _work_pair_scope_compatibility_within_schedule(work: Mapping[str, Any]) -> bool | None:
