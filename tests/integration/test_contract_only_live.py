@@ -12,6 +12,8 @@ from __future__ import annotations
 import io
 import json
 import os
+import shutil
+import subprocess
 import time
 import urllib.request
 import zipfile
@@ -28,6 +30,7 @@ from asd_kontur.application_spine.config import SessionProfile, SpineSettings
 from asd_kontur.application_spine.orchestrator import ProjectOrchestrator
 from asd_kontur.application_spine.postgres import SpinePostgresRepository
 from asd_kontur.application_spine.worker import DocumentWorker
+from asd_kontur.tender.qwen_contract_analysis import contract_proposed_wording_has_placeholder
 from asd_kontur.web_app import create_app
 
 from .conftest import PostgreSQLEnvironment
@@ -69,13 +72,24 @@ def _contract_docx() -> bytes:
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
         '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.'
+        'relationships+xml"/>'
         '<Override PartName="/word/document.xml" '
         'ContentType="application/vnd.openxmlformats-officedocument.'
         'wordprocessingml.document.main+xml"/></Types>'
     )
+    package_relationships = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
+        'officeDocument" Target="word/document.xml"/>'
+        "</Relationships>"
+    )
     target = io.BytesIO()
     with zipfile.ZipFile(target, "w") as package:
         package.writestr("[Content_Types].xml", content_types)
+        package.writestr("_rels/.rels", package_relationships)
         package.writestr("word/document.xml", document)
     return target.getvalue()
 
@@ -100,6 +114,8 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,
 ) -> None:
+    if any(shutil.which(tool) is None for tool in ("soffice", "pdfinfo", "pdftoppm")):
+        pytest.skip("DOCX page-rendering tools are unavailable")
     if not _qwen_idle():
         pytest.skip("Persistent Qwen is occupied; do not compete with owner processing")
     objects = tmp_path / "objects"
@@ -260,8 +276,44 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
             artifact = client.get(f"/api/v1/workspaces/{workspace_id}/tender/{suffix}")
             assert artifact.status_code == 200, (suffix, artifact.text[:300])
             assert artifact.content
+            (tmp_path / suffix).write_bytes(artifact.content)
+        for name in ("disagreement-protocol", "revised-contract"):
+            source = tmp_path / f"{name}.docx"
+            converted = subprocess.run(
+                [
+                    "soffice",
+                    f"-env:UserInstallation={(tmp_path / 'libreoffice-profile').as_uri()}",
+                    "--headless",
+                    "--convert-to",
+                    "pdf",
+                    "--outdir",
+                    str(tmp_path),
+                    str(source),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            pdf = tmp_path / f"{name}.pdf"
+            assert converted.returncode == 0 and pdf.is_file(), converted.stderr
+            info = subprocess.run(
+                ["pdfinfo", str(pdf)], capture_output=True, text=True, timeout=30, check=True
+            )
+            page_line = next(line for line in info.stdout.splitlines() if line.startswith("Pages:"))
+            page_count = int(page_line.split(":", 1)[1].strip())
+            assert page_count > 0
+            subprocess.run(
+                ["pdftoppm", "-png", "-r", "100", str(pdf), str(tmp_path / f"{name}-page")],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=True,
+            )
+            assert len(list(tmp_path.glob(f"{name}-page-*.png"))) == page_count
         revised = client.get(f"/api/v1/workspaces/{workspace_id}/tender/revised-contract.docx")
         revised_text = _docx_text(revised.content)
+        assert not contract_proposed_wording_has_placeholder(revised_text)
         assert "9.2." in revised_text
         revised_clauses = view.get("revised_clauses")
         assert isinstance(revised_clauses, list) and revised_clauses

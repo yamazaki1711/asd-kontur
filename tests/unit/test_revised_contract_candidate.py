@@ -30,6 +30,29 @@ from asd_kontur.tender.revised_contract_candidate import (
 _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
+def _write_minimal_docx_package(package: zipfile.ZipFile, document: bytes) -> None:
+    package.writestr(
+        "[Content_Types].xml",
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.'
+        'relationships+xml"/>'
+        '<Override PartName="/word/document.xml" ContentType="application/'
+        'vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        "</Types>",
+    )
+    package.writestr(
+        "_rels/.rels",
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/'
+        'officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+        "</Relationships>",
+    )
+    package.writestr("word/document.xml", document)
+
+
 def _source_docx(*paragraphs: str) -> bytes:
     body = "".join(
         f'<w:p><w:r><w:t xml:space="preserve">{value}</w:t></w:r></w:p>' for value in paragraphs
@@ -40,7 +63,7 @@ def _source_docx(*paragraphs: str) -> bytes:
     ).encode()
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as package:
-        package.writestr("word/document.xml", document)
+        _write_minimal_docx_package(package, document)
         package.writestr("custom/untouched.bin", b"exact-untouched-package-member")
     return output.getvalue()
 
@@ -57,7 +80,7 @@ def _source_docx_with_ignorable_namespace(paragraph: str) -> bytes:
     ).encode()
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as package:
-        package.writestr("word/document.xml", document)
+        _write_minimal_docx_package(package, document)
     return output.getvalue()
 
 
@@ -189,6 +212,49 @@ def test_reviewed_package_carries_matching_editable_protocol() -> None:
         assert manifest["reviewed_protocol"]["proposal_count"] == 1
         assert archive.read("reviewed-disagreement-protocol.docx") == protocol
         assert _paragraphs(archive.read("contract-source-01.docx")) == [proposed]
+
+
+def test_revised_contract_refuses_unresolved_proposal_placeholder() -> None:
+    original = "4.2. Заказчик оплачивает принятые работы после получения финансирования."
+    with pytest.raises(RevisedContractCandidateError, match="unresolved_placeholder"):
+        render_revised_contract_candidate_docx(
+            _source_docx(original),
+            {
+                "clauses": [{"clause_id": "payment", "clause_version": 1, "source_text": original}],
+                "revised_clauses": [
+                    {
+                        "source_clause_id": "payment",
+                        "source_clause_version": 1,
+                        "revised_text": "4.2. Оплата производится в течение [X] дней.",
+                    }
+                ],
+            },
+        )
+
+
+def test_revised_contract_refuses_zip_without_office_document_relationship() -> None:
+    original = "4.2. Payment follows acceptance."
+    malformed = io.BytesIO()
+    with zipfile.ZipFile(malformed, "w") as package:
+        package.writestr(
+            "word/document.xml",
+            f'<w:document xmlns:w="{_WORD_NS}"><w:body><w:p><w:r><w:t>'
+            f"{original}</w:t></w:r></w:p></w:body></w:document>",
+        )
+    with pytest.raises(RevisedContractCandidateError, match="source_docx_invalid"):
+        render_revised_contract_candidate_docx(
+            malformed.getvalue(),
+            {
+                "clauses": [{"clause_id": "payment", "clause_version": 1, "source_text": original}],
+                "revised_clauses": [
+                    {
+                        "source_clause_id": "payment",
+                        "source_clause_version": 1,
+                        "revised_text": "4.2. Payment follows a signed acceptance certificate.",
+                    }
+                ],
+            },
+        )
 
 
 def test_revised_contract_change_register_is_editable_and_formula_safe() -> None:
@@ -335,7 +401,7 @@ def test_revised_contract_rejects_unresolved_source_tracked_changes() -> None:
     ).encode()
     source = io.BytesIO()
     with zipfile.ZipFile(source, "w") as package:
-        package.writestr("word/document.xml", document)
+        _write_minimal_docx_package(package, document)
 
     with pytest.raises(
         RevisedContractCandidateError,
@@ -715,7 +781,7 @@ def test_revised_contract_preserves_unedited_run_styles_across_split_clause() ->
     ).encode()
     source_buffer = io.BytesIO()
     with zipfile.ZipFile(source_buffer, "w") as package:
-        package.writestr("word/document.xml", document)
+        _write_minimal_docx_package(package, document)
     view = _view(prefix + unsafe + suffix)
     revisions = view["revised_clauses"]
     assert isinstance(revisions, list)

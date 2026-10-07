@@ -12,6 +12,7 @@ from asd_kontur.tender.qwen_contract_analysis import (
     _contract_output_token_budget,
     _merge_contract_analysis_parts,
     contract_commercial_narrative_without_unverified_authority,
+    contract_proposed_wording_has_placeholder,
     contract_proposed_wording_is_grounded,
     contract_risk_controller_is_grounded,
     parse_contract_analysis,
@@ -728,6 +729,52 @@ def test_contract_revision_numeric_terms_must_come_from_replaced_clause() -> Non
         "Срок устранения определяется Заказчиком.",
         "Срок устранения составляет 25 дней.",
     )
+
+
+def test_unresolved_contract_revision_placeholder_is_not_a_publishable_proposal() -> None:
+    source = {"loc-payment": "Заказчик оплачивает работы после поступления средств инвестора."}
+    payload = {
+        "clauses": [
+            {
+                "clause_ref": "7.4",
+                "source_text": source["loc-payment"],
+                "source_locator_ids": ["loc-payment"],
+                "category": "payment",
+            }
+        ],
+        "risks": [
+            {
+                "clause_ref": "7.4",
+                "kind": "payment_dependency",
+                "basis": "explicit_clause_text",
+                "risk_mechanism": "customer_controlled_payment",
+                "trigger_text": "Заказчик оплачивает работы после поступления средств инвестора",
+                "adverse_effect_text": "после поступления средств инвестора",
+                "severity": "high",
+                "description": "Срок оплаты зависит от инвестора.",
+                "practical_consequence": "Подрядчик не контролирует дату оплаты.",
+                "recommended_action": "Установить проверяемый срок оплаты.",
+                "replacement_source_text": source["loc-payment"],
+                "proposed_contractor_wording": "Оплата производится в течение [X] дней.",
+                "disagreement_required": True,
+                "confidence": 0.9,
+            }
+        ],
+    }
+    raw = json.dumps(payload, ensure_ascii=False)
+
+    assert contract_proposed_wording_has_placeholder("Оплата в течение [X] дней.")
+    assert not contract_proposed_wording_is_grounded(
+        source["loc-payment"], "Оплата производится в течение [X] дней."
+    )
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_revision_placeholder"):
+        parse_contract_analysis(
+            raw, allowed_text_by_locator=source, reject_placeholder_revision=True
+        )
+    result = parse_contract_analysis(raw, allowed_text_by_locator=source)
+    assert result["risks"][0]["disagreement_required"] is False
+    assert result["risks"][0]["uncertainty"] == "PROPOSED_WORDING_UNRESOLVED_PLACEHOLDER"
+    assert not contract_proposed_wording_has_placeholder("Приложение [1] определяет состав.")
 
 
 def test_contract_analysis_rejects_assumed_delay_of_fixed_term_security_return() -> None:

@@ -143,6 +143,12 @@ _NUMERIC_CONTRACT_TERM = re.compile(
     r"(?<![\w])\d+(?:[.,]\d+)*(?:\s*(?:%|процент\w*|percent\w*))?",
     flags=re.IGNORECASE,
 )
+_UNRESOLVED_PROPOSAL_PLACEHOLDER = re.compile(
+    r"(?:\[\s*(?:[xхnн]+|[_.?*•…]+|(?:срок|дата|сумма|цена|ставка|количество|"
+    r"значение|указать|вставить|заполнить|tbd)[^\]]*)\s*\]|"
+    r"<\s*(?:[xхnн]+|[_.?*•…]+|tbd)\s*>|\bTBD\b|_{3,})",
+    flags=re.IGNORECASE,
+)
 _RETURN_TERMS = ("возвращ", "return", "refund", "release")
 _CONTRACTUAL_FIXED_TERM = re.compile(
     r"(?:в установленн\w*.{0,60}срок|срок\w*.{0,40}(?:установлен|предусмотрен)\w*"
@@ -236,7 +242,9 @@ class QwenContractAnalyzer:
             max_tokens=output_tokens,
         )
         try:
-            parsed = parse_contract_analysis(raw, allowed_text_by_locator=allowed)
+            parsed = parse_contract_analysis(
+                raw, allowed_text_by_locator=allowed, reject_placeholder_revision=True
+            )
         except QwenSemanticFailure as exc:
             if not exc.code.startswith("qwen_contract_"):
                 raise
@@ -268,6 +276,7 @@ def parse_contract_analysis(
     *,
     allowed_text_by_locator: Mapping[str, str],
     discard_controller_ungrounded_risks: bool = False,
+    reject_placeholder_revision: bool = False,
 ) -> dict[str, object]:
     """Validate model JSON against exact bounded input identities and source text."""
 
@@ -387,16 +396,24 @@ def parse_contract_analysis(
             or (disagreement and clause_ref in disagreement_clause_refs)
         ):
             raise QwenSemanticFailure("qwen_contract_risk_revision_invalid")
+        if disagreement and proposed and contract_proposed_wording_has_placeholder(proposed):
+            if reject_placeholder_revision:
+                raise QwenSemanticFailure("qwen_contract_risk_revision_placeholder")
         if disagreement and not contract_proposed_wording_is_grounded(
             exact_replacement_source or "", proposed or ""
         ):
             # Preserve the exact-source commercial risk but do not publish a
-            # negotiation proposal containing a new amount, percentage or
-            # deadline invented outside the admitted clause.
+            # negotiation proposal containing an invented numeric term or an
+            # unresolved placeholder instead of a usable condition.
+            placeholder = contract_proposed_wording_has_placeholder(proposed or "")
             disagreement = False
             proposed = None
             exact_replacement_source = None
-            uncertainty = uncertainty or "PROPOSED_WORDING_NUMERIC_TERM_UNGROUNDED"
+            uncertainty = uncertainty or (
+                "PROPOSED_WORDING_UNRESOLVED_PLACEHOLDER"
+                if placeholder
+                else "PROPOSED_WORDING_NUMERIC_TERM_UNGROUNDED"
+            )
         if disagreement:
             disagreement_clause_refs.add(clause_ref)
         risks.append(
@@ -552,7 +569,15 @@ def contract_proposed_wording_is_grounded(source_text: str, proposed_text: str) 
             for match in _NUMERIC_CONTRACT_TERM.finditer(value)
         }
 
-    return terms(proposed_text).issubset(terms(source_text))
+    return not contract_proposed_wording_has_placeholder(proposed_text) and terms(
+        proposed_text
+    ).issubset(terms(source_text))
+
+
+def contract_proposed_wording_has_placeholder(proposed_text: str) -> bool:
+    """A draft blank is not a complete contractor-protective clause."""
+
+    return _UNRESOLVED_PROPOSAL_PLACEHOLDER.search(proposed_text) is not None
 
 
 _SOURCE_QUOTE_TRANSLATION = str.maketrans(
@@ -695,11 +720,20 @@ CONTEXT:
 
 
 def _repair_prompt(rows: list[dict[str, object]], invalid: str, failure_code: str) -> str:
+    placeholder_instruction = (
+        "Не оставляй [X], TBD, подчёркивания или другой незаполненный параметр в "
+        "proposed_contractor_wording. Если точный срок отсутствует, предложи "
+        "ненумерованное проверяемое условие; если это невозможно, верни null и "
+        "disagreement_required=false. "
+        if failure_code == "qwen_contract_risk_revision_placeholder"
+        else ""
+    )
     return (
         _prompt(rows)
         + "\nПредыдущий ответ отклонён валидатором: "
         + failure_code
         + ". Исправь только JSON и ссылки на предоставленные source_locator_id. "
+        + placeholder_instruction
         + "Не добавляй новых фактов.\nINVALID_RESPONSE:\n"
         + invalid[:12_000]
     )

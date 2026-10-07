@@ -22,6 +22,7 @@ from asd_kontur.tender.contract_coherence import (
 from asd_kontur.tender.qwen_contract_analysis import (
     CONTRACT_ANALYSIS_PROFILE,
     contract_commercial_narrative_without_unverified_authority,
+    contract_proposed_wording_has_placeholder,
     contract_proposed_wording_is_grounded,
     contract_risk_controller_is_grounded,
 )
@@ -648,7 +649,11 @@ class TenderContractAnalysisRepository:
                     or (
                         None
                         if not proposed or proposed_is_grounded
-                        else "PROPOSED_WORDING_NUMERIC_TERM_UNGROUNDED"
+                        else (
+                            "PROPOSED_WORDING_UNRESOLVED_PLACEHOLDER"
+                            if contract_proposed_wording_has_placeholder(str(proposed))
+                            else "PROPOSED_WORDING_NUMERIC_TERM_UNGROUNDED"
+                        )
                     ),
                     "description": description,
                     "recommendation_text": recommendation,

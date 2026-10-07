@@ -13,8 +13,14 @@ from typing import Any, cast
 from xml.etree import ElementTree as ET
 
 from asd_kontur.tender.clause_reference import display_clause_reference
+from asd_kontur.tender.qwen_contract_analysis import contract_proposed_wording_has_placeholder
 
 _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+_PACKAGE_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+_CONTENT_TYPES_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
+_OFFICE_DOCUMENT_REL = (
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+)
 _MARKUP_COMPATIBILITY_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 _TEXT = f"{{{_WORD_NS}}}t"
 _PARAGRAPH = f"{{{_WORD_NS}}}p"
@@ -81,8 +87,10 @@ def render_revised_contract_source_package(
             with zipfile.ZipFile(io.BytesIO(original)) as package:
                 if package.testzip() is not None or "word/document.xml" not in package.namelist():
                     raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
+                _require_office_document_relationship(package.read("_rels/.rels"))
+                _require_word_content_type(package.read("[Content_Types].xml"))
                 _parse_source_document(package.read("word/document.xml"))
-        except zipfile.BadZipFile as exc:
+        except (zipfile.BadZipFile, KeyError) as exc:
             raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
         selected = revisions_by_source.get(source_id, [])
         output = (
@@ -244,6 +252,8 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
         revised_text = str(revision.get("revised_text") or "")
         if not source_text.strip() or not revised_text.strip():
             raise RevisedContractCandidateError("revised_contract_exact_clause_text_unavailable")
+        if contract_proposed_wording_has_placeholder(revised_text):
+            raise RevisedContractCandidateError("revised_contract_unresolved_placeholder")
         replacements.append((source_text, revised_text))
     if not replacements:
         raise RevisedContractCandidateError("revised_contract_revisions_unavailable")
@@ -260,8 +270,12 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
     except (zipfile.BadZipFile, KeyError) as exc:
         raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
     document = payloads.get("word/document.xml")
-    if document is None:
+    relationships = payloads.get("_rels/.rels")
+    content_types = payloads.get("[Content_Types].xml")
+    if document is None or relationships is None or content_types is None:
         raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
+    _require_office_document_relationship(relationships)
+    _require_word_content_type(content_types)
 
     source_namespaces = _register_source_namespaces(document)
     root = _parse_source_document(document)
@@ -335,6 +349,35 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
             copied.create_system = info.create_system
             target.writestr(copied, payloads[info.filename])
     return output.getvalue()
+
+
+def _require_office_document_relationship(payload: bytes) -> None:
+    try:
+        root = ET.fromstring(payload)
+    except ET.ParseError as exc:
+        raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
+    if root.tag != f"{{{_PACKAGE_REL_NS}}}Relationships" or not any(
+        item.tag == f"{{{_PACKAGE_REL_NS}}}Relationship"
+        and item.get("Type") == _OFFICE_DOCUMENT_REL
+        and str(item.get("Target") or "").lstrip("/") == "word/document.xml"
+        for item in root
+    ):
+        raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
+
+
+def _require_word_content_type(payload: bytes) -> None:
+    try:
+        root = ET.fromstring(payload)
+    except ET.ParseError as exc:
+        raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
+    if root.tag != f"{{{_CONTENT_TYPES_NS}}}Types" or not any(
+        item.tag == f"{{{_CONTENT_TYPES_NS}}}Override"
+        and item.get("PartName") == "/word/document.xml"
+        and item.get("ContentType")
+        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"
+        for item in root
+    ):
+        raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
 
 
 def _replace_paragraph_span(

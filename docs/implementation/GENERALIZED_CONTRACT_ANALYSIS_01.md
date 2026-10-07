@@ -1973,3 +1973,23 @@ cutover. Qwen and NTD process IDs were preserved. API readiness returned
 migration `0133_contract_coherence_review` after rollout. The contract journey
 remains `PARTIAL` pending full legal coherence, owner decisions and authenticated
 UI acceptance.
+
+The next isolated contract-only render check exposed an output-qualification
+defect: its synthetic DOCX input lacked the OOXML root relationship, so the
+revised copy was ZIP-valid but could not be opened by LibreOffice. The fixture
+now contains a valid Office package, and the opt-in live-Qwen acceptance
+renders every page of the protocol and revised contract. In the first valid
+render, Qwen's proposed payment wording included an unresolved `[X]` deadline.
+The source-bound validator now makes one bounded repair attempt for such a
+placeholder, then suppresses the proposal if it remains unresolved. The
+read model also refuses previously persisted placeholder proposals, and the
+revised-contract renderer rejects a manually selected placeholder. Output
+assembly requires the source DOCX's Office relationship and main-document
+content type, not merely a readable ZIP. A rerun on the changed-party corpus
+completed in 185.32 seconds; both one-page editable documents opened, all
+pages rendered and were visually inspected, and neither revised output had an
+unresolved placeholder. No numerical deadline was invented. The resulting
+non-numeric wording is still a negotiation candidate requiring qualified
+review, not a fully agreed payment term. The full isolated Python gate passed
+1,501 tests with two skips; mypy and ruff passed. The source fix is not a
+deployed release until an exact-SHA cutover is separately recorded.
