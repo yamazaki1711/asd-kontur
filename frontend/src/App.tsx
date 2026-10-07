@@ -3240,7 +3240,11 @@ function TenderContractAnalysisBody({
                         ) : null}
                       </td>
                       <td>
-                        {displayValue(sourceClause?.display_clause_ref ?? sourceClause?.clause_key, "—")}
+                        {displayValue(
+                          sourceClause?.display_clause_ref ??
+                            sourceClause?.clause_key,
+                          "—",
+                        )}
                         {locator ? (
                           <small>
                             <Link
@@ -3377,7 +3381,12 @@ function TenderContractAnalysisBody({
                   const locator = displayValue(clause.source_locator_id, "");
                   return (
                     <tr key={`${String(clause.clause_id)}:${party}`}>
-                      <td>{displayValue(clause.display_clause_ref ?? clause.clause_key, "—")}</td>
+                      <td>
+                        {displayValue(
+                          clause.display_clause_ref ?? clause.clause_key,
+                          "—",
+                        )}
+                      </td>
                       <td>{party}</td>
                       <td>{text}</td>
                       <td>{displayValue(clause.condition, "Не выделено")}</td>
@@ -3432,7 +3441,12 @@ function TenderContractAnalysisBody({
                     : "Открыть фрагмент";
                   return (
                     <tr key={String(clause.clause_id)}>
-                      <td>{displayValue(clause.display_clause_ref ?? clause.clause_key, "—")}</td>
+                      <td>
+                        {displayValue(
+                          clause.display_clause_ref ?? clause.clause_key,
+                          "—",
+                        )}
+                      </td>
                       <td>
                         {displayValue(clause.source_text, "—")}
                         <small>{displayValue(clause.locator_label, "")}</small>
@@ -4121,7 +4135,10 @@ function SupportProductionBody({
                 {contractExecutionConditions.map((item) => (
                   <tr key={`${displayValue(item.candidate_id, "")}:condition`}>
                     <td>
-                      {displayValue(item.display_clause_ref ?? item.clause_key, "—")}
+                      {displayValue(
+                        item.display_clause_ref ?? item.clause_key,
+                        "—",
+                      )}
                       <small>
                         {humanizeStatus(displayValue(item.category, ""))}
                       </small>
@@ -4188,7 +4205,12 @@ function SupportProductionBody({
                     <tr
                       key={`${displayValue(item.clause_id, String(index))}:${displayValue(item.party, "")}`}
                     >
-                      <td>{displayValue(item.display_clause_ref ?? item.clause_key, "—")}</td>
+                      <td>
+                        {displayValue(
+                          item.display_clause_ref ?? item.clause_key,
+                          "—",
+                        )}
+                      </td>
                       <td>
                         {item.party === "customer" ? "Заказчик" : "Подрядчик"}
                       </td>
