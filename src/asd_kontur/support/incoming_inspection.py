@@ -24,6 +24,28 @@ INCOMING_CHECKS: tuple[tuple[str, str, str], ...] = (
     ("incoming_log", "Запись в журнале входного контроля", "record"),
 )
 _ALLOWED_STATES = frozenset({"passed", "failed", "pending", "not_applicable"})
+_STATE_LABELS = {
+    "passed": "Соответствует",
+    "failed": "Несоответствие",
+    "pending": "Ожидает проверки",
+    "not_applicable": "Неприменимо",
+}
+_KIND_LABELS = {
+    "document": "Проверка документов",
+    "physical": "Фактический осмотр",
+    "document_and_physical": "Документы и фактический осмотр",
+    "record": "Учётная запись",
+}
+_OUTCOME_LABELS = {
+    "nonconforming": "Несоответствие — партию изолировать",
+    "incomplete": "Проверка не завершена",
+    "ready_for_authorized_admission_review": "Подготовлено к решению ответственного лица",
+}
+_ACTION_LABELS = {
+    "isolate_batch_and_resolve_nonconformity": "Изолировать партию и устранить несоответствие",
+    "perform_or_obtain_check": "Выполнить проверку или получить документ",
+    "record_evidence_or_applicability_basis": "Указать подтверждение или основание неприменимости",
+}
 
 
 def evaluate_incoming_inspection(checks: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -98,6 +120,7 @@ def render_incoming_inspection_register(records: Sequence[Mapping[str, Any]]) ->
             "Основание / замечание",
             "Итог по партии",
             "Допуск к применению",
+            "Необходимое действие",
         )
     )
     for record in records:
@@ -107,28 +130,58 @@ def render_incoming_inspection_register(records: Sequence[Mapping[str, Any]]) ->
         checks = result.get("checks")
         if not isinstance(checks, list) or len(checks) != len(INCOMING_CHECKS):
             raise ValueError("incoming_inspection_register_checks_invalid")
+        expected = {key: (label, kind) for key, label, kind in INCOMING_CHECKS}
+        actions = result.get("actions")
+        if not isinstance(actions, list):
+            raise ValueError("incoming_inspection_register_actions_invalid")
+        actions_by_check: dict[str, list[str]] = {}
+        for action in actions:
+            if not isinstance(action, Mapping):
+                raise ValueError("incoming_inspection_register_actions_invalid")
+            key = str(action.get("check_key") or "")
+            action_code = str(action.get("action") or "")
+            if key not in expected or action_code not in _ACTION_LABELS:
+                raise ValueError("incoming_inspection_register_actions_invalid")
+            actions_by_check.setdefault(key, []).append(_ACTION_LABELS[action_code])
+        outcome = str(result.get("outcome") or "")
+        if outcome not in _OUTCOME_LABELS:
+            raise ValueError("incoming_inspection_register_result_invalid")
         submitted_at = record.get("submitted_at")
         submitted = (
             submitted_at.isoformat()
             if hasattr(submitted_at, "isoformat")
             else str(submitted_at or "")
         )
+        seen: set[str] = set()
         for check in checks:
             if not isinstance(check, Mapping):
                 raise ValueError("incoming_inspection_register_checks_invalid")
+            key = str(check.get("key") or "")
+            state = str(check.get("state") or "")
+            if (
+                key not in expected
+                or key in seen
+                or (check.get("label"), check.get("kind")) != expected[key]
+                or state not in _STATE_LABELS
+            ):
+                raise ValueError("incoming_inspection_register_checks_invalid")
+            seen.add(key)
             writer.writerow(
                 (
                     _csv_cell(submitted),
                     _csv_cell(record.get("material_name")),
                     _csv_cell(record.get("batch_reference")),
                     _csv_cell(check.get("label")),
-                    _csv_cell(check.get("kind")),
-                    _csv_cell(check.get("state")),
+                    _KIND_LABELS[str(check["kind"])],
+                    _STATE_LABELS[state],
                     _csv_cell(check.get("basis")),
-                    _csv_cell(result.get("outcome")),
+                    _OUTCOME_LABELS[outcome],
                     "Материал не допущен — требуется решение ответственного лица",
+                    "; ".join(actions_by_check.get(key, ())),
                 )
             )
+        if seen != expected.keys():
+            raise ValueError("incoming_inspection_register_checks_invalid")
     return ("\ufeff" + output.getvalue()).encode("utf-8")
 
 

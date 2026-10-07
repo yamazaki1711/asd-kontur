@@ -76,7 +76,43 @@ def test_register_exports_all_checks_without_admission_or_csv_formulas() -> None
     assert {row[8] for row in rows[1:]} == {
         "Материал не допущен — требуется решение ответственного лица"
     }
+    assert {row[4] for row in rows[1:]} == {
+        "Проверка документов",
+        "Фактический осмотр",
+        "Документы и фактический осмотр",
+        "Учётная запись",
+    }
+    assert {row[5] for row in rows[1:]} == {"Соответствует"}
+    assert {row[7] for row in rows[1:]} == {"Подготовлено к решению ответственного лица"}
+    assert all(row[9] == "" for row in rows[1:])
     assert all(row[1].startswith("'=HYPERLINK") for row in rows[1:])
+
+
+def test_register_shows_corrective_action_for_each_failed_or_unchecked_item() -> None:
+    checks = _checks()
+    checks[0] = {"key": checks[0]["key"], "state": "failed", "basis": "Документ просрочен"}
+    checks[3] = {"key": checks[3]["key"], "state": "pending", "basis": ""}
+    result = evaluate_incoming_inspection(checks)
+    content = render_incoming_inspection_register(
+        [{"material_name": "Материал", "batch_reference": "Партия 42", "result": result}]
+    )
+    rows = list(csv.reader(io.StringIO(content.decode("utf-8-sig"))))
+    by_check = {row[3]: row for row in rows[1:]}
+    assert by_check["Паспорта и сертификаты"][5] == "Несоответствие"
+    assert by_check["Паспорта и сертификаты"][9] == (
+        "Изолировать партию и устранить несоответствие"
+    )
+    assert by_check["Визуальное состояние"][5] == "Ожидает проверки"
+    assert by_check["Визуальное состояние"][9] == (
+        "Выполнить проверку или получить документ"
+    )
+
+
+def test_register_rejects_an_unknown_check_instead_of_exporting_it() -> None:
+    result = evaluate_incoming_inspection(_checks())
+    result["checks"][0]["key"] = "other-project-check"
+    with pytest.raises(ValueError, match="checks_invalid"):
+        render_incoming_inspection_register([{"result": result}])
 
 
 def test_register_rejects_result_that_claims_admission() -> None:
