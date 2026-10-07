@@ -122,6 +122,53 @@ def test_distant_clause_explicitly_referring_to_revised_clause_enters_review() -
     assert tasks[0]["coverage"]["selected_reverse_reference_clauses"] == 1
 
 
+def test_explicit_cross_references_overflow_into_separate_bounded_review() -> None:
+    view = _view(conflicting=False)
+    view["clauses"] = [view["clauses"][0]] + [
+        {
+            "clause_id": f"related-{index:02d}",
+            "clause_version": 1,
+            "source_version_id": "source-a",
+            "source_locator_id": f"locator-{index:02d}",
+            "source_page": index + 20,
+            "display_clause_ref": f"8.{index}",
+            "category": "scope",
+            "source_text": f"8.{index}. Условия п. 4.1 применяются к этапу {index}.",
+        }
+        for index in range(1, 15)
+    ]
+    tasks = contract_coherence_tasks(view)
+    assert len(tasks) == 2
+    assert len(tasks[0]["related_clauses"]) == 12
+    assert len(tasks[1]["related_clauses"]) == 2
+    ids = [clause["clause_id"] for task in tasks for clause in task["related_clauses"]]
+    assert len(ids) == len(set(ids)) == 14
+    assert tasks[1]["coverage"]["review_segment"] == "explicit_reference_overflow"
+    assert tasks[1]["coverage"]["total_explicit_reference_overflow"] == 2
+    assert tasks[0]["context_digest"] != tasks[1]["context_digest"]
+    assert contract_coherence_tasks(view) == tasks
+    overflow_result = parse_contract_coherence(
+        json.dumps(
+            {
+                "conflicts": [
+                    {
+                        "other_clause_id": "related-13",
+                        "proposal_quote": "within ten days of acceptance",
+                        "other_quote": "Условия п. 4.1 применяются к этапу 13",
+                        "conflict": "The payment and stage conditions require reconciliation.",
+                        "contractor_consequence": "The payment trigger may be disputed.",
+                        "recommended_action": "Agree the controlling clause wording.",
+                        "confidence": 0.8,
+                        "uncertainty": None,
+                    }
+                ]
+            }
+        ),
+        context=tasks[1],
+    )
+    assert overflow_result[0]["other_clause_id"] == "related-13"
+
+
 def test_same_number_as_measurement_does_not_create_contract_reference() -> None:
     view = _view(conflicting=False)
     view["clauses"] = [

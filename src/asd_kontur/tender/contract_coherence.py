@@ -15,8 +15,9 @@ CONTRACT_COHERENCE_PROFILE = "qwen-contract-coherence-v2"
 # A failed v2 result write under schema 0133 must not reserve the same durable
 # scheduling identity after the compatible result constraint is installed.
 CONTRACT_COHERENCE_RESULT_SCHEMA = "0134"
-_MAX_REVISIONS = 16
+MAX_CONTRACT_COHERENCE_REVISIONS = 16
 _MAX_RELATED_CLAUSES = 12
+_MAX_REFERENCE_OVERFLOW_BATCHES = 8
 _MAX_CONTEXT_CHARS = 10_000
 _MAX_SOURCE_CHARS = 3_500
 _MAX_RELATED_CHARS = 1_800
@@ -51,7 +52,7 @@ def contract_coherence_tasks(view: Mapping[str, Any]) -> tuple[dict[str, Any], .
     }
     tasks: list[dict[str, Any]] = []
     for revision in sorted(revisions, key=lambda item: str(item.get("revised_clause_id") or ""))[
-        :_MAX_REVISIONS
+        :MAX_CONTRACT_COHERENCE_REVISIONS
     ]:
         source = by_identity.get(
             (
@@ -163,11 +164,66 @@ def contract_coherence_tasks(view: Mapping[str, Any]) -> tuple[dict[str, Any], .
                     str(item["clause_id"]) in reverse_reference_ids for item in selected
                 ),
                 "total_revisions": len(revisions),
-                "scheduled_revision_limit": _MAX_REVISIONS,
+                "scheduled_revision_limit": MAX_CONTRACT_COHERENCE_REVISIONS,
             },
         }
         context["context_digest"] = semantic_digest(context)
         tasks.append(context)
+        # Keep the original bounded context byte-for-byte stable: accepted
+        # reviews remain reusable. Explicit cross-references that lost the
+        # ranking/budget contest get separate bounded semantic reviews.
+        selected_ids = {str(item["clause_id"]) for item in selected}
+        overflow = [
+            other
+            for _score, other_id, other in scored
+            if other_id not in selected_ids
+            and (
+                other_id in reverse_reference_ids
+                or display_clause_reference(other) in referenced_numbers
+            )
+        ]
+        overflow_batches: list[list[dict[str, Any]]] = []
+        batch: list[dict[str, Any]] = []
+        batch_chars = len(source_text) + len(proposed_text)
+        for other in overflow:
+            other_text = str(other["source_text"]).strip()
+            if batch and (
+                len(batch) >= _MAX_RELATED_CLAUSES
+                or batch_chars + len(other_text) > _MAX_CONTEXT_CHARS
+            ):
+                overflow_batches.append(batch)
+                batch = []
+                batch_chars = len(source_text) + len(proposed_text)
+            if batch_chars + len(other_text) > _MAX_CONTEXT_CHARS:
+                continue
+            batch.append(_clause_context(other))
+            batch_chars += len(other_text)
+        if batch:
+            overflow_batches.append(batch)
+        for index, related in enumerate(
+            overflow_batches[:_MAX_REFERENCE_OVERFLOW_BATCHES], start=1
+        ):
+            overflow_context = {
+                "profile": CONTRACT_COHERENCE_PROFILE,
+                "revision_id": revision_id,
+                "revision_digest": revision_digest,
+                "source_clause": _clause_context(source),
+                "proposed_text": proposed_text,
+                "related_clauses": related,
+                "coverage": {
+                    "review_segment": "explicit_reference_overflow",
+                    "segment_index": index,
+                    "total_explicit_reference_overflow": len(overflow),
+                    "scheduled_overflow_batch_limit": _MAX_REFERENCE_OVERFLOW_BATCHES,
+                    "total_other_clauses": len(clauses) - 1,
+                    "selected_other_clauses": len(related),
+                    "omitted_other_clauses": max(0, len(clauses) - 1 - len(related)),
+                    "total_revisions": len(revisions),
+                    "scheduled_revision_limit": MAX_CONTRACT_COHERENCE_REVISIONS,
+                },
+            }
+            overflow_context["context_digest"] = semantic_digest(overflow_context)
+            tasks.append(overflow_context)
     return tuple(tasks)
 
 

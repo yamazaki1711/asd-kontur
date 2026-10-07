@@ -2127,3 +2127,19 @@ platform knowledge; older backups may also contain it. Mixed backups were
 preserved under the no-unsafe-generic-backup-deletion rule. Backup retention
 and sanitization require an exact inventory and approved policy before
 zero-remnant deletion can be claimed.
+
+The next contract-coherence source slice addresses a bounded-review coverage
+gap without altering accepted contexts or scheduling manually. Previously,
+when more than 12 otherwise valid related clauses existed, clauses with an
+explicit reference to a proposed revision could lose the ranking/budget
+contest and receive no semantic review. The task builder now emits separate
+bounded Qwen contexts for those overflow references (at most eight additional
+batches per revision). The original context digest stays stable, so accepted
+reviews remain reusable; new contexts acquire independent durable job keys and
+are scheduled by the existing orchestrator. The projection now exposes a
+typed gap and a non-complete coherence state if the 16-revision scheduling cap
+is exceeded. This is not whole-contract legal clearance: unrelated clauses,
+unroutable long passages and references beyond the explicit bounded cap can
+remain unreviewed. Changed-corpus unit qualification covers overflow
+dispatch, no duplicate clause selection, bounded context validation and
+source-quote checking. This source slice is not yet a deployed capability.
