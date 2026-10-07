@@ -1,5 +1,23 @@
 # Generalized Contract Analysis 01
 
+## 2026-10-07 source-linked Support handover candidate
+
+The Support production view now carries the same workspace's Qwen-extracted
+Customer and Contractor obligations with clause, condition and exact source
+locator. The browser presents them as a review list before execution. This is
+read-only: extraction does not silently become an accepted obligation,
+mandatory work prerequisite, approved contract change or field fact. Clauses
+without a source locator or obligation do not enter the handover. The
+underlying Tender projection remains the single source; no project data is
+copied into platform knowledge.
+
+Changed synthetic-party tests verified party/source preservation, duplicate
+suppression and same-owner/same-workspace access. An isolated PostgreSQL
+browser scenario displayed the new Support table and source navigation. The
+human review/acceptance command, scoped transfer into actual Support process
+rules and full contract legal-authority qualification remain open. This slice
+alone does not establish Support or contract readiness.
+
 ## 2026-10-07 source-linked obligations result
 
 The existing Qwen clause output already separated Customer and Contractor

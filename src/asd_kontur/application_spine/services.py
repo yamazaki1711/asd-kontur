@@ -29,6 +29,7 @@ from asd_kontur.restoration import (
     build_recovery_plan,
     render_recovery_plan_csv,
 )
+from asd_kontur.support.contract_handover import contract_obligation_handover
 from asd_kontur.support.package_consistency import assess_id_package_consistency
 from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
@@ -1364,7 +1365,14 @@ class ProductSpineService:
             workspace_id=workspace_id,
             work_package_id=work_package_id,
         )
-        return {**view, "consistency": assess_id_package_consistency(view)}
+        contract = self._tender_contract_analysis.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        return {
+            **view,
+            "consistency": assess_id_package_consistency(view),
+            "contract_obligation_candidates": contract_obligation_handover(contract),
+        }
 
     def audit_expected_actual_preflight(
         self, *, owner_identity_id: str, workspace_id: UUID

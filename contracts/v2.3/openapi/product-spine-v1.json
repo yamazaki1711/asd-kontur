@@ -3370,6 +3370,14 @@
             "title": "Consistency",
             "type": "object"
           },
+          "contract_obligation_candidates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Contract Obligation Candidates",
+            "type": "array"
+          },
           "field_resolutions": {
             "items": {
               "additionalProperties": true,

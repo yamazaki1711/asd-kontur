@@ -565,6 +565,57 @@ test("contract analysis refreshes as supervised work publishes clauses", async (
   expect(reads).toBeGreaterThanOrEqual(2);
 });
 
+test("Support shows source-linked contract duties as review candidates", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v1/session") return json(route, session());
+    if (path === `/api/v1/workspaces/${workspaceA}`)
+      return json(route, workspace(workspaceA, "Changed construction project"));
+    if (path.endsWith("/support/id-production"))
+      return json(route, {
+        workspace_id: workspaceA,
+        matrix: null,
+        requirements: [],
+        package: null,
+        consistency: {},
+        gaps: [],
+        authority_layers: {},
+        contract_obligation_candidates: [
+          {
+            clause_id: "payment-4",
+            clause_key: "4.2",
+            party: "customer",
+            obligation: "Pay accepted work.",
+            condition: "After acceptance.",
+            source_version_id: documentId,
+            source_locator_id: documentId,
+            source_name: "changed-contract.docx",
+            authority: "qwen_extracted_candidate_requires_contract_review",
+          },
+        ],
+      });
+    if (path.endsWith("/support/scope-readiness"))
+      return json(route, error("support_scope_not_configured"), 404);
+    return json(route, error("synthetic_route_not_defined"), 404);
+  });
+  await page.goto(`/modes/support/workspaces/${workspaceA}/support-id`);
+  await expect(
+    page.getByRole("heading", {
+      name: "Договорные обязательства для проверки перед выполнением работ",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText("Pay accepted work.")).toBeVisible();
+  await expect(page.getByText("After acceptance.")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "changed-contract.docx" }),
+  ).toHaveAttribute(
+    "href",
+    `/modes/support/workspaces/${workspaceA}/evidence/locators/${documentId}`,
+  );
+});
+
 for (const viewport of [
   { width: 1440, height: 900 },
   { width: 1280, height: 720 },

@@ -2716,6 +2716,10 @@ export interface components {
             consistency: {
                 [key: string]: unknown;
             };
+            /** Contract Obligation Candidates */
+            contract_obligation_candidates?: {
+                [key: string]: unknown;
+            }[];
             /** Field Resolutions */
             field_resolutions?: {
                 [key: string]: unknown;

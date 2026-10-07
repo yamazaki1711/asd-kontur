@@ -3858,9 +3858,71 @@ function SupportProductionBody({
   const fields = value.field_resolutions ?? [];
   const fieldRows = mergeFieldResolutionRows(fields);
   const sourceFieldCandidates = value.source_field_candidates ?? [];
+  const contractObligations = value.contract_obligation_candidates ?? [];
   const supportProcess = value.support_process;
   return (
     <>
+      <section className="panel">
+        <h2>Договорные обязательства для проверки перед выполнением работ</h2>
+        <p>
+          Это положения, извлечённые из договора. Они не становятся принятыми
+          обязательствами или запретами на работы без проверки договора и
+          решения ответственного специалиста.
+        </p>
+        {contractObligations.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Пункт</th>
+                  <th>Сторона</th>
+                  <th>Действие</th>
+                  <th>Условие</th>
+                  <th>Источник</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contractObligations.map((item, index) => {
+                  const locator = displayValue(item.source_locator_id, "");
+                  return (
+                    <tr
+                      key={`${displayValue(item.clause_id, String(index))}:${displayValue(item.party, "")}`}
+                    >
+                      <td>{displayValue(item.clause_key, "—")}</td>
+                      <td>
+                        {item.party === "customer" ? "Заказчик" : "Подрядчик"}
+                      </td>
+                      <td>{displayValue(item.obligation, "—")}</td>
+                      <td>
+                        {displayValue(item.condition, "Требует проверки")}
+                      </td>
+                      <td>
+                        {locator ? (
+                          <Link
+                            to={workspaceRoute(
+                              "Support",
+                              workspaceId,
+                              `/evidence/locators/${locator}`,
+                            )}
+                          >
+                            {displayValue(item.source_name, "Открыть источник")}
+                          </Link>
+                        ) : (
+                          displayValue(item.source_name, "Источник не привязан")
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <InfoNotice>
+            Договорные обязательства ещё не извлечены или договор отсутствует.
+          </InfoNotice>
+        )}
+      </section>
       {availablePackages.length > 0 && (
         <section className="panel">
           <div className="entity-heading">
