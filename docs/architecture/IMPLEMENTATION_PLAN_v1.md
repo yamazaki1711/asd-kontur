@@ -60,6 +60,19 @@ CPU after 23 seconds versus 99.9% for the previous worker after 41 minutes.
 Qwen and NTD services were not restarted. This is an operational and contract
 package improvement, not FFC-01 or full-product acceptance.
 
+Follow-up public release `d30a1cadd5da90ec7cd67a9e1fc97611bd6eb699`
+adds an editable, source-linked `unresolved-references.csv` to a revised
+contract package when the autonomous reference review could not match a
+contract citation to an admitted document. The register preserves exact
+quotes, target descriptions, source locators and uncertainty; it does not
+claim that an unresolved referenced document is actually missing. The
+package manifest records its digest and count. Changed-reference focused
+tests passed 34/34. All four supervised application roles were cut over with
+zero queued/leased/running durable jobs; exact-SHA launchd preflight passed
+4/4, API readiness and frontend HTTP 200 passed, and Qwen/NTD were untouched.
+Authenticated owner download and visual DOCX review were not repeated on this
+follow-up release. FFC-01 remains PARTIAL.
+
 Checkpoint 2026-10-07 (Asia/Kamchatka): public application release
 `039ce694a10200a2f24e7cadda61b9c8cd6a58ac` runs migration
 `0134_contract_coherence_profile_v2`. Five owner-workspace contract coherence
