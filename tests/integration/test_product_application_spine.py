@@ -86,7 +86,25 @@ def test_field_document_upload_keeps_declared_role_and_rejects_path_role_conflic
                     "document": document_id,
                 },
             )
+            field_jobs = set(
+                connection.scalars(
+                    sa.text(
+                        "SELECT job_kind FROM workspace.durable_jobs WHERE "
+                        "organization_id=:o AND workspace_id=:w AND "
+                        "subject_document_id=:document"
+                    ),
+                    {
+                        "o": workspace["organization_id"],
+                        "w": workspace["workspace_id"],
+                        "document": document_id,
+                    },
+                )
+            )
         assert kind == "field_document"
+        assert "DOCUMENT_PAGE_CLASSIFICATION" in field_jobs
+        assert "PROJECT_DEFINITION_EXTRACTION" not in field_jobs
+        assert "PROJECT_UNDERSTANDING_RECONCILIATION" not in field_jobs
+        assert "REQUIREMENT_MATRIX_ASSEMBLY" not in field_jobs
         listed = client.get(endpoint)
         assert listed.status_code == 200
         assert listed.json()["items"][0]["source_kind"] == "field_document"
@@ -105,6 +123,42 @@ def test_field_document_upload_keeps_declared_role_and_rejects_path_role_conflic
             headers=_csrf(client),
         )
         assert invalid.status_code == 422
+        project_run = f"/api/v1/workspaces/{workspace['workspace_id']}/project-understanding/runs"
+        field_only = client.post(project_run, headers=_csrf(client))
+        assert field_only.status_code == 409
+        assert field_only.json()["error"]["code"] == "project_understanding_sources_unavailable"
+        project = client.post(
+            endpoint,
+            files=[("files", ("project.txt", b"Project design scope", "text/plain"))],
+            headers=_csrf(client),
+        )
+        assert project.status_code == 202, project.text
+        project_document_id = project.json()["accepted_document_ids"][0]
+        assert client.post(project_run, headers=_csrf(client)).status_code == 202
+        with postgres_environment.owner_engine.connect() as connection:
+            sources = dict(
+                connection.execute(
+                    sa.text(
+                        "SELECT document_id,source_version_id FROM workspace.document_versions "
+                        "WHERE organization_id=:o AND workspace_id=:w"
+                    ),
+                    {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                ).all()
+            )
+            project_jobs = (
+                connection.execute(
+                    sa.text(
+                        "SELECT input_manifest->>'source_version_id' FROM workspace.durable_jobs "
+                        "WHERE organization_id=:o AND workspace_id=:w AND "
+                        "job_kind='PROJECT_UNDERSTANDING_RECONCILIATION'"
+                    ),
+                    {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                )
+                .scalars()
+                .all()
+            )
+        assert str(sources[UUID(project_document_id)]) in project_jobs
+        assert str(sources[UUID(document_id)]) not in project_jobs
 
 
 def test_processing_status_ignores_obsolete_contract_profile_failures(

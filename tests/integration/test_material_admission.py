@@ -56,7 +56,7 @@ def test_material_admission_migration_roundtrip_on_disposable_database(
     run_migration(str(repository_root), url, "head")
     with postgres_environment.owner_engine.connect() as connection:
         assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
-            "0138_support_material_use_evidence"
+            "0139_field_document_project_role_boundary"
         )
     run_migration(str(repository_root), url, "0135_support_incoming_inspection_preflights")
     with postgres_environment.owner_engine.connect() as connection:

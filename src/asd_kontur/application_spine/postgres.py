@@ -2634,6 +2634,7 @@ class SpinePostgresRepository:
             object_key=staged.object_key,
             media_type=staged.media_type,
             content_digest=staged.digest,
+            source_kind=source_kind,
             owner_identity_id=owner_identity_id,
             correlation_id=correlation_id,
         )
@@ -2716,6 +2717,7 @@ class SpinePostgresRepository:
         object_key: str,
         media_type: str,
         content_digest: str,
+        source_kind: str,
         owner_identity_id: str,
         correlation_id: UUID,
     ) -> tuple[UUID, ...]:
@@ -2747,6 +2749,22 @@ class SpinePostgresRepository:
                 JobKind.DOCUMENT_ADMISSION,
                 JobKind.DOCUMENT_HASH,
                 JobKind.DOCUMENT_FORMAT_INVENTORY,
+            )
+        elif source_kind == "field_document":
+            # A field record needs native/OCR intake and document classification,
+            # but it must not form design scope, work requirements or Tender facts.
+            kinds = tuple(
+                kind
+                for kind in kinds
+                if kind
+                not in {
+                    JobKind.PROJECT_DEFINITION_EXTRACTION,
+                    JobKind.WORK_QUANTITY_MATERIAL_EXTRACTION,
+                    JobKind.WORK_PACKAGE_ASSEMBLY,
+                    JobKind.REQUIREMENT_MATRIX_ASSEMBLY,
+                    JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+                    JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+                }
             )
         for priority, kind in enumerate(kinds, start=1):
             job_id = uuid7()
@@ -7386,14 +7404,19 @@ class SpinePostgresRepository:
                     sa.text(
                         "WITH active_versions AS ("
                         " SELECT v.document_id,v.version,v.source_version_id,v.object_key,v.media_type,"
-                        " v.content_digest,v.safe_display_name,v.recorded_at FROM workspace.document_versions v JOIN LATERAL ("
+                        " v.content_digest,v.safe_display_name,v.recorded_at FROM workspace.document_versions v "
+                        " JOIN workspace.source_artifacts source ON "
+                        " source.organization_id=v.organization_id AND "
+                        " source.workspace_id=v.workspace_id AND "
+                        " source.source_artifact_id=v.source_artifact_id JOIN LATERAL ("
                         " SELECT selected_document_version FROM "
                         " workspace.document_version_activation_decisions a WHERE "
                         " a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id "
                         " AND a.document_id=v.document_id ORDER BY a.decision_version DESC LIMIT 1"
                         " ) activation ON activation.selected_document_version=v.version WHERE "
                         " v.organization_id=:organization AND v.workspace_id=:workspace "
-                        " AND v.media_type<>'application/zip'"
+                        " AND v.media_type<>'application/zip' AND "
+                        " source.source_kind<>'field_document' AND source.status='active'"
                         "), native_counts AS (SELECT locators.source_version_id,COUNT(DISTINCT elements.source_locator_id) "
                         "FILTER (WHERE COALESCE(NULLIF(elements.raw_text,''),"
                         "elements.normalized_text)<>'') AS native_locator_count "

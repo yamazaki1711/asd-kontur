@@ -118,13 +118,21 @@ class ProjectOrchestrator:
                     organization_id=organization_id,
                     workspace_id=workspace_id,
                 )
-                self._repository.start_project_understanding(
-                    owner_identity_id=owner_identity_id,
-                    workspace_id=workspace_id,
-                    correlation_id=uuid7(),
-                    _resolved_organization_id=organization_id,
-                )
-                models += 1
+                try:
+                    self._repository.start_project_understanding(
+                        owner_identity_id=owner_identity_id,
+                        workspace_id=workspace_id,
+                        correlation_id=uuid7(),
+                        _resolved_organization_id=organization_id,
+                    )
+                except SpinePersistenceError as exc:
+                    if str(exc) != "project_understanding_sources_unavailable":
+                        raise
+                    # A Support workspace can contain only actual field records.
+                    # Keep lease/retry reconciliation active without treating that
+                    # evidence as design input or reporting a project-model fault.
+                else:
+                    models += 1
                 work_batches += len(
                     self._repository.schedule_contract_coherence_reviews(
                         organization_id=organization_id,

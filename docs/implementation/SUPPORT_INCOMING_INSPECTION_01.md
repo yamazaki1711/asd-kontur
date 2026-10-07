@@ -415,3 +415,26 @@ Qwen and NTD were not restarted. Previous plists remain under
 No owner-provided delivery/use facts or authenticated browser result are
 claimed. This is a usable calculation path for supplied facts, not a full
 Support acceptance.
+
+## Field-document boundary for autonomous project analysis
+
+A regression test exposed a cross-mode scheduling defect in the preceding
+release: an admitted `field_document` received design/project-definition,
+work/quantity, requirement-matrix and reconciliation jobs. A Support record
+could therefore consume Qwen time and influence the Tender project model as
+though it were design evidence. No public field-document upload was observed
+at this checkpoint; the retained owner's project had 21 existing sources and
+zero material-use confirmations/applications.
+
+Migration `0139_field_document_project_role_boundary` gives the supervised
+document worker SELECT-only access to the authoritative source-role ledger,
+under the existing organization/workspace RLS scope. Initial field-document
+intake retains native/OCR/classification/indexing but does not enqueue
+project-definition, work/quantity, package, requirement-matrix or project
+reconciliation jobs. Project-understanding recovery selects active non-field
+sources only; a field-only workspace is not reported as a project-model
+failure by the orchestrator. The design-document path is otherwise unchanged.
+The isolated regression covers field-only admission, subsequent design upload,
+worker access and source selection; no project-specific inference or public
+project data repair was used. This boundary does not by itself qualify all
+Support, Tender, Audit or Restoration outcomes.

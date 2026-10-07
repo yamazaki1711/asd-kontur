@@ -9,6 +9,7 @@ import pytest
 
 from asd_kontur.application_spine.models import ClaimedJob, JobKind
 from asd_kontur.application_spine.orchestrator import ProjectOrchestrator
+from asd_kontur.application_spine.postgres import SpinePersistenceError
 from asd_kontur.application_spine.worker import (
     DeterministicJobFailure,
     DocumentWorker,
@@ -120,6 +121,40 @@ def test_orchestrator_repairs_dependencies_and_ensures_successors() -> None:
         "refill_work",
         "recover_dependencies",
     ]
+
+
+def test_orchestrator_does_not_treat_field_only_workspace_as_project_model_failure() -> None:
+    class Repository:
+        def reconcile_unclaimable_jobs(self) -> int:
+            return 0
+
+        def recover_dependency_terminal_failures(self) -> int:
+            return 0
+
+        def autonomous_project_processing_scopes(self, **_kwargs: object):
+            return ((ORGANIZATION_ID, WORKSPACE_ID, "owner", datetime.now(UTC)),)
+
+        def reconcile_expired_exhausted_jobs(self, **_kwargs: object) -> int:
+            return 0
+
+        def schedule_autonomous_retry_replacements(self, **_kwargs: object):
+            return ()
+
+        def supersede_redundant_project_reconciliations(self, **_kwargs: object) -> int:
+            return 0
+
+        def start_project_understanding(self, **_kwargs: object) -> None:
+            raise SpinePersistenceError("project_understanding_sources_unavailable")
+
+        def schedule_contract_coherence_reviews(self, **_kwargs: object):
+            return ()
+
+        def refill_workspace_project_work_reconciliation_if_idle(self, **_kwargs: object):
+            return ()
+
+    result = ProjectOrchestrator(Repository()).run_once()  # type: ignore[arg-type]
+    assert result.project_models_ensured == 0
+    assert result.scope_failures == ()
 
 
 def test_orchestrator_rotates_across_more_scopes_than_one_sweep() -> None:
