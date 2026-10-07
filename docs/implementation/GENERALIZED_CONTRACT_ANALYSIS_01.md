@@ -11,8 +11,25 @@ Changed-source tests cover four non-body part classes and an unchanged-source
 package member; 40/40 focused contract-output unit cases passed. A read-only
 check found no such blocker in the retained workspace's four admitted DOCX
 sources. This is a deterministic source-integrity guard, not legal approval,
-whole-contract coherence or browser acceptance. Deployment is not yet claimed
-at this source checkpoint.
+whole-contract coherence or browser acceptance.
+
+Exact source SHA `b033cfe74e744a02ebe30b8e0a865387eb80f4a4` was released
+on unchanged migration `0139_field_document_project_role_boundary`. The exact
+archive passed 41/41 selected contract-output/API checks plus frontend
+typecheck, lint and build; 4/4 private launchd staging passed. The first
+immediate bootstrap after bootout hit launchd I/O error 5; one bounded retry
+started all four application roles, each pinned to this SHA. API readiness
+and frontend HTTP 200 passed. The owner-scoped read-only service still forms
+the complete two-source package from 307 persisted clauses and five proposed
+revisions; 31 referenced-document matches remain unresolved. The retained
+workspace still has 21 source versions and no active durable jobs. The
+platform-only data fingerprint remained
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+Qwen PID 9105 and NTD worker PID 1356 were not restarted. The previous
+application plists are private under
+`~/.asd-kontur/public-demo/launchd-backups/20261008-pre-b033cfe-visible-word-parts/`.
+No owner-authenticated browser acceptance or human/legal approval is claimed;
+the in-app browser backend was unavailable during this checkpoint.
 
 ## Source-document ambiguity guards (deployed checkpoint)
 
