@@ -1071,3 +1071,30 @@ the project-understanding scheduler creates one current-profile
 `asd_g04_test_*` and removed by the integration fixture. This establishes the
 application/SQL boundary for this case, not a live model result or full
 contract-only journey.
+
+## 2026-10-07 exact-source release candidate and read-only check
+
+Commit `46aab7680633d0e93cda7b552bca8b04e4c84f41` was archived into a
+non-active qualification release at
+`~/.asd-kontur/qualification/contract-release-46aab76.7Wcuie`.
+Its isolated Python environment installs from the frozen lock; frontend
+`npm ci`, production build and TypeScript check pass. The transitive
+`source-map-js` lock was raised from 1.2.1 to patched 1.2.2 after the
+[reviewed advisory](https://github.com/advisories/GHSA-68fv-2mgg-jv7q);
+`npm audit` reports zero known vulnerabilities for the candidate.
+
+The staged read projection was exercised without writes against the existing
+real contract workspace. It returned a drafted assessment with two of two
+current contract sources complete and no uncovered sources; one revised-contract
+candidate remained eligible. An independent SQL aggregate found all 576 of 576
+readable current-source locators covered by accepted v10 result segments. This
+checks that the new gate does not demote an already-covered corpus. It does not
+validate the substantive legal findings or activate the staged code.
+
+All-page Word rendering remains unqualified. The installed ONLYOFFICE `x2t`
+converter returned its `open` error for both an existing generated report and
+a trivial synthetic DOCX, so that invocation is not evidence that the report
+is malformed. LibreOffice is unavailable. Existing ZIP/XML integrity and
+first-page Quick Look checks do not satisfy all-page visual acceptance. The
+owner-facing launchd services were not restarted or repointed during this
+qualification.
