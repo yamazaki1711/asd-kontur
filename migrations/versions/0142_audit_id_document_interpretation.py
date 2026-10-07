@@ -79,9 +79,7 @@ def downgrade() -> None:
     if os.environ.get("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE") != "1":
         raise RuntimeError("Audit interpretation downgrade requires a disposable database")
     if op.get_bind().scalar(
-        sa.text(
-            "SELECT EXISTS (SELECT 1 FROM workspace.durable_jobs WHERE job_kind=:kind)"
-        ),
+        sa.text("SELECT EXISTS (SELECT 1 FROM workspace.durable_jobs WHERE job_kind=:kind)"),
         {"kind": _KIND},
     ):
         raise RuntimeError("Audit interpretation jobs exist; downgrade requires a clean fixture")

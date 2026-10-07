@@ -6696,16 +6696,20 @@ class SpinePostgresRepository:
                         "document": source["document_id"],
                         "manifest": _json(manifest),
                         "digest": semantic_digest(
-                            {"kind": JobKind.AUDIT_ID_DOCUMENT_INTERPRETATION.value,
-                             "manifest": manifest}
+                            {
+                                "kind": JobKind.AUDIT_ID_DOCUMENT_INTERPRETATION.value,
+                                "manifest": manifest,
+                            }
                         ),
                         "key": key,
-                        "provenance": _json({
-                            "contract": "audit.id-document-interpretation@1.0.0",
-                            "source_version_id": str(source_version_id),
-                            "profile": ID_DOCUMENT_INTERPRETATION_PROFILE,
-                            "authority": "qwen_candidate_requires_independent_audit",
-                        }),
+                        "provenance": _json(
+                            {
+                                "contract": "audit.id-document-interpretation@1.0.0",
+                                "source_version_id": str(source_version_id),
+                                "profile": ID_DOCUMENT_INTERPRETATION_PROFILE,
+                                "authority": "qwen_candidate_requires_independent_audit",
+                            }
+                        ),
                         "correlation": correlation_id,
                         "owner": owner_identity_id,
                     },

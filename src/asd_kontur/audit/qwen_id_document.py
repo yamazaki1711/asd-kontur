@@ -188,8 +188,8 @@ def _bounded_fragments(
             remaining = _MAX_TOTAL_CHARS - total_chars
             if remaining <= 0 or len(fragments) >= _MAX_FRAGMENTS:
                 return tuple(fragments)
-            text = (element.raw_text or element.normalized_text).strip()[:
-                min(_MAX_FRAGMENT_CHARS, remaining)
+            text = (element.raw_text or element.normalized_text).strip()[
+                : min(_MAX_FRAGMENT_CHARS, remaining)
             ]
             if not text:
                 continue
