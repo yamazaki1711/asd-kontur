@@ -67,6 +67,16 @@ argument array was corrected. No live service was restarted until the staged
 plists passed. These tool-behaviour hazards must be accounted for in future
 release automation.
 
+Source-only follow-up `tools/stage_launchd_release.py` replaces that fragile
+manual plist-editing step. It validates all four source argument arrays,
+creates a new private staging directory, writes complete replacement arrays
+and release pins with `plistlib`, retains existing secret values without
+printing them, and runs the four-role topology check. Two synthetic tests
+verify unchanged source plists, private permissions, no duplicated executable
+argument, rejection of an existing output directory and fail-closed malformed
+input. This tool is not part of the already deployed `491add1` release and
+does not itself migrate or restart any service.
+
 This is one Support result, not Support-mode readiness. It does not yet bind
 the preflight to a material-admission decision, field evidence, work-package
 blocking, laboratory records or KS/payment outputs. Tender, Audit and
