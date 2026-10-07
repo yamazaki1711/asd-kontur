@@ -79,6 +79,7 @@ from asd_kontur.support.scope_commands import (
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisError
 from asd_kontur.tender.contract_revision_review import ContractRevisionReviewError
 from asd_kontur.tender.participation_decision import TenderParticipationInputError
+from asd_kontur.tender.revised_contract_candidate import RevisedContractCandidateError
 
 from ..application_spine.auth import AuthError, OwnerAuthService
 from ..application_spine.config import SpineSettings
@@ -427,6 +428,12 @@ def _install_middleware(app: FastAPI) -> None:
     ) -> JSONResponse:
         status_code = 503 if "inference" in exc.code else 409
         return _error(request, exc.code, status_code)
+
+    @app.exception_handler(RevisedContractCandidateError)
+    async def revised_contract_error(
+        request: Request, exc: RevisedContractCandidateError
+    ) -> JSONResponse:
+        return _error(request, str(exc), 409)
 
     @app.exception_handler(ValueError)
     async def value_error(request: Request, exc: ValueError) -> JSONResponse:

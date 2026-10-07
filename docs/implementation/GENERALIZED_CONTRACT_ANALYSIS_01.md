@@ -2190,3 +2190,32 @@ surface was unavailable in this session;
 no authenticated owner UI/download acceptance is claimed. This release does
 not certify legal coherence of unreviewed clauses or authority to adopt any
 proposal.
+
+## Multi-source revised-contract output boundary — 2026-10-07
+
+The current real workspace has two active DOCX documents classified as
+contract sources. Its read-only contract view contains five source-bound
+proposed revisions across those documents. Before this correction, the
+standalone revised-contract DOCX applied only the primary source's revisions
+while remaining downloadable. The complete source-package ZIP already edits
+both DOCX files, but its link required explicit proposal selection. A partial
+standalone file could therefore be mistaken for the whole revised contract.
+
+The corrected service rejects the standalone DOCX when any proposed revision
+belongs to another source, even if a projected external-revision count were
+stale. The contract view retains the candidate as a multi-source package,
+verifies the complete ZIP, and the UI offers that ZIP directly without forcing
+selection. The optional selected and human-reviewed ZIPs remain separate.
+The route returns a typed conflict instead of silently exporting the partial
+file. The user-facing notice explains that one Word file cannot represent all
+edited source documents. This is a generic source-identity rule, not a branch
+on the current project's clauses or values.
+
+A read-only application-service qualification against the real workspace
+generated a two-source package with five applied revisions, five change-register
+rows and 31 unresolved-reference rows; it did not mutate project data or call
+Qwen. The standalone service returned the new typed blocker. Controlled
+multi-source tests prove both DOCX members receive their respective edits and
+that a stale projected count cannot bypass the guard. The package is still a
+candidate for professional/legal review, and unresolved references remain
+unresolved; this does not complete FFC-01 or ProductReady.

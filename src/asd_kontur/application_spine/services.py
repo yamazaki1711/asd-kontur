@@ -641,7 +641,20 @@ class ProductSpineService:
             workspace_id=workspace_id,
             contract_view=view,
         )
-        if any(
+        multi_source_revisions = any(
+            isinstance(candidate, dict) and int(candidate.get("external_revision_count") or 0) > 0
+            for candidate in view.get("revised_contracts", ())
+        )
+        if multi_source_revisions:
+            for candidate in view["revised_contracts"]:
+                candidate["state"] = "multi_source_package_required"
+            for deliverable in view.get("deliverables", ()):
+                if (
+                    isinstance(deliverable, dict)
+                    and deliverable.get("deliverable_kind") == "revised_contract"
+                ):
+                    deliverable["state"] = "multi_source_package_required"
+        elif any(
             str(item.get("state")) == "source_format_supported"
             for item in view.get("revised_contracts", ())
             if isinstance(item, dict)
@@ -1066,6 +1079,11 @@ class ProductSpineService:
         workspace_id: UUID,
         view: dict[str, Any],
     ) -> tuple[bytes, str]:
+        if any(
+            isinstance(candidate, dict) and int(candidate.get("external_revision_count") or 0) > 0
+            for candidate in view.get("revised_contracts", ())
+        ):
+            raise RevisedContractCandidateError("revised_contract_multiple_sources_use_package")
         clauses = {
             (str(item.get("clause_id", "")), str(item.get("clause_version", ""))): item
             for item in view.get("clauses", ())
@@ -1093,6 +1111,11 @@ class ProductSpineService:
             )
             and str(clause.get("source_version_id") or "") == str(source_version_id)
         ]
+        all_revisions = [
+            revision for revision in view.get("revised_clauses", ()) if isinstance(revision, dict)
+        ]
+        if len(selected_revisions) != len(all_revisions):
+            raise RevisedContractCandidateError("revised_contract_multiple_sources_use_package")
         if not selected_revisions:
             raise RevisedContractCandidateError("revised_contract_revisions_unavailable")
         source = self._repository.get_workspace_source_object(

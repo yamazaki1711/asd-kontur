@@ -1367,7 +1367,7 @@ def test_primary_contract_source_fails_closed_for_semantically_close_sources() -
     assert _select_primary_revised_contract_source(sources, clauses=clauses) is None
 
 
-def test_exact_candidate_changes_only_primary_contract_source_revisions() -> None:
+def test_multi_source_revisions_require_complete_editable_package() -> None:
     primary_id = "71000000-0000-4000-8000-000000000097"
     attachment_id = "71000000-0000-4000-8000-000000000098"
     primary_clause = "2.4. Оплата зависит от лимитов финансирования Заказчика."
@@ -1429,16 +1429,24 @@ def test_exact_candidate_changes_only_primary_contract_source_revisions() -> Non
         }
     )
 
-    candidate = service.tender_revised_contract_candidate(
-        owner_identity_id="owner:changed", workspace_id=UUID(int=75)
-    )
-
-    assert _paragraphs(b"".join(candidate.chunks)) == [
-        "2.4. Оплата производится после приёмки выполненных работ."
-    ]
+    with pytest.raises(
+        RevisedContractCandidateError, match="revised_contract_multiple_sources_use_package"
+    ):
+        service.tender_revised_contract_candidate(
+            owner_identity_id="owner:changed", workspace_id=UUID(int=75)
+        )
+    view["revised_contracts"][0]["external_revision_count"] = 0
+    with pytest.raises(
+        RevisedContractCandidateError, match="revised_contract_multiple_sources_use_package"
+    ):
+        service.tender_revised_contract_candidate(
+            owner_identity_id="owner:changed", workspace_id=UUID(int=75)
+        )
+    view["revised_contracts"][0]["external_revision_count"] = 1
     projected = service.tender_contract_analysis(
         owner_identity_id="owner:changed", workspace_id=UUID(int=75)
     )
+    assert projected["revised_contracts"][0]["state"] == "multi_source_package_required"
     assert projected["revised_contracts"][0]["package_state"] == ("exact_source_package_available")
     package = service.tender_revised_contract_package(
         owner_identity_id="owner:changed", workspace_id=UUID(int=75)

@@ -2945,12 +2945,11 @@ function TenderContractAnalysisBody({
   const revisedContracts = value.revised_contracts as Array<
     Record<string, unknown>
   >;
-  const exactRevisedContract = revisedContracts.find(
-    (candidate) =>
-      String(candidate.state) === "exact_source_candidate_available",
+  const multiSourceContract = revisedContracts.find(
+    (candidate) => String(candidate.state) === "multi_source_package_required",
   );
   const externalRevisionCount = Number(
-    exactRevisedContract?.external_revision_count ?? 0,
+    multiSourceContract?.external_revision_count ?? 0,
   );
   const deliverables = value.deliverables as Array<Record<string, unknown>>;
   const projectContext = (value.project_context ?? {}) as Record<
@@ -3117,6 +3116,13 @@ function TenderContractAnalysisBody({
             Скачать черновик редакции договора (Word)
           </a>
         ) : null}
+        {revisedContracts.some(
+          (candidate) => String(candidate.package_state) === "exact_source_package_available",
+        ) ? (
+          <a className="button-link secondary" href={`/api/v1/workspaces/${workspaceId}/tender/revised-contract-package.zip`}>
+            Скачать полный черновик редакций договорных документов (ZIP)
+          </a>
+        ) : null}
         {selectedPackageHref &&
         revisedContracts.some(
           (candidate) =>
@@ -3148,19 +3154,18 @@ function TenderContractAnalysisBody({
           правок; архив не означает согласования редакции Заказчиком.
         </p>
       ) : null}
-      {exactRevisedContract && externalRevisionCount > 0 ? (
+      {multiSourceContract && externalRevisionCount > 0 ? (
         <InfoNotice>
-          Редакция основного договора подготовлена только по изменениям,
-          относящимся к этому документу. Ещё {externalRevisionCount}{" "}
+          Изменения относятся к нескольким договорным документам. Отдельный
+          Word-файл основного договора не выдаётся как полный результат: ещё {externalRevisionCount}{" "}
           {externalRevisionCount === 1
             ? "предложение относится"
             : "предложения относятся"}{" "}
           к приложениям или другим договорным документам.{" "}
-          {externalRevisionCount === 1 ? "Оно сохранено" : "Они сохранены"} в
-          протоколе разногласий.
-          {String(exactRevisedContract.package_state) ===
+          {externalRevisionCount === 1 ? "Оно сохранено" : "Они сохранены"} в протоколе разногласий.
+          {String(multiSourceContract.package_state) ===
           "exact_source_package_available"
-            ? " Полный комплект изменённых исходных договорных файлов доступен отдельно; он остаётся проектом для проверки и согласования."
+            ? " Полный комплект редактируемых исходных договорных файлов доступен в ZIP; он остаётся проектом для проверки и согласования."
             : " Полный комплект редактируемых исходных файлов пока не подготовлен."}
         </InfoNotice>
       ) : null}
@@ -10594,6 +10599,8 @@ function humanizeStatus(value: string) {
     source_format_supported: "Можно подготовить редакцию исходного договора",
     exact_source_candidate_available:
       "Автоматический черновик редакции исходного договора доступен",
+    multi_source_package_required:
+      "Редакции нескольких документов доступны полным комплектом",
     candidate_clause_schedule: "Подготовлен перечень предлагаемых изменений",
     duplicate: "Повторный файл",
     processing: "Обрабатывается",
