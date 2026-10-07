@@ -352,3 +352,28 @@ created for the existing owner project. This bridge does not establish material
 balance, work acceptance, KS/payment readiness, complete Support-mode
 acceptance or whole-product readiness. Authenticated owner-browser acceptance
 and public deployment are separate checks, not inferred from source tests.
+
+The bridge was released from exact source SHA
+`29b39dbded65c2edc352b4f09ee1d956afa80a27` to the four supervised
+application roles on 2026-10-08. The owner database is at
+`0138_support_material_use_evidence`; API readiness and frontend HTTP 200
+passed, the served OpenAPI is structurally identical to the staged schema
+(SHA-256 `440951b193877caf448dc708011dccca8c62b83addf3fdc573535af4f5d9915b`),
+and the new route returned 401 without authentication. A fresh private custom
+backup at
+`~/.asd-kontur/public-demo/backups/0138-field-evidence-29b39db/pre-migration.dump`
+has SHA-256 `f9834bf9a87f8b844899ef4fe2a20d78b96a0e4a2e742726bb414d88fe0211b7`.
+It restored to a separate qualification database and passed 0137 → 0138,
+0138 → 0137 and 0137 → 0138 before public migration. The exact release
+passed 32/32 focused isolated PostgreSQL/API/lifecycle tests plus frontend
+typecheck and build. All four launchd plists are pinned to the SHA; previous
+plists remain private under
+`~/.asd-kontur/public-demo/launchd-backups/20261008-pre-29b39db-field-evidence/`.
+The public project retained 21 source versions, with zero material-use
+confirmations and zero material applications; no owner field fact was
+manufactured. The normalized platform-only data fingerprint was identical
+before and after this cutover:
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+The existing Qwen and NTD processes were not restarted. Authenticated
+owner-browser acceptance and a real field-document application remain
+unverified. Support-mode and `ProductReady` remain unaccepted.
