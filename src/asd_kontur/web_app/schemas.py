@@ -113,6 +113,7 @@ class DocumentView(ApiModel):
     capability_gaps: list[str]
     recorded_at: datetime
     document_roles: list[str] = Field(default_factory=list)
+    audit_id_candidate: dict[str, Any] | None = None
 
 
 class DocumentPage(ApiModel):

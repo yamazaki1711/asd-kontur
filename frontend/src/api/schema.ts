@@ -2024,6 +2024,10 @@ export interface components {
         DocumentView: {
             /** Admission Status */
             admission_status: string;
+            /** Audit Id Candidate */
+            audit_id_candidate?: {
+                [key: string]: unknown;
+            } | null;
             /** Capability Gaps */
             capability_gaps: string[];
             /** Content Digest */

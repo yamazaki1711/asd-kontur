@@ -154,6 +154,18 @@ class QwenDocumentSemanticAdapter:
         self._endpoint = endpoint
         self._timeout_seconds = timeout_seconds
 
+    def interpret_id_document(
+        self, elements: Iterable[LayoutElement], *, source_version_id: str
+    ) -> dict[str, object]:
+        from asd_kontur.audit.qwen_id_document import interpret_id_document
+
+        return interpret_id_document(
+            elements,
+            source_version_id=source_version_id,
+            endpoint=self._endpoint,
+            timeout_seconds=self._timeout_seconds,
+        )
+
     def classify(self, elements: Iterable[LayoutElement]) -> QwenSemanticClassification:
         pages = _sample_pages(elements)
         if not pages:

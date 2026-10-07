@@ -222,6 +222,29 @@ class IndustrialUnderstandingRepository:
             )
         return stage_result_id
 
+    def load_stage_result(
+        self, claimed: ClaimedJob, *, stage_kind: str, profile_version: str
+    ) -> dict[str, object] | None:
+        """Reuse a completed immutable result after a worker crash before job terminalization."""
+
+        with self._session(claimed) as session:
+            row = session.execute(
+                sa.text(
+                    "SELECT output_manifest FROM workspace.project_understanding_stage_results "
+                    "WHERE organization_id=:o AND workspace_id=:w AND job_id=:job "
+                    "AND stage_kind=:stage AND profile_version=:profile "
+                    "AND terminal_status='complete'"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "job": claimed.job_id,
+                    "stage": stage_kind,
+                    "profile": profile_version,
+                },
+            ).scalar_one_or_none()
+        return dict(row) if isinstance(row, dict) else None
+
     def load_accepted_engineering_batches(
         self, claimed: ClaimedJob, *, profile_version: str
     ) -> dict[str, dict[str, object]]:

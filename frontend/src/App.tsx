@@ -4239,7 +4239,60 @@ function AuditExpectedActualPreflightWorkspace({
                             {humanizeStatus(document.extraction_status)}
                           </td>
                           <td>
-                            Содержание и обязательные реквизиты не проверены
+                            {document.source_kind === "field_document" &&
+                            document.audit_id_candidate ? (
+                              <>
+                                <span>
+                                  Предварительный вид:{" "}
+                                  {humanizeAuditIdDocumentType(
+                                    displayValue(
+                                      document.audit_id_candidate.document_type,
+                                    ),
+                                  )}
+                                </span>
+                                {document.audit_id_candidate.work_scope ? (
+                                  <small>
+                                    Работа:{" "}
+                                    {displayValue(
+                                      document.audit_id_candidate.work_scope,
+                                    )}
+                                  </small>
+                                ) : null}
+                                {document.audit_id_candidate
+                                  .document_type_locator_id ? (
+                                  <small>
+                                    <Link
+                                      to={workspaceRoute(
+                                        "Audit",
+                                        workspaceId,
+                                        `/evidence/locators/${displayValue(document.audit_id_candidate.document_type_locator_id)}`,
+                                      )}
+                                    >
+                                      Источник определения вида
+                                    </Link>
+                                  </small>
+                                ) : null}
+                                {document.audit_id_candidate.work_locator_id ? (
+                                  <small>
+                                    <Link
+                                      to={workspaceRoute(
+                                        "Audit",
+                                        workspaceId,
+                                        `/evidence/locators/${displayValue(document.audit_id_candidate.work_locator_id)}`,
+                                      )}
+                                    >
+                                      Источник привязки работы
+                                    </Link>
+                                  </small>
+                                ) : null}
+                                <small>
+                                  Реквизиты, подписи и соответствие требованиям
+                                  не проверены
+                                </small>
+                              </>
+                            ) : (
+                              "Содержание и обязательные реквизиты не проверены"
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -12292,6 +12345,26 @@ function humanizeExportKind(value: string) {
     workspace_results: "Архив результатов объекта",
   };
   return labels[value] ?? "Результат объекта";
+}
+
+function humanizeAuditIdDocumentType(value: string) {
+  const labels: Record<string, string> = {
+    document_register: "реестр документации",
+    concealed_work_act: "акт освидетельствования скрытых работ",
+    critical_structure_act: "акт освидетельствования ответственных конструкций",
+    acceptance_act: "акт приёмки",
+    work_log: "журнал работ",
+    as_built_drawing: "исполнительная схема или чертёж",
+    material_certificate: "паспорт или сертификат материала",
+    laboratory_report: "протокол испытаний",
+    quantity_statement: "ведомость объёмов",
+    transmittal_register: "реестр передачи документации",
+    ks2: "КС-2",
+    ks3: "КС-3",
+    other_id: "иной документ ИД",
+    unknown: "не установлен",
+  };
+  return labels[value] ?? "не установлен";
 }
 
 function humanizeDocumentRole(value: string) {

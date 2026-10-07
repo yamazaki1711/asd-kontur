@@ -15,6 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from asd_kontur.audit.qwen_id_document import ID_DOCUMENT_INTERPRETATION_PROFILE
 from asd_kontur.document_understanding.models import (
     CLASSIFICATION_PROFILE_VERSION,
     PIT_OBSERVATION_GROUPING_POLICY_VERSION,
@@ -1941,7 +1942,8 @@ class SpinePostgresRepository:
                         "'PROJECT_DEFINITION_EXTRACTION',"
                         "'WORK_QUANTITY_MATERIAL_EXTRACTION','PROJECT_STRUCTURE_RECONCILIATION',"
                         "'PROJECT_WORK_RECONCILIATION','CONTRACT_ANALYSIS',"
-                        "'CONTRACT_REFERENCE_REVIEW','CONTRACT_COHERENCE_REVIEW')) AS qwen_active "
+                        "'CONTRACT_REFERENCE_REVIEW','CONTRACT_COHERENCE_REVIEW',"
+                        "'AUDIT_ID_DOCUMENT_INTERPRETATION')) AS qwen_active "
                         "FROM workspace.durable_jobs job WHERE job.organization_id=:organization "
                         "AND job.workspace_id=:workspace AND "
                         f"{effective_job}"
@@ -2008,6 +2010,7 @@ class SpinePostgresRepository:
             JobKind.CONTRACT_ANALYSIS.value,
             JobKind.CONTRACT_REFERENCE_REVIEW.value,
             JobKind.CONTRACT_COHERENCE_REVIEW.value,
+            JobKind.AUDIT_ID_DOCUMENT_INTERPRETATION.value,
         }
         active_count = int(jobs["active_count"] or 0)
         blocked_count = int(jobs["blocked_count"] or 0)
@@ -2743,6 +2746,7 @@ class SpinePostgresRepository:
                 JobKind.CONTRACT_ANALYSIS,
                 JobKind.CONTRACT_REFERENCE_REVIEW,
                 JobKind.CONTRACT_COHERENCE_REVIEW,
+                JobKind.AUDIT_ID_DOCUMENT_INTERPRETATION,
             }
         )
         if media_type == "application/zip":
@@ -2879,7 +2883,8 @@ class SpinePostgresRepository:
             s.capability_gaps,
             COALESCE(history.prior_versions,ARRAY[]::bigint[]) AS prior_versions,
             COALESCE(jobs.job_ids,ARRAY[]::uuid[]) AS job_ids,
-            COALESCE(semantic_roles.document_roles,ARRAY[]::text[]) AS document_roles
+            COALESCE(semantic_roles.document_roles,ARRAY[]::text[]) AS document_roles,
+            id_candidate.output_manifest AS audit_id_candidate
           FROM workspace.document_records d
           JOIN LATERAL (
             SELECT a.selected_document_version
@@ -2930,9 +2935,24 @@ class SpinePostgresRepository:
             ) latest_decisions
             CROSS JOIN LATERAL unnest(latest_decisions.selected_roles) AS role(value)
           ) semantic_roles ON true
+          LEFT JOIN LATERAL (
+            SELECT result.output_manifest
+            FROM workspace.project_understanding_stage_results result
+            WHERE a_source.source_kind='field_document'
+              AND result.organization_id=v.organization_id
+              AND result.workspace_id=v.workspace_id
+              AND result.document_id=v.document_id
+              AND result.document_version=v.version
+              AND result.source_version_id=v.source_version_id
+              AND result.stage_kind='AUDIT_ID_DOCUMENT_INTERPRETATION'
+              AND result.profile_version=:audit_id_profile
+              AND result.terminal_status='complete'
+            ORDER BY result.recorded_at DESC,result.stage_result_id DESC LIMIT 1
+          ) id_candidate ON true
           WHERE {" AND ".join(filters)}
           ORDER BY v.recorded_at {direction},v.document_id {direction} LIMIT :limit
         """
+        parameters["audit_id_profile"] = ID_DOCUMENT_INTERPRETATION_PROFILE
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
             rows = session.execute(sa.text(statement), parameters).all()
@@ -6589,6 +6609,119 @@ class SpinePostgresRepository:
                         "state": "queued",
                     }
                 )
+        return scheduled
+
+    def schedule_audit_id_document_interpretations(
+        self,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        owner_identity_id: str,
+        correlation_id: UUID,
+    ) -> list[str]:
+        """Queue one bounded interpretation per admitted active field-document version."""
+
+        scheduled: list[str] = []
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            if not self._workspace_accepts_jobs(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ):
+                return []
+            sources = session.execute(
+                sa.text(
+                    "SELECT v.document_id,v.version,v.source_version_id,v.object_key,"
+                    "v.media_type,v.content_digest FROM workspace.document_versions v "
+                    "JOIN workspace.source_artifacts artifact ON "
+                    "artifact.organization_id=v.organization_id AND "
+                    "artifact.workspace_id=v.workspace_id AND "
+                    "artifact.source_artifact_id=v.source_artifact_id "
+                    "JOIN LATERAL (SELECT a.selected_document_version FROM "
+                    "workspace.document_version_activation_decisions a WHERE "
+                    "a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id "
+                    "AND a.document_id=v.document_id ORDER BY a.decision_version DESC LIMIT 1) "
+                    "active ON active.selected_document_version=v.version "
+                    "WHERE v.organization_id=:o AND v.workspace_id=:w "
+                    "AND artifact.source_kind='field_document' AND artifact.status='active' "
+                    "AND EXISTS (SELECT 1 FROM workspace.durable_jobs finished WHERE "
+                    "finished.organization_id=v.organization_id AND "
+                    "finished.workspace_id=v.workspace_id AND "
+                    "finished.subject_document_id=v.document_id AND "
+                    "finished.job_kind='DOCUMENT_AGGREGATION' AND finished.state='succeeded' "
+                    "AND finished.input_manifest->>'source_version_id'=v.source_version_id::text) "
+                    "AND EXISTS (SELECT 1 FROM workspace.native_layout_element_versions element "
+                    "WHERE element.organization_id=v.organization_id AND "
+                    "element.workspace_id=v.workspace_id AND element.document_id=v.document_id "
+                    "AND element.document_version=v.version AND "
+                    "(length(trim(element.raw_text))>0 OR length(trim(element.normalized_text))>0)) "
+                    "ORDER BY v.document_id LIMIT 32"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            ).mappings()
+            for source in sources:
+                source_version_id = source["source_version_id"]
+                key = f"audit-id-document:{source_version_id}:{ID_DOCUMENT_INTERPRETATION_PROFILE}"
+                if session.scalar(
+                    sa.text(
+                        "SELECT 1 FROM workspace.durable_jobs WHERE organization_id=:o "
+                        "AND workspace_id=:w AND idempotency_key=:key LIMIT 1"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "key": key},
+                ):
+                    continue
+                manifest = {
+                    "document_id": str(source["document_id"]),
+                    "document_version": int(source["version"]),
+                    "source_version_id": str(source_version_id),
+                    "object_key": str(source["object_key"]),
+                    "media_type": str(source["media_type"]),
+                    "content_digest": str(source["content_digest"]),
+                    "audit_id_profile": ID_DOCUMENT_INTERPRETATION_PROFILE,
+                }
+                job_id = uuid7()
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                        "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,"
+                        "state,priority,max_attempts,retry_policy_version,provenance,correlation_id,"
+                        "created_by_identity_id) VALUES (:o,:w,:job,:document,"
+                        "'AUDIT_ID_DOCUMENT_INTERPRETATION',CAST(:manifest AS jsonb),:digest,"
+                        ":key,'queued',170,2,'spine-retry-v0.1',CAST(:provenance AS jsonb),"
+                        ":correlation,:owner)"
+                    ),
+                    {
+                        "o": organization_id,
+                        "w": workspace_id,
+                        "job": job_id,
+                        "document": source["document_id"],
+                        "manifest": _json(manifest),
+                        "digest": semantic_digest(
+                            {"kind": JobKind.AUDIT_ID_DOCUMENT_INTERPRETATION.value,
+                             "manifest": manifest}
+                        ),
+                        "key": key,
+                        "provenance": _json({
+                            "contract": "audit.id-document-interpretation@1.0.0",
+                            "source_version_id": str(source_version_id),
+                            "profile": ID_DOCUMENT_INTERPRETATION_PROFILE,
+                            "authority": "qwen_candidate_requires_independent_audit",
+                        }),
+                        "correlation": correlation_id,
+                        "owner": owner_identity_id,
+                    },
+                )
+                self._append_event(
+                    session,
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    job_id=job_id,
+                    event_type="job.queued",
+                    safe_message_code="audit_id_document_interpretation_queued",
+                    current=0,
+                    total=1,
+                    terminal=False,
+                )
+                scheduled.append(str(job_id))
         return scheduled
 
     def schedule_contract_coherence_reviews(
@@ -10934,6 +11067,7 @@ def _document_summary(row: Any) -> DocumentSummary:
         tuple(row.capability_gaps or ()),
         row.recorded_at,
         tuple(getattr(row, "document_roles", ()) or ()),
+        dict(row.audit_id_candidate) if getattr(row, "audit_id_candidate", None) else None,
     )
 
 

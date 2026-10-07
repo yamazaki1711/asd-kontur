@@ -386,6 +386,7 @@ class DocumentWorker:
             JobKind.CONTRACT_ANALYSIS,
             JobKind.CONTRACT_REFERENCE_REVIEW,
             JobKind.CONTRACT_COHERENCE_REVIEW,
+            JobKind.AUDIT_ID_DOCUMENT_INTERPRETATION,
         }:
             try:
                 if claimed.job_kind is JobKind.CONTRACT_COHERENCE_REVIEW:

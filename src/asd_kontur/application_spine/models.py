@@ -45,6 +45,7 @@ class JobKind(StrEnum):
     CONTRACT_ANALYSIS = "CONTRACT_ANALYSIS"
     CONTRACT_REFERENCE_REVIEW = "CONTRACT_REFERENCE_REVIEW"
     CONTRACT_COHERENCE_REVIEW = "CONTRACT_COHERENCE_REVIEW"
+    AUDIT_ID_DOCUMENT_INTERPRETATION = "AUDIT_ID_DOCUMENT_INTERPRETATION"
     ID_DOCUMENT_GENERATION = "ID_DOCUMENT_GENERATION"
     EVIDENCE_INDEX_UPDATE = "EVIDENCE_INDEX_UPDATE"
     WORKSPACE_RESET_RECONCILIATION = "WORKSPACE_RESET_RECONCILIATION"
@@ -135,6 +136,7 @@ class DocumentSummary:
     capability_gaps: tuple[str, ...]
     recorded_at: datetime
     document_roles: tuple[str, ...] = ()
+    audit_id_candidate: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -1021,6 +1021,18 @@
             "title": "Admission Status",
             "type": "string"
           },
+          "audit_id_candidate": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Id Candidate"
+          },
           "capability_gaps": {
             "items": {
               "type": "string"

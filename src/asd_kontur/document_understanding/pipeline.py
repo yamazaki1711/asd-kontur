@@ -13,6 +13,9 @@ from asd_kontur.application_spine.models import (
     ClaimedJob,
     JobKind,
 )
+from asd_kontur.audit.qwen_id_document import (
+    ID_DOCUMENT_INTERPRETATION_PROFILE,
+)
 from asd_kontur.tender.contract_coherence import CONTRACT_COHERENCE_PROFILE
 from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
 from asd_kontur.tender.qwen_contract_references import CONTRACT_REFERENCE_PROFILE
@@ -102,6 +105,7 @@ class IndustrialDocumentUnderstandingPipeline:
             JobKind.CONTRACT_ANALYSIS: self._contract_analysis,
             JobKind.CONTRACT_REFERENCE_REVIEW: self._contract_references,
             JobKind.CONTRACT_COHERENCE_REVIEW: self._contract_coherence,
+            JobKind.AUDIT_ID_DOCUMENT_INTERPRETATION: self._audit_id_document,
         }
         handler = handlers.get(claimed.job_kind)
         if handler is None:
@@ -966,6 +970,27 @@ class IndustrialDocumentUnderstandingPipeline:
         self._repository.record_contract_reference_result(claimed, output_manifest=result)
         return result
 
+    def _audit_id_document(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
+        if self._qwen_semantic is None:
+            raise UnderstandingStageFailure("qwen_id_document_runtime_unavailable")
+        if claimed.input_manifest.get("audit_id_profile") != ID_DOCUMENT_INTERPRETATION_PROFILE:
+            raise UnderstandingStageFailure("audit_id_document_profile_superseded")
+        reusable = self._repository.load_stage_result(
+            claimed,
+            stage_kind=JobKind.AUDIT_ID_DOCUMENT_INTERPRETATION.value,
+            profile_version=ID_DOCUMENT_INTERPRETATION_PROFILE,
+        )
+        if reusable is not None:
+            return reusable
+        elements = self._repository.load_elements(claimed)
+        try:
+            return self._qwen_semantic.interpret_id_document(
+                elements,
+                source_version_id=str(claimed.input_manifest["source_version_id"]),
+            )
+        except QwenSemanticFailure as exc:
+            raise UnderstandingStageFailure(exc.code) from exc
+
 
 def _read_bounded(source: BinaryIO) -> bytes:
     content = source.read(MAX_BOUNDED_PROCESSING_BYTES + 1)
@@ -999,6 +1024,7 @@ def _profile_for(kind: JobKind) -> str:
         JobKind.CONTRACT_ANALYSIS: CONTRACT_ANALYSIS_PROFILE,
         JobKind.CONTRACT_REFERENCE_REVIEW: CONTRACT_REFERENCE_PROFILE,
         JobKind.CONTRACT_COHERENCE_REVIEW: CONTRACT_COHERENCE_PROFILE,
+        JobKind.AUDIT_ID_DOCUMENT_INTERPRETATION: ID_DOCUMENT_INTERPRETATION_PROFILE,
     }[kind]
 
 
