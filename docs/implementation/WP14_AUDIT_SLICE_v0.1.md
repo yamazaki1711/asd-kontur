@@ -77,6 +77,15 @@ Uploaded filenames are escaped against spreadsheet formula execution. An
 isolated API case proves both field and project documents export with their
 own roles, without converting either into an Audit pass. The checkpoint does
 not yet inspect content, satisfy required ID positions or produce findings.
+It is deployed as application release
+`5f5fad5b9e9b02df3be96dc522178d9baedbf6b8`, unchanged migration
+`0141_contract_reference_partial_package`. Four supervised application roles
+passed exact-SHA topology preflight, API readiness and frontend HTTP 200. The
+new route rejects an anonymous request with 401; authenticated live-owner
+download and browser inspection remain unverified. The isolated checks covered
+two scoped active document versions, later-page inclusion and formula-safe
+filenames. Qwen/NTD processes were not restarted; no owner project processing
+was manually scheduled.
 
 ## 1. Scope and boundary
 

@@ -67,6 +67,13 @@ preflight and API readiness after cutover; Qwen/NTD were unchanged. A follow-up
 source slice adds an editable, full-inventory CSV with explicitly unperformed
 content checks. The genuine ID subtype/work-link and independent content-check
 engine remains the next Audit dependency; neither slice is FFC-04 acceptance.
+The full-inventory editable CSV is deployed in release
+`5f5fad5b9e9b02df3be96dc522178d9baedbf6b8` on unchanged migration
+`0141_contract_reference_partial_package`; it preserves the explicit
+`not_performed` content-review state. Authenticated owner-browser acceptance
+remains unverified. Continue the same Audit delivery slice with a bounded
+Qwen-grounded ID subtype/work association and independently validated checks;
+do not misrepresent this CSV as a completed Audit.
 
 Checkpoint 2026-10-07 (later): the owner-supplied mandate in
 `/Users/oleg/Downloads/ASD_KONTUR_FULL_FUNCTIONAL_COMPLETION_EN.md` was read
