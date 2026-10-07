@@ -2725,6 +2725,19 @@ function TenderContractAnalysisBody({
   workspaceId: string;
 }) {
   const clauses = value.clauses as Array<Record<string, unknown>>;
+  const obligations = clauses.flatMap((clause) =>
+    (
+      [
+        ["Заказчик", "customer_obligation"],
+        ["Подрядчик", "contractor_obligation"],
+      ] as const
+    ).flatMap(([party, field]) => {
+      const obligation = clause[field];
+      return typeof obligation === "string" && obligation.trim()
+        ? [{ clause, party, text: obligation }]
+        : [];
+    }),
+  );
   const attachmentReferences = (value.attachment_references ?? []) as Array<
     Record<string, unknown>
   >;
@@ -3123,6 +3136,62 @@ function TenderContractAnalysisBody({
         ) : null}
         <GapList gaps={value.gaps} />
       </section>
+      {obligations.length ? (
+        <section className="panel">
+          <h2>Обязательства сторон и условия исполнения</h2>
+          <p>
+            Условия извлечены из договора и требуют проверки вместе с полным
+            текстом и приложениями.
+          </p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Пункт</th>
+                  <th>Сторона</th>
+                  <th>Обязательство</th>
+                  <th>Условие</th>
+                  <th>Источник</th>
+                </tr>
+              </thead>
+              <tbody>
+                {obligations.map(({ clause, party, text }) => {
+                  const locator = displayValue(clause.source_locator_id, "");
+                  return (
+                    <tr key={`${String(clause.clause_id)}:${party}`}>
+                      <td>{displayValue(clause.clause_key, "—")}</td>
+                      <td>{party}</td>
+                      <td>{text}</td>
+                      <td>{displayValue(clause.condition, "Не выделено")}</td>
+                      <td>
+                        {locator ? (
+                          <Link
+                            to={workspaceRoute(
+                              "Tender",
+                              workspaceId,
+                              `/evidence/locators/${locator}`,
+                            )}
+                          >
+                            {displayValue(
+                              clause.source_name,
+                              "Открыть источник",
+                            )}
+                          </Link>
+                        ) : (
+                          displayValue(
+                            clause.source_name,
+                            "Источник не привязан",
+                          )
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
       <section className="panel">
         <h2>Положения с источниками</h2>
         {clauses.length ? (

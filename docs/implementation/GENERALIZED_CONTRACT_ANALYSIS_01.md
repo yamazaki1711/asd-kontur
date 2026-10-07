@@ -1,5 +1,18 @@
 # Generalized Contract Analysis 01
 
+## 2026-10-07 source-linked obligations result
+
+The existing Qwen clause output already separated Customer and Contractor
+obligations and their conditions, but the professional result hid those fields
+in the clause payload. Tender contract analysis now presents them in a party,
+obligation, condition and source table in the browser and editable Word
+report. Clauses without an extracted obligation do not produce a fabricated
+row. The source clause remains accessible for review; these are extracted
+candidate duties, not accepted legal conclusions or a Support handover yet.
+Changed-name/changed-term Word qualification and the isolated browser scenario
+passed. The Support obligation-transfer and human decision workflow remain
+open before contract capability readiness.
+
 ## 2026-10-07 contract-only live integration qualification
 
 An opt-in isolated PostgreSQL acceptance now uploads one changed-party synthetic

@@ -16,6 +16,28 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
     """Render canonical clauses and proposals without creating a legal decision."""
 
     clauses = tuple(_records(view.get("clauses")))
+    obligation_rows = [
+        (
+            str(ordinal),
+            str(clause.get("clause_key") or "Не указан"),
+            party,
+            obligation,
+            str(clause.get("condition") or "Не выделено из текста"),
+            _source_reference(clause),
+        )
+        for ordinal, (clause, party, obligation) in enumerate(
+            (
+                (clause, party, str(clause.get(field) or "").strip())
+                for clause in clauses
+                for party, field in (
+                    ("Заказчик", "customer_obligation"),
+                    ("Подрядчик", "contractor_obligation"),
+                )
+                if str(clause.get(field) or "").strip()
+            ),
+            start=1,
+        )
+    ]
     clause_by_identity = {
         (str(item.get("clause_id", "")), str(item.get("clause_version", ""))): item
         for item in clauses
@@ -176,6 +198,22 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
                 _paragraph(
                     "Неустановленная связь с загруженным документом требует проверки состава "
                     "перед согласованием; сама по себе она не доказывает отсутствие приложения."
+                ),
+            )
+        )
+
+    if obligation_rows:
+        body.extend(
+            (
+                _heading("Обязательства сторон и условия исполнения", "Heading1"),
+                _paragraph(
+                    "Условия извлечены из исходных пунктов договора и требуют проверки "
+                    "вместе с полным текстом и приложениями."
+                ),
+                _table(
+                    ("№", "Пункт", "Сторона", "Обязательство", "Условие", "Источник"),
+                    obligation_rows,
+                    "",
                 ),
             )
         )

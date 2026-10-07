@@ -527,6 +527,9 @@ test("contract analysis refreshes as supervised work publishes clauses", async (
                   source_name: "changed-contract.docx",
                   source_page: 2,
                   source_locator_id: documentId,
+                  customer_obligation: "Pay for accepted work.",
+                  contractor_obligation: "Submit an acceptance act.",
+                  condition: "Following acceptance.",
                 },
               ],
         attachment_references: [],
@@ -552,6 +555,13 @@ test("contract analysis refreshes as supervised work publishes clauses", async (
   ).toBeVisible();
   await page.clock.runFor(30_100);
   await expect(page.getByText("Payment follows acceptance.")).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "Обязательства сторон и условия исполнения",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText("Pay for accepted work.")).toBeVisible();
+  await expect(page.getByText("Submit an acceptance act.")).toBeVisible();
   expect(reads).toBeGreaterThanOrEqual(2);
 });
 
