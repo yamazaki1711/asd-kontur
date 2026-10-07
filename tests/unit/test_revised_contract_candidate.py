@@ -573,6 +573,50 @@ def test_reviewed_package_carries_matching_editable_protocol() -> None:
         assert _paragraphs(archive.read("contract-source-01.docx")) == [proposed]
 
 
+def test_reviewed_package_maps_unnumbered_attachment_reference() -> None:
+    original = "Site access is arranged by the contractor."
+    proposed = "Site access is arranged by the customer."
+    view = {
+        "clauses": [
+            {
+                "clause_id": "clause-access",
+                "clause_version": 1,
+                "source_version_id": "source-attachment",
+                "source_name": "Site Conditions.docx",
+                "source_page": 3,
+                "source_text": original,
+            }
+        ],
+        "disagreement_items": [
+            {"item_id": "item-access", "clause_id": "clause-access", "clause_version": 1}
+        ],
+        "revised_clauses": [
+            {
+                "disagreement_item_id": "item-access",
+                "source_clause_id": "clause-access",
+                "source_clause_version": 1,
+                "revised_text": proposed,
+            }
+        ],
+    }
+    protocol = render_tender_disagreement_protocol_docx(view)
+    package = render_revised_contract_source_package(
+        [
+            {
+                "source_version_id": "source-attachment",
+                "safe_display_name": "Site Conditions.docx",
+                "content": _source_docx(original),
+            }
+        ],
+        view,
+        protocol_docx=protocol,
+    )
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        assert _paragraphs(archive.read("contract-source-01.docx")) == [proposed]
+        xml = zipfile.ZipFile(io.BytesIO(protocol)).read("word/document.xml").decode("utf-8")
+    assert "Site Conditions.docx: Пункт без номера (стр./лист 3)" in xml
+
+
 def test_reviewed_package_rejects_stale_or_unrelated_protocol() -> None:
     original = "4.2. Payment follows acceptance."
     source = _source_docx(original)

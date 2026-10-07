@@ -16,7 +16,10 @@ from xml.etree import ElementTree as ET
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from asd_kontur.tender.clause_reference import display_clause_reference
+from asd_kontur.tender.clause_reference import (
+    display_clause_reference,
+    display_protocol_clause_reference,
+)
 from asd_kontur.tender.qwen_contract_analysis import contract_proposed_wording_has_placeholder
 
 _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -163,7 +166,7 @@ def render_revised_contract_source_package(
             )
             protocol_rows.append(
                 (
-                    display_clause_reference(clause),
+                    display_protocol_clause_reference(clause),
                     str(clause.get("source_text") or ""),
                     str(revision.get("revised_text") or ""),
                 )
@@ -306,7 +309,7 @@ def _validate_protocol_rows(document: bytes, expected_rows: Sequence[tuple[str, 
             and len(rows[0]) == 5
             and rows[0][1:4]
             == (
-                "Пункт договора",
+                "Пункт договора / документа",
                 "Редакция Заказчика",
                 "Редакция Подрядчика",
             )

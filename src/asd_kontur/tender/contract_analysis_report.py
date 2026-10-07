@@ -9,7 +9,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 from xml.sax.saxutils import escape
 
-from asd_kontur.tender.clause_reference import display_clause_reference
+from asd_kontur.tender.clause_reference import (
+    display_clause_reference,
+    display_protocol_clause_reference,
+)
 
 _FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 
@@ -389,7 +392,7 @@ def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
         rows.append(
             (
                 str(ordinal),
-                display_clause_reference(clause),
+                display_protocol_clause_reference(clause),
                 str(clause.get("source_text") or "Текст исходного пункта не извлечён"),
                 str(revision.get("revised_text") or item.get("proposed_clause_text") or ""),
                 _disagreement_basis(issue, item) + "; Источник: " + _source_reference(clause),
@@ -425,7 +428,7 @@ def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
         _table(
             (
                 "№",
-                "Пункт договора",
+                "Пункт договора / документа",
                 "Редакция Заказчика",
                 "Редакция Подрядчика",
                 "Обоснование / практическая причина",

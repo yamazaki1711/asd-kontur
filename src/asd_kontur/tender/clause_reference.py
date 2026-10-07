@@ -17,3 +17,13 @@ def display_clause_reference(clause: Mapping[str, Any]) -> str:
         return source_match.group(1)
     page = clause.get("source_page") or clause.get("page_number")
     return f"Пункт без номера (стр./лист {page})" if page else "Пункт без номера — см. источник"
+
+
+def display_protocol_clause_reference(clause: Mapping[str, Any]) -> str:
+    """Identify an unnumbered proposal by its source document in the protocol."""
+
+    reference = display_clause_reference(clause)
+    if not reference.startswith("Пункт без номера"):
+        return reference
+    source_name = str(clause.get("source_name") or "").strip()
+    return f"{source_name}: {reference}" if source_name else reference

@@ -6,7 +6,10 @@ import io
 import zipfile
 
 from asd_kontur.application_spine.services import _contract_cross_check_coverage
-from asd_kontur.tender.clause_reference import display_clause_reference
+from asd_kontur.tender.clause_reference import (
+    display_clause_reference,
+    display_protocol_clause_reference,
+)
 from asd_kontur.tender.contract_analysis_export import render_tender_contract_analysis_csv
 from asd_kontur.tender.contract_analysis_report import (
     render_tender_contract_analysis_docx,
@@ -45,6 +48,51 @@ def test_contract_report_uses_only_source_supported_clause_references() -> None:
         )
         == "Пункт без номера — см. источник"
     )
+
+
+def test_protocol_identifies_unnumbered_source_without_inventing_a_clause_number() -> None:
+    unnumbered = {
+        "source_text": "Передача строительной площадки оформляется актом.",
+        "source_name": "Условия выполнения работ.docx",
+        "source_page": 4,
+        "clause_key": "model-generated-7.9",
+    }
+    assert display_protocol_clause_reference(unnumbered) == (
+        "Условия выполнения работ.docx: Пункт без номера (стр./лист 4)"
+    )
+    assert display_protocol_clause_reference(
+        {"source_text": "8.3. Оплата после приёмки", "source_name": "Договор.docx"}
+    ) == "8.3"
+    assert display_protocol_clause_reference({"source_text": "Условие без номера"}) == (
+        "Пункт без номера — см. источник"
+    )
+
+
+def test_protocol_word_table_names_the_unnumbered_attachment() -> None:
+    view = {
+        "assessment": {"source_names": ["Условия выполнения работ.docx"]},
+        "clauses": [
+            {
+                "clause_id": "clause-a",
+                "clause_version": 1,
+                "source_text": "Передача площадки оформляется актом.",
+                "source_name": "Условия выполнения работ.docx",
+                "source_page": 4,
+            }
+        ],
+        "disagreement_items": [
+            {"item_id": "item-a", "clause_id": "clause-a", "clause_version": 1}
+        ],
+        "revised_clauses": [
+            {"disagreement_item_id": "item-a", "revised_text": "Передача оформляется актом сторон."}
+        ],
+    }
+    payload = render_tender_disagreement_protocol_docx(view)
+    with zipfile.ZipFile(io.BytesIO(payload)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert "Пункт договора / документа" in xml
+    assert "Условия выполнения работ.docx: Пункт без номера (стр./лист 4)" in xml
+    assert "Передача оформляется актом сторон." in xml
 
 
 def test_contract_analysis_export_preserves_lineage_and_neutralizes_formulas() -> None:
