@@ -19,9 +19,37 @@ position, authorize signatures or silently transfer the draft into Support.
 The isolated PostgreSQL integration check passed source-bound persistence,
 idempotent replay, staleness, read-only denial and cross-workspace denial. The
 isolated browser check passed explicit reviewer action and reviewed-draft link
-creation. Contract unit checks passed 33/33. This checkpoint is not a public
-deployment or a legal-coherence acceptance; those remain open. The public
-runtime remains on migration `0130` until a backed-up controlled release.
+creation. Contract unit checks passed 33/33. This is not legal-coherence
+acceptance; no real owner proposal was confirmed for qualification.
+
+The owner-facing public application is now pinned to
+`335c4624c80a95d825b56169f102f0a5769bc0de` at
+`~/.asd-kontur/public-demo/releases/20261007-335c462-contract-revision-review-v1`.
+Its API, worker, project-orchestrator and assistant-worker launchd roles all
+report that SHA, API readiness returns HTTP 200, and the new frontend asset
+returns HTTP 200. The public database is at migration
+`0131_contract_revision_review`; the application queue had no
+queued/leased/running jobs before cutover. Qwen and NTD workers were not
+restarted. The exact pre-migration database backup is
+`~/.asd-kontur/public-demo/backups/20261007-pre-0131-contract-revision-review.dump`
+(SHA-256 `8c638668f4adb1aab9a38c0723ef8fb5c0546f91854d2cbb3dacb79fcb02ae1d`).
+It restored into a separate database; upgrade, disposable downgrade and
+re-upgrade passed before public migration. The raw `pg_dump` hashes for
+platform-only data differed solely because the tool emits a random
+`\\restrict`/`\\unrestrict` session marker; after removing those two
+non-data lines both pre/post platform dumps had SHA-256
+`ff6e99703e35fa28887ed16571aa62f552649ccd8027b60305691155f863e3da`.
+The previous launchd plists are preserved under
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-335c462-contract-revision-review/`.
+
+Read-only acceptance through the pinned owner-scoped application service found
+exactly one authorized workspace (the real retaining-wall OKS), 307 contract
+clauses, five proposed revisions and five source-bound review candidates.
+Zero were marked reviewed; no real owner decision was fabricated. The new
+revision-review API was tested with an isolated client/browser, not with an
+authenticated owner mutation on the public project. Full professional legal
+review, counterparty negotiation, coherent attachment/reference review and
+four-mode product acceptance remain open. `ProductReady=false`.
 
 ## 2026-10-07 editable execution-condition register
 
