@@ -121,6 +121,51 @@ def _model() -> dict[str, object]:
     }
 
 
+def test_primary_report_is_bounded_while_full_work_schedule_remains_exportable() -> None:
+    model = _model()
+    model["facility_cards"] = [
+        {
+            "facility": {"name": "Bridge West"},
+            "works": [{"work_name": f"Card operation {index}"} for index in range(18)],
+        }
+    ]
+    model["works"] = [
+        {
+            "facility": "Bridge West",
+            "work_family": f"Work family {index:02d}",
+            "work_name": f"Work operation {index:02d}",
+            "quantities_by_document": {"RD": [{"value": str(100 + index), "unit": "m"}]},
+        }
+        for index in range(50)
+    ]
+    model["materials"] = [
+        {
+            "facility": "Bridge West",
+            "work": "Installation",
+            "name": f"Material {index:02d}",
+            "document_role": "RD",
+            "quantity": str(index + 1),
+            "unit": "t",
+        }
+        for index in range(35)
+    ]
+    report = render_engineering_tender_report_docx(model)
+    with zipfile.ZipFile(io.BytesIO(report)) as package:
+        document = package.read("word/document.xml").decode("utf-8")
+    assert "Work operation 29" in document
+    assert "Work operation 30" not in document
+    assert "Ещё 20 групп" in document
+    assert "Material 24" in document
+    assert "Material 25" not in document
+    assert "Ещё 10 наблюдений" in document
+    assert "Card operation 7" in document
+    assert "Card operation 8" not in document
+    schedule = render_engineering_work_schedule_csv(model).decode("utf-8-sig")
+    materials = render_engineering_material_schedule_csv(model).decode("utf-8-sig")
+    assert "Work operation 49" in schedule
+    assert "Material 34" in materials
+
+
 def test_primary_tender_report_discloses_missing_participation_inputs() -> None:
     model = _model()
     model["participation_decision"] = {

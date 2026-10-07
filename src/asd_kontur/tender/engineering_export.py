@@ -14,6 +14,24 @@ from xml.sax.saxutils import escape
 
 from .findings_report import _docx_package
 
+_MAIN_REPORT_WORK_GROUP_LIMIT = 30
+_MAIN_REPORT_QUANTITY_LIMIT = 30
+_MAIN_REPORT_MATERIAL_LIMIT = 25
+_FACILITY_CARD_ITEM_LIMIT = 8
+
+
+def _bounded_report_names(values: Sequence[str], *, empty: str) -> str:
+    names = list(dict.fromkeys(value.strip() for value in values if value.strip()))
+    if not names:
+        return empty
+    shown = names[:_FACILITY_CARD_ITEM_LIMIT]
+    suffix = (
+        f"; ещё {len(names) - len(shown)} позиций — в модели проекта"
+        if len(names) > len(shown)
+        else ""
+    )
+    return ", ".join(shown) + suffix
+
 
 def render_engineering_work_schedule_csv(model: Mapping[str, Any]) -> bytes:
     """Render the professional work/quantity/material schedule."""
@@ -270,9 +288,7 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
             derived = cost_build_up.get("derived_minimum_viable_price_rub")
             if derived:
                 lines.append(
-                    _paragraph(
-                        f"Расчётная минимальная цена с заявленной прибылью: {derived} руб."
-                    )
+                    _paragraph(f"Расчётная минимальная цена с заявленной прибылью: {derived} руб.")
                 )
             else:
                 lines.append(
@@ -344,24 +360,31 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                                 for value in row.get("characteristics") or ()
                             )
                             or "не установлены",
-                            ", ".join(
-                                str(value.get("name") or "") for value in row.get("pits") or ()
-                            )
-                            or "не установлен / не предусмотрен",
-                            ", ".join(
-                                str(value.get("name") or "")
-                                for value in [
-                                    *(row.get("structures") or ()),
-                                    *(row.get("connections") or ()),
-                                ]
-                            )
-                            or "требуют привязки",
-                            ", ".join(
-                                str(value.get("work_name") or "")
-                                for value in row.get("works") or ()
-                            )
-                            or "требуют привязки",
-                            "; ".join(str(value) for value in row.get("missing_information") or ()),
+                            _bounded_report_names(
+                                [str(value.get("name") or "") for value in row.get("pits") or ()],
+                                empty="не установлен / не предусмотрен",
+                            ),
+                            _bounded_report_names(
+                                [
+                                    str(value.get("name") or "")
+                                    for value in [
+                                        *(row.get("structures") or ()),
+                                        *(row.get("connections") or ()),
+                                    ]
+                                ],
+                                empty="требуют привязки",
+                            ),
+                            _bounded_report_names(
+                                [
+                                    str(value.get("work_name") or "")
+                                    for value in row.get("works") or ()
+                                ],
+                                empty="требуют привязки",
+                            ),
+                            _bounded_report_names(
+                                [str(value) for value in row.get("missing_information") or ()],
+                                empty="",
+                            ),
                         )
                         for row in facility_cards
                     ],
@@ -396,7 +419,7 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                 str(group[0].get("work_family") or group[0].get("work_name") or "").casefold(),
             ),
         )
-        visible_groups = ordered_groups[:120]
+        visible_groups = ordered_groups[:_MAIN_REPORT_WORK_GROUP_LIMIT]
         work_rows = []
         for group in visible_groups:
             representative = max(
@@ -491,7 +514,7 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         if quantity_row not in seen_quantity_rows:
             seen_quantity_rows.add(quantity_row)
             distinct_quantity_rows.append(quantity_row)
-    quantity_rows = distinct_quantity_rows[:80]
+    quantity_rows = distinct_quantity_rows[:_MAIN_REPORT_QUANTITY_LIMIT]
     unreviewed_quantity_rows = sum(
         len(quantities or ())
         for work in works
@@ -590,7 +613,7 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                 str(row.get("name") or "").casefold(),
             ),
         )
-        visible_materials = ordered_materials[:60]
+        visible_materials = ordered_materials[:_MAIN_REPORT_MATERIAL_LIMIT]
         add_section(
             "Материалы",
             [
