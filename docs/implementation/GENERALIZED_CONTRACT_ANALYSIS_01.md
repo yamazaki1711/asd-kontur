@@ -2144,4 +2144,15 @@ This is not whole-contract legal clearance: unrelated clauses, unroutable
 long passages and references beyond the explicit bounded cap can remain
 unreviewed. Changed-corpus unit qualification covers overflow
 dispatch, no duplicate clause selection, bounded context validation and
-source-quote checking. This source slice is not yet a deployed capability.
+source-quote checking. The exact source SHA
+`56300deabcdc9aaa6d1271d9433b5d5c8e945cbe` was staged at
+`~/.asd-kontur/public-demo/releases/20261007-56300de-contract-reference-coverage`
+with offline pinned Python dependencies and a built frontend. The staged
+launchd topology passed 4/4; the exact release passed 95 focused contract
+tests, Ruff, frontend typecheck and build. A controlled cutover restarted only
+the four application roles. API readiness returned healthy with unchanged
+migration `0134_contract_coherence_profile_v2`; the Qwen and NTD worker PIDs
+were not restarted. The frontend index digest matched the pinned plist.
+No public database rows were manually enqueued or repaired. No authenticated
+owner-browser check or real-project new overflow result is claimed by this
+release check; those remain separate product acceptance steps.
