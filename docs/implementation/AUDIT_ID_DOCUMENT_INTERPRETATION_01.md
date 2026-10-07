@@ -55,6 +55,13 @@ HTTP 200. The owner workspace has zero ID-document interpretation jobs because
 it has zero `field_document` sources. Live Audit semantic acceptance is therefore
 still unverified, and this is not Audit mode acceptance.
 
+One bounded synthetic, non-workspace Qwen qualification was run against the
+persistently loaded local `/generate` service. It returned
+`concealed_work_act` and the cited cable-installation work scope in 12.1 seconds
+with candidate authority; it did not claim that the unsigned example was valid.
+This verifies the model task contract on one changed construction example, not
+autonomous job scheduling or independent document-audit acceptance.
+
 ## Still required for Audit
 
 The candidate must be linked to the applicable work/documentation matrix and
