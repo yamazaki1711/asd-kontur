@@ -1826,3 +1826,14 @@ databases were not touched. The full disposable PostgreSQL suite also passed:
 1490 passed, two skipped, one warning, in 125.98 seconds. This test drives the
 orchestrator and worker classes inside a test process and therefore does not
 alone prove Codex-disconnected supervisor autonomy or owner-browser access.
+
+The same isolated contract-only scenario was then extended with an explicitly
+referenced but unprovided Appendix 1. Its autonomous reference-review stage
+completed and returned an exact-quote, unresolved attachment reference plus
+`CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED` in the contract view. The grounded
+payment risk, benign-warranty false-positive control, editable protocol and
+revised-source package still passed. The bounded run passed in 103.60 seconds;
+Qwen's completed-request counter moved from 890 to 894 and returned idle. The
+disposable database was removed by teardown. This proves one missing-attachment
+case with live Qwen; it does not establish completeness of all attachment
+types, internal cross-clause consistency, legal correctness, or browser use.

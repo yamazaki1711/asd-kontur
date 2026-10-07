@@ -219,6 +219,10 @@ for authenticated download and visual UI acceptance. Legal/cross-clause
 coherence, attachment authority, user selection of revisions, and full
 contract-only supervisor-disconnected acceptance remain unverified; no
 contract journey PASS or `ProductReady` change follows from these checks.
+An additional changed-party contract-only run verified an unprovided referenced
+appendix as `unresolved` with an exact source quote and an explicit contract
+gap (one scenario, 103.60 seconds, four local-Qwen requests). This closes only
+the missing-attachment subcase; it does not promote FFC-01 to PASS.
 
 The FFC-02 partial delivery is pinned to application release
 `81af71af3d12a988dbd2100d664233272bc20f09` on migration

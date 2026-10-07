@@ -50,6 +50,8 @@ def _contract_docx() -> bytes:
         "ООО Северный Берег (Заказчик) и ООО Теплоконтур (Подрядчик) заключили договор.",
         "1.1. Подрядчик реконструирует участок тепловой сети "
         "по переданной Заказчиком документации.",
+        "1.2. Техническое задание (Приложение № 1) является неотъемлемой частью "
+        "договора и определяет состав работ. Приложение № 1 передаётся отдельно.",
         "7.4. Заказчик оплачивает принятые работы после поступления средств от инвестора. "
         "До поступления указанных средств обязанность Заказчика по оплате не возникает.",
         "9.2. Подрядчик устраняет за свой счёт недостатки работ, возникшие по его вине, "
@@ -186,6 +188,7 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
             assert response.status_code == 200, response.text
             view = response.json()
             revisions = view.get("revised_contracts") or []
+            reference_review = view.get("reference_review")
             if (
                 view.get("disagreement_items")
                 and isinstance(revisions, list)
@@ -194,6 +197,8 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
                     and item.get("state") == "exact_source_candidate_available"
                     for item in revisions
                 )
+                and isinstance(reference_review, dict)
+                and reference_review.get("status") == "complete"
             ):
                 break
             if time.monotonic() - last_outcome_at > 45:
@@ -226,6 +231,16 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
         assert isinstance(risks, list)
         assert any("7.4." in str(item.get("source_text")) for item in clauses)
         assert not any("9.2." in str(item.get("trigger_text")) for item in risks)
+        references = view.get("attachment_references")
+        assert isinstance(references, list) and references
+        assert any(
+            "Приложение № 1" in str(item.get("source_quote"))
+            and item.get("match_decision") == "unresolved"
+            for item in references
+        ), references
+        gaps = view.get("gaps")
+        assert isinstance(gaps, list)
+        assert "CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED" in gaps
         for suffix in (
             "disagreement-protocol.docx",
             "revised-contract.docx",
