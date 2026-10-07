@@ -25,13 +25,18 @@ application launchd roles under
 public migration remains `0141_contract_reference_partial_package`. The
 supervised reconciler created one final `invalid-output-split-v2` job without
 a Codex command; it carried six source locators and the new worker claimed it.
-Its Qwen outcome is pending at this checkpoint. The exact release passed
+The final repair succeeded without a developer queue command. The effective
+v3 review is complete for seven batches: one exact match, seven partial
+package matches and 33 unresolved links. Partial matches remain in the
+clarification register, not the complete-match total. The exact release passed
 88/88 focused unit and 4/4 isolated PostgreSQL checks plus frontend typecheck,
 lint and build. API readiness passed; Qwen PID 9105 and NTD worker PID 1356
 were not restarted. The platform-only fingerprint remained
 `9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
 Previous application plists are private under
 `~/.asd-kontur/public-demo/launchd-backups/20261008-pre-5b6fcc4-contract-reference-repair/`.
+The subsequent report-presentation release `9cb02f7d8e9db4596a422af96ca91266aae116cd`
+retains this recovery behavior on unchanged migration 0141.
 
 ## Partial contract-package evidence — 2026-10-08 source checkpoint
 

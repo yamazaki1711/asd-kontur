@@ -27,9 +27,20 @@ On a read-only render of the same live project model, the primary Word report
 fell from 44 to 28 A4 pages. Both full schedule members retained their
 previous uncompressed byte counts (470,906 and 462,111). A changed-name
 controlled test verifies that omitted main-report rows remain in the complete
-CSV schedules. This is a source-only checkpoint; no deployment or browser
-acceptance is claimed here. The temporary owner-report QA files were removed
-after visual inspection.
+CSV schedules. Exact release `9cb02f7d8e9db4596a422af96ca91266aae116cd`
+is pinned to the API, document worker, assistant worker and project
+orchestrator under
+`~/.asd-kontur/public-demo/releases/20261008-9cb02f7-tender-summary`. The
+public migration remains `0141_contract_reference_partial_package`. API
+readiness and frontend HTTP 200 passed; the Qwen and NTD worker processes
+were not restarted. The platform-only data fingerprint remained
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+The exact release passed 87/87 focused unit and 3/3 isolated PostgreSQL
+checks plus frontend typecheck, lint and build. Owner-authenticated browser
+acceptance is not claimed; the in-app browser backend was unavailable.
+Temporary owner-report QA files were removed after visual inspection. The
+previous application plists are private under
+`~/.asd-kontur/public-demo/launchd-backups/20261008-pre-9cb02f7-tender-summary/`.
 
 ## Remaining professional limit
 
