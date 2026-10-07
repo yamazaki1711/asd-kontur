@@ -1,5 +1,7 @@
 """Changed-corpus qualification of bounded contract-revision coherence inputs."""
 
+# ruff: noqa: RUF001 -- Russian contract examples are intentional.
+
 from __future__ import annotations
 
 import io
@@ -75,6 +77,8 @@ def test_changed_contract_routes_related_clause_without_claiming_full_coverage()
         "total_other_clauses": 2,
         "selected_other_clauses": 1,
         "omitted_other_clauses": 1,
+        "reverse_reference_clauses": 0,
+        "selected_reverse_reference_clauses": 0,
         "total_revisions": 1,
         "scheduled_revision_limit": 16,
     }
@@ -82,6 +86,74 @@ def test_changed_contract_routes_related_clause_without_claiming_full_coverage()
     changed = _view(conflicting=True)
     changed["clauses"][1]["source_text"] = "7.3. Customer pays after signed acceptance."
     assert contract_coherence_tasks(changed)[0]["context_digest"] != task["context_digest"]
+
+
+def test_distant_clause_explicitly_referring_to_revised_clause_enters_review() -> None:
+    view = _view(conflicting=False)
+    view["clauses"] = [
+        view["clauses"][0],
+        {
+            "clause_id": "termination-far",
+            "clause_version": 1,
+            "source_version_id": "other-source",
+            "source_locator_id": "locator-far",
+            "source_page": 80,
+            "display_clause_ref": "11.7",
+            "category": "termination",
+            "source_text": (
+                "11.7. В случае, указанном в п. 4.1 настоящего договора, "
+                "Заказчик вправе приостановить оплату."
+            ),
+        },
+    ]
+    tasks = contract_coherence_tasks(view)
+    assert len(tasks) == 1
+    assert [item["clause_id"] for item in tasks[0]["related_clauses"]] == ["termination-far"]
+    assert tasks[0]["coverage"]["reverse_reference_clauses"] == 1
+    assert tasks[0]["coverage"]["selected_reverse_reference_clauses"] == 1
+
+
+def test_same_number_as_measurement_does_not_create_contract_reference() -> None:
+    view = _view(conflicting=False)
+    view["clauses"] = [
+        view["clauses"][0],
+        {
+            "clause_id": "quantity-far",
+            "clause_version": 1,
+            "source_version_id": "other-source",
+            "source_locator_id": "locator-far",
+            "source_page": 80,
+            "display_clause_ref": "11.7",
+            "category": "scope",
+            "source_text": "11.7. Объём работ составляет 4.1 м³ по ведомости.",
+        },
+    ]
+    assert contract_coherence_tasks(view) == ()
+
+
+def test_proposal_requires_explicit_clause_reference_not_numeric_similarity() -> None:
+    view = _view(conflicting=False)
+    view["clauses"] = [
+        view["clauses"][0],
+        {
+            "clause_id": "liability-far",
+            "clause_version": 1,
+            "source_version_id": "other-source",
+            "source_locator_id": "locator-far",
+            "source_page": 80,
+            "display_clause_ref": "11.7",
+            "category": "liability",
+            "source_text": "11.7. Liability is limited to direct loss.",
+        },
+    ]
+    view["revised_clauses"][0]["revised_text"] = "4.1. The material mass is 11.7 tonnes."
+    assert contract_coherence_tasks(view) == ()
+    view["revised_clauses"][0]["revised_text"] = (
+        "4.1. Payment remains subject to clause 11.7 of this agreement."
+    )
+    tasks = contract_coherence_tasks(view)
+    assert len(tasks) == 1
+    assert [item["clause_id"] for item in tasks[0]["related_clauses"]] == ["liability-far"]
 
 
 def test_exact_two_sided_quotes_required_for_candidate_conflict() -> None:

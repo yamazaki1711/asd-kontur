@@ -1,5 +1,7 @@
 """Bounded, project-independent contexts for contract revision consistency review."""
 
+# ruff: noqa: RUF001 -- Russian clause-reference forms are intentional.
+
 from __future__ import annotations
 
 import re
@@ -7,14 +9,20 @@ from collections.abc import Mapping
 from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
+from asd_kontur.tender.clause_reference import display_clause_reference
 
-CONTRACT_COHERENCE_PROFILE = "qwen-contract-coherence-v1"
+CONTRACT_COHERENCE_PROFILE = "qwen-contract-coherence-v2"
 _MAX_REVISIONS = 16
 _MAX_RELATED_CLAUSES = 12
 _MAX_CONTEXT_CHARS = 10_000
 _MAX_SOURCE_CHARS = 3_500
 _MAX_RELATED_CHARS = 1_800
-_CLAUSE_NUMBER = re.compile(r"(?<!\d)(\d{1,3}(?:\.\d{1,3}){0,4})(?!\d)")
+_EXPLICIT_CLAUSE_REFERENCE = re.compile(
+    r"(?<!\w)(?:п\.|пункт(?:а|е|ом|у)?|clauses?|sections?)\s*"
+    r"(?:№\s*)?(\d{1,3}(?:\.\d{1,3}){1,4})(?![\d.])",
+    re.IGNORECASE,
+)
+_CLAUSE_NUMBER = re.compile(r"\d{1,3}(?:\.\d{1,3}){1,4}")
 
 
 def contract_coherence_tasks(view: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
@@ -57,11 +65,23 @@ def contract_coherence_tasks(view: Mapping[str, Any]) -> tuple[dict[str, Any], .
             or len(proposed_text) > _MAX_SOURCE_CHARS
         ):
             continue
-        referenced_numbers = set(_CLAUSE_NUMBER.findall(proposed_text))
+        referenced_numbers = set(_EXPLICIT_CLAUSE_REFERENCE.findall(proposed_text))
+        source_number = display_clause_reference(source)
+        if _CLAUSE_NUMBER.fullmatch(source_number) is None:
+            source_number = ""
         scored: list[tuple[int, str, dict[str, Any]]] = []
+        reverse_reference_ids: set[str] = set()
         for other in clauses:
             other_id = str(other.get("clause_id") or "")
             other_text = str(other.get("source_text") or "").strip()
+            if (
+                other_id
+                and other_id != str(source.get("clause_id"))
+                and other.get("source_locator_id")
+                and source_number
+                and source_number in _EXPLICIT_CLAUSE_REFERENCE.findall(other_text)
+            ):
+                reverse_reference_ids.add(other_id)
             if (
                 not other_id
                 or other_id == str(source.get("clause_id"))
@@ -84,9 +104,16 @@ def contract_coherence_tasks(view: Mapping[str, Any]) -> tuple[dict[str, Any], .
                 and isinstance(other_page, int)
                 and abs(source_page - other_page) <= 2
             )
-            number = str(other.get("display_clause_ref") or "")
-            explicit_reference = number in referenced_numbers
-            score = 5 * explicit_reference + 3 * same_category + 2 * nearby + same_source
+            number = display_clause_reference(other)
+            forward_reference = number in referenced_numbers
+            reverse_reference = other_id in reverse_reference_ids
+            score = (
+                7 * reverse_reference
+                + 6 * forward_reference
+                + 3 * same_category
+                + 2 * nearby
+                + same_source
+            )
             if score:
                 scored.append((score, other_id, other))
         scored.sort(key=lambda row: (-row[0], row[1]))
@@ -121,6 +148,10 @@ def contract_coherence_tasks(view: Mapping[str, Any]) -> tuple[dict[str, Any], .
                 "total_other_clauses": len(clauses) - 1,
                 "selected_other_clauses": len(selected),
                 "omitted_other_clauses": max(0, len(clauses) - 1 - len(selected)),
+                "reverse_reference_clauses": len(reverse_reference_ids),
+                "selected_reverse_reference_clauses": sum(
+                    str(item["clause_id"]) in reverse_reference_ids for item in selected
+                ),
                 "total_revisions": len(revisions),
                 "scheduled_revision_limit": _MAX_REVISIONS,
             },
