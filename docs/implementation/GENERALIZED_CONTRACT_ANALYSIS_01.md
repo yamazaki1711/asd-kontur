@@ -1,5 +1,16 @@
 # Generalized Contract Analysis 01
 
+## Source-document ambiguity guards (source checkpoint)
+
+The exact-source revised-contract renderer now refuses a proposed clause text
+that appears only inside a different clause number (for example, a reference
+to 7.4 inside 17.4). It also refuses a selected or unchanged DOCX source with
+unresolved Word tracked-change elements, rather than silently presenting a
+candidate based on an ambiguous source revision. The tests use changed,
+project-independent clause text. This checkpoint is not yet deployed; it is
+deterministic output safety, not Qwen legal coherence or professional approval.
+`ProductReady=false`.
+
 ## Clause-number and overlapping-edit safety (deployed checkpoint)
 
 Exact DOCX substitution now preserves the source's explicit clause number when
