@@ -3865,6 +3865,17 @@
             "title": "Revised Contracts",
             "type": "array"
           },
+          "revision_selection_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Selection Fingerprint"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -8700,6 +8711,38 @@
               "format": "uuid",
               "title": "Workspace Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision_ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revision Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision_fingerprint",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revision Fingerprint"
             }
           }
         ],

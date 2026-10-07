@@ -548,6 +548,7 @@ class TenderContractAnalysisView(ApiModel):
     project_context: dict[str, Any] = Field(default_factory=dict)
     gaps: list[str]
     authority_boundary: str
+    revision_selection_fingerprint: str | None = None
 
 
 class AuditReportProjectionView(ApiModel):

@@ -40,6 +40,10 @@ from asd_kontur.tender.contract_analysis_report import (
     render_tender_disagreement_protocol_docx,
 )
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
+from asd_kontur.tender.contract_revision_selection import (
+    contract_revision_fingerprint,
+    select_contract_revisions,
+)
 from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_csv
 from asd_kontur.tender.engineering_export import (
     render_engineering_disagreement_protocol_docx,
@@ -599,6 +603,7 @@ class ProductSpineService:
         view = self._tender_contract_analysis.latest(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
         )
+        view["revision_selection_fingerprint"] = contract_revision_fingerprint(view)
         view["project_context"] = self._contract_project_context(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
@@ -797,12 +802,22 @@ class ProductSpineService:
         )
 
     def tender_revised_contract_package(
-        self, *, owner_identity_id: str, workspace_id: UUID
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        selected_revision_ids: list[str] | None = None,
+        revision_fingerprint: str | None = None,
     ) -> DocumentContent:
         """Export all current DOCX contract sources with explicit revisions only."""
 
         view = self._tender_contract_analysis.latest(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        view = select_contract_revisions(
+            view,
+            revision_ids=selected_revision_ids,
+            fingerprint=revision_fingerprint,
         )
         data, _ = self._render_revised_contract_source_package(
             owner_identity_id=owner_identity_id,

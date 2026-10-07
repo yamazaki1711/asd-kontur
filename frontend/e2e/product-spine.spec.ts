@@ -616,6 +616,72 @@ test("Support shows source-linked contract duties as review candidates", async (
   );
 });
 
+test("reviewer selects only desired contract revisions for draft export", async ({
+  page,
+}) => {
+  const first = "018f5c3e-7b00-7000-8000-000000002111";
+  const second = "018f5c3e-7b00-7000-8000-000000002112";
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v1/session") return json(route, session());
+    if (path.endsWith("/tender/contract-analysis"))
+      return json(route, {
+        status: "drafted",
+        revision_selection_fingerprint: digest("c"),
+        clauses: [
+          { clause_id: "a", clause_version: 1, clause_key: "4.2" },
+          { clause_id: "b", clause_version: 1, clause_key: "5.1" },
+        ],
+        attachment_references: [],
+        reference_review: {},
+        issues: [],
+        disagreement_items: [
+          { item_id: "item-a", clause_id: "a", clause_version: 1 },
+          { item_id: "item-b", clause_id: "b", clause_version: 1 },
+        ],
+        revised_clauses: [
+          {
+            revised_clause_id: first,
+            disagreement_item_id: "item-a",
+            revised_text: "Proposed A",
+          },
+          {
+            revised_clause_id: second,
+            disagreement_item_id: "item-b",
+            revised_text: "Proposed B",
+          },
+        ],
+        revised_contracts: [
+          { package_state: "exact_source_package_available" },
+        ],
+        deliverables: [],
+        project_context: {},
+        assessment: { source_coverage: { incomplete_source_names: [] } },
+        gaps: [],
+      });
+    return json(route, error("synthetic_route_not_defined"), 404);
+  });
+  await page.goto(
+    `/modes/tender/workspaces/${workspaceA}/tender-contract-analysis`,
+  );
+  const firstBox = page.getByRole("checkbox", {
+    name: "Включить изменение пункта 4.2",
+  });
+  const secondBox = page.getByRole("checkbox", {
+    name: "Включить изменение пункта 5.1",
+  });
+  await expect(firstBox).toBeChecked();
+  await expect(secondBox).toBeChecked();
+  await firstBox.uncheck();
+  const exportLink = page.getByRole("link", {
+    name: "Скачать выбранные редакции договорных документов (ZIP)",
+  });
+  await expect(exportLink).toHaveAttribute("href", /revision_ids=/);
+  await expect(exportLink).toHaveAttribute("href", new RegExp(second));
+  await expect(exportLink).not.toHaveAttribute("href", new RegExp(first));
+  await expect(exportLink).toHaveAttribute("href", /revision_fingerprint=/);
+});
+
 for (const viewport of [
   { width: 1440, height: 900 },
   { width: 1280, height: 720 },

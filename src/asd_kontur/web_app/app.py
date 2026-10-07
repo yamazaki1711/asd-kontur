@@ -1195,9 +1195,14 @@ def _api_router() -> APIRouter:
         request: Request,
         workspace_id: UUID,
         principal: Annotated[SessionPrincipal, Depends(_principal)],
+        revision_ids: str | None = None,
+        revision_fingerprint: str | None = None,
     ) -> Response:
         value = _container(request).service.tender_revised_contract_package(
-            owner_identity_id=principal.owner_identity_id, workspace_id=workspace_id
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            selected_revision_ids=(revision_ids.split(",") if revision_ids is not None else None),
+            revision_fingerprint=revision_fingerprint,
         )
         return Response(
             content=b"".join(value.chunks),

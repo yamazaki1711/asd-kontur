@@ -1,5 +1,23 @@
 # Generalized Contract Analysis 01
 
+## 2026-10-07 reviewer-selected draft revisions (source checkpoint)
+
+The Tender contract page now lets a reviewer choose which Qwen-proposed
+revisions to include in the downloadable editable contract-source package.
+The selection is bound to a fingerprint of the exact current proposal text,
+original clause text and source identities. Unknown, duplicate, empty or
+stale selections fail closed; the client cannot submit replacement wording
+through this endpoint. Unselected admitted DOCX sources remain byte-for-byte
+unchanged in the ZIP. The default server export remains the existing all-
+proposal draft for compatibility. This selection is an export preference,
+not a durable legal acceptance, signature or Customer agreement.
+
+Changed-source tests exercised stale rejection and an actual two-DOCX ZIP in
+which only one chosen clause changed. An isolated browser scenario verified
+checkbox selection and the fingerprinted export link. A durable human review
+decision and legal-authority gate remain necessary before a contract can be
+called accepted. This checkpoint is source-only until a controlled release.
+
 ## 2026-10-07 source-linked Support handover candidate
 
 The Support production view now carries the same workspace's Qwen-extracted
@@ -17,6 +35,19 @@ browser scenario displayed the new Support table and source navigation. The
 human review/acceptance command, scoped transfer into actual Support process
 rules and full contract legal-authority qualification remain open. This slice
 alone does not establish Support or contract readiness.
+
+Release `dc54b172bbc8005eb6e49124462f6a11f58a11a6` was pinned at
+`~/.asd-kontur/public-demo/releases/20261007-dc54b17-support-contract-handover-v1`.
+The four application launchd roles passed the exact-argument/SHA/migration
+preflight and were restarted from this release. API readiness and the new
+frontend asset returned HTTP 200; public migration remained
+`0129_contract_reference_review`. The public queue had zero queued/running
+jobs before cutover, so no active project inference was interrupted. Qwen and
+NTD workers were not restarted. A read-only call through the pinned service
+against the owner workspace returned 274 sourced candidates: 63 Customer and
+211 Contractor. This verifies the backend handover data, not an authenticated
+owner-browser session or human acceptance. Previous plists are recoverable at
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-dc54b17-support-contract-handover/`.
 
 ## 2026-10-07 source-linked obligations result
 

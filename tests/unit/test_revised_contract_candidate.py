@@ -13,6 +13,10 @@ import pytest
 
 from asd_kontur.application_spine.services import ProductSpineService
 from asd_kontur.tender.contract_analysis_view import _select_primary_revised_contract_source
+from asd_kontur.tender.contract_revision_selection import (
+    contract_revision_fingerprint,
+    select_contract_revisions,
+)
 from asd_kontur.tender.revised_contract_candidate import (
     RevisedContractCandidateError,
     render_revised_contract_candidate_docx,
@@ -118,6 +122,62 @@ def test_revised_contract_package_applies_two_sources_and_preserves_unchanged_do
     assert [item["revision_count"] for item in manifest["sources"]] == [1, 1, 0]
     assert manifest["status"] == "human_review_candidate"
     assert manifest["analysis_gaps"] == ["CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED"]
+
+
+def test_selected_revision_package_preserves_unselected_contract_source() -> None:
+    source_a = _source_docx("Payment follows acceptance.")
+    source_b = _source_docx("Warranty lasts two years.")
+    selected_id = "018f5c3e-7b00-7000-8000-000000002111"
+    omitted_id = "018f5c3e-7b00-7000-8000-000000002112"
+    view = {
+        "clauses": [
+            {
+                "clause_id": "payment",
+                "clause_version": 1,
+                "source_version_id": "source-a",
+                "source_text": "Payment follows acceptance.",
+            },
+            {
+                "clause_id": "warranty",
+                "clause_version": 1,
+                "source_version_id": "source-b",
+                "source_text": "Warranty lasts two years.",
+            },
+        ],
+        "revised_clauses": [
+            {
+                "revised_clause_id": selected_id,
+                "source_clause_id": "payment",
+                "source_clause_version": 1,
+                "revised_text": "Payment follows acceptance within ten days.",
+            },
+            {
+                "revised_clause_id": omitted_id,
+                "source_clause_id": "warranty",
+                "source_clause_version": 1,
+                "revised_text": "Warranty lasts one year.",
+            },
+        ],
+    }
+    selected = select_contract_revisions(
+        view,
+        revision_ids=[selected_id],
+        fingerprint=contract_revision_fingerprint(view),
+    )
+    archive_bytes = render_revised_contract_source_package(
+        [
+            {"source_version_id": "source-a", "content": source_a},
+            {"source_version_id": "source-b", "content": source_b},
+        ],
+        selected,
+    )
+    with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+        assert _paragraphs(archive.read("contract-source-01.docx")) == [
+            "Payment follows acceptance within ten days."
+        ]
+        assert archive.read("contract-source-02.docx") == source_b
+        manifest = json.loads(archive.read("manifest.json"))
+    assert [source["revision_count"] for source in manifest["sources"]] == [1, 0]
 
 
 def test_revised_contract_package_fails_when_revision_source_is_not_admitted() -> None:

@@ -2923,6 +2923,8 @@ export interface components {
             revised_contracts: {
                 [key: string]: unknown;
             }[];
+            /** Revision Selection Fingerprint */
+            revision_selection_fingerprint?: string | null;
             /** Status */
             status: string;
         };
@@ -5731,7 +5733,10 @@ export interface operations {
     };
     tender_revised_contract_package_api_v1_workspaces__workspace_id__tender_revised_contract_package_zip_get: {
         parameters: {
-            query?: never;
+            query?: {
+                revision_ids?: string | null;
+                revision_fingerprint?: string | null;
+            };
             header?: never;
             path: {
                 workspace_id: string;

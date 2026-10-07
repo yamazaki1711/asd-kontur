@@ -2710,7 +2710,11 @@ function TenderContractAnalysisPage() {
     >
       <QueryState query={analysis}>
         {(value) => (
-          <TenderContractAnalysisBody value={value} workspaceId={workspaceId} />
+          <TenderContractAnalysisBody
+            key={value.revision_selection_fingerprint ?? value.status}
+            value={value}
+            workspaceId={workspaceId}
+          />
         )}
       </QueryState>
     </Page>
@@ -2752,6 +2756,14 @@ function TenderContractAnalysisBody({
   const revisedClauses = value.revised_clauses as Array<
     Record<string, unknown>
   >;
+  const [selectedRevisionIds, setSelectedRevisionIds] = useState<string[]>(() =>
+    revisedClauses.map((item) => String(item.revised_clause_id)),
+  );
+  const revisionFingerprint = value.revision_selection_fingerprint;
+  const selectedPackageHref =
+    revisionFingerprint && selectedRevisionIds.length
+      ? `/api/v1/workspaces/${workspaceId}/tender/revised-contract-package.zip?revision_ids=${encodeURIComponent(selectedRevisionIds.join(","))}&revision_fingerprint=${encodeURIComponent(revisionFingerprint)}`
+      : null;
   const revisedContracts = value.revised_contracts as Array<
     Record<string, unknown>
   >;
@@ -2916,16 +2928,14 @@ function TenderContractAnalysisBody({
             Скачать редакцию договора Подрядчика (Word)
           </a>
         ) : null}
-        {revisedContracts.some(
+        {selectedPackageHref &&
+        revisedContracts.some(
           (candidate) =>
             String(candidate.package_state) ===
             "exact_source_package_available",
         ) ? (
-          <a
-            className="button-link secondary"
-            href={`/api/v1/workspaces/${workspaceId}/tender/revised-contract-package.zip`}
-          >
-            Скачать комплект редакций договорных документов (ZIP)
+          <a className="button-link secondary" href={selectedPackageHref}>
+            Скачать выбранные редакции договорных документов (ZIP)
           </a>
         ) : null}
       </div>
@@ -3047,11 +3057,20 @@ function TenderContractAnalysisBody({
       </section>
       <section className="panel">
         <h2>Протокол разногласий и переработанные положения</h2>
+        {revisedClauses.length ? (
+          <p>
+            Отметьте предложения, которые нужно включить в редактируемый проект
+            договора. Выбор действует только для скачиваемого проекта и не
+            означает согласования с Заказчиком. При изменении анализа выбор
+            потребуется проверить заново.
+          </p>
+        ) : null}
         {disagreementItems.length || revisedClauses.length ? (
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
+                  <th>Включить</th>
                   <th>Исходное положение</th>
                   <th>Предлагаемая редакция</th>
                   <th>Практическое последствие</th>
@@ -3087,6 +3106,27 @@ function TenderContractAnalysisBody({
                     : "Открыть исходный фрагмент";
                   return (
                     <tr key={String(item.item_id)}>
+                      <td>
+                        {revised ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`Включить изменение пункта ${displayValue(sourceClause?.clause_key, "без номера")}`}
+                            checked={selectedRevisionIds.includes(
+                              String(revised.revised_clause_id),
+                            )}
+                            onChange={(event) => {
+                              const identity = String(
+                                revised.revised_clause_id,
+                              );
+                              setSelectedRevisionIds((current) =>
+                                event.target.checked
+                                  ? [...current, identity]
+                                  : current.filter((item) => item !== identity),
+                              );
+                            }}
+                          />
+                        ) : null}
+                      </td>
                       <td>
                         {displayValue(sourceClause?.clause_key, "—")}
                         {locator ? (
