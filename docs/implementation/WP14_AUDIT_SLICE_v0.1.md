@@ -100,6 +100,16 @@ active files, zero `field_document` files and therefore zero duplicate-ID
 candidates. No document inference or owner-data mutation was performed. This
 is an independent exact-byte inventory check, **not** semantic ID subtype,
 signature, chronology, quantity or work-link audit and not FFC-04 acceptance.
+It is deployed in application release
+`fa22c2bde13eefbeaadaa404056d192613c84b1e`, unchanged migration
+`0141_contract_reference_partial_package`. The four supervised application
+roles run the exact source release; launchd preflight passed 4/4, API readiness
+and frontend HTTP 200 passed, and the new endpoint rejects anonymous access
+with 401. Qwen PID 9105 and NTD PID 1356 were unchanged. The isolated API
+scenario uploaded two byte-identical field files under distinct document IDs,
+found one review group, and proved another workspace saw none; the full 20/20
+Product Spine integration file passed. Authenticated browser review is still
+unverified because no connected browser was available.
 
 ## 1. Scope and boundary
 

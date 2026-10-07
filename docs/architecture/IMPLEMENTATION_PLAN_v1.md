@@ -80,6 +80,12 @@ It cannot establish ID completeness or document validity. A real Audit pass
 still requires Qwen-grounded subtype/work association, individual checks,
 cross-document checks and a corrective report; continue that same capability
 chain after deploying the triage slice.
+The exact-byte Audit triage is deployed in application release
+`fa22c2bde13eefbeaadaa404056d192613c84b1e` on unchanged migration 0141.
+The real workspace has no uploaded field documents; its Audit screen must
+state that limitation instead of presenting a clean ID audit. The next
+professional dependency remains Qwen-grounded ID subtype/work association
+and independent content checks. FFC-04 and ProductReady remain unverified/false.
 
 Checkpoint 2026-10-07 (later): the owner-supplied mandate in
 `/Users/oleg/Downloads/ASD_KONTUR_FULL_FUNCTIONAL_COMPLETION_EN.md` was read
