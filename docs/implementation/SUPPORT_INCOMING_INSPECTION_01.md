@@ -24,7 +24,7 @@ inferred from uploaded paperwork or asserted by Qwen.
 - API and Support UI expose submission and history. The UI does not display
   this preflight as an approved material admission.
 
-## Qualification and release limit
+## Qualification and release
 
 Four deterministic unit tests and two isolated PostgreSQL integration tests
 pass; frontend typechecking/build pass, and the OpenAPI contract has been
@@ -32,10 +32,40 @@ regenerated. The integration tests used a verified disposable PostgreSQL 17
 cluster under `/tmp`, not the owner database. They covered migration 0135,
 workspace isolation, immutable writes, owner-scoped replay/conflict, the
 authenticated submit/list API, and late-write rejection during lifecycle
-freezing. Migration 0135 has **not**
-been applied to the owner database; the deployed release remains the prior
-version. Before deployment, perform the required backup/restore upgrade
-verification and a controlled application/browser acceptance.
+freezing. The broader isolated Python suite passed 1,540 tests, with two skips.
+The in-app Browser reported zero available browser instances, so authenticated
+owner-screen acceptance could not be performed; it is not inferred from
+TestClient or frontend build results.
+
+Release `491add15a29306683cef0db10c6fc19a4ba3a14e` was staged from its
+exact Git archive with offline locked Python dependencies and an offline
+frontend build. Before the public migration, a custom-format backup of
+`asd_kontur_public_demo` was written under
+`~/.asd-kontur/public-demo/backups/0135-preflight.viBsID/` with SHA-256
+`0b7f88010ad0bdbba995a8938b9c76d1f14cf18900aa41347ac0a18b9046e2f4`.
+That backup restored separately to `asd_restore_0135_20261007`; upgrade,
+downgrade and re-upgrade of 0135 all passed there. No existing production row
+was deleted for this migration. Public migration 0135 was then applied.
+
+All four application launchd roles were rolled to the pinned release after a
+4/4 staged-plist preflight. API readiness returned migration 0135; the served
+OpenAPI SHA-256 matched the staged digest
+`3f24870efdfb165b20c854a581671df1fbbb6906cc997616f7e99c4a5f09489c`.
+The two new routes returned 401 without authentication. The owner database
+still had one active workspace, 21 source versions and 274 contract-analysis
+results, matching the restored pre-migration copy. The new preflight table was
+empty. Qwen PID 9105 and NTD-worker PID 1356 were not restarted. Selected
+canonical NTD, graph/search, normative and practice row counts, and the NTD
+publication fingerprint, were identical before and after migration.
+
+During staging, a `plutil` conversion unexpectedly rewrote the on-disk API
+plist. It was restored immediately from the exact previous-release staged
+copy and verified by `plutil -lint`, the old SHA pin and API readiness before
+cutover. Separately, staging-plist array replacement inserted an extra
+argument; the 4/4 topology preflight caught it before cutover, and the staged
+argument array was corrected. No live service was restarted until the staged
+plists passed. These tool-behaviour hazards must be accounted for in future
+release automation.
 
 This is one Support result, not Support-mode readiness. It does not yet bind
 the preflight to a material-admission decision, field evidence, work-package
