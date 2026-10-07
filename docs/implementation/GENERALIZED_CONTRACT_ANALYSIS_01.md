@@ -2032,3 +2032,19 @@ test database was removed by fixture teardown. Focused contract/export checks
 passed 45/45. This is a consistency safeguard for a human-review candidate,
 not proof of contract-wide legal coherence or an approved agreement. The source
 change is not yet the public deployed release.
+
+The package-consistency change was deployed as exact application SHA
+`94704f0c56ddc9ba1d1a53b76625bafbf8474889` with no new migration;
+the public database remained at `0133_contract_coherence_review`. The
+disposable-PostgreSQL Python gate passed 1,510 tests with two skips, the
+frontend test gate passed 7/7, and the four staged launchd roles passed
+preflight before controlled replacement. The existing Qwen and NTD worker
+processes were not restarted. API readiness returned `ready`, and the HTTP
+frontend index matched the staged release SHA-256. The private release receipt
+is under the immutable release directory; it does not contain project data or
+credentials. In-app authenticated browser acceptance was attempted, but the
+browser runtime exposed no available session, so the owner contract screen and
+download flow are not claimed visually accepted. FFC-01 remains `PARTIAL`:
+exact protocol/edit consistency is now enforced, while full legal/reference
+coherence, owner-selected commercial terms, and owner-browser acceptance are
+still outstanding.
