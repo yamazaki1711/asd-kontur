@@ -2767,6 +2767,10 @@ export interface components {
             consistency: {
                 [key: string]: unknown;
             };
+            /** Contract Execution Conditions */
+            contract_execution_conditions?: {
+                [key: string]: unknown;
+            }[];
             /** Contract Obligation Candidates */
             contract_obligation_candidates?: {
                 [key: string]: unknown;

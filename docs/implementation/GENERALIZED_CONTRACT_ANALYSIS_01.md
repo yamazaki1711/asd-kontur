@@ -1,5 +1,22 @@
 # Generalized Contract Analysis 01
 
+## 2026-10-07 confirmed execution-conditions schedule
+
+The Support production view now separates reviewed contract candidates from
+execution conditions. Only a source-linked candidate with a current human
+`confirmed` decision enters the execution-conditions schedule. Unreviewed,
+rejected and stale candidates remain visible for review but are excluded from
+that schedule. The candidate's semantic category, party, clause, condition and
+source locator remain available; a changed candidate invalidates its prior
+confirmation. This is a planning handover, not an automatic construction-work
+block, legal approval, negotiated amendment or field-work confirmation.
+
+The Support UI shows the confirmed schedule with source links. Unit checks
+cover empty and confirmed schedules plus stale-decision exclusion. The isolated
+browser check confirms that review refreshes the schedule and both displayed
+source links resolve to the same admitted document locator. No owner-project
+decision is inserted for qualification.
+
 ## 2026-10-07 durable contract-obligation review (source checkpoint)
 
 The Support contract handover now has a human confirmation/rejection command.

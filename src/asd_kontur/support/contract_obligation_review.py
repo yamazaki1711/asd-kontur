@@ -65,6 +65,7 @@ class ContractObligationReviewRepository:
         original_value = {
             "candidate_digest": expected_digest,
             "party": candidate["party"],
+            "category": candidate["category"],
             "obligation": candidate["obligation"],
             "condition": candidate["condition"],
             "clause_id": candidate["clause_id"],

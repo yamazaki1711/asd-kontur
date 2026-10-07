@@ -44,6 +44,7 @@ def contract_obligation_handover(
                 {
                     "clause_id": clause_id,
                     "party": party,
+                    "category": str(clause.get("category") or ""),
                     "obligation": obligation,
                     "condition": str(clause.get("condition") or "").strip(),
                     "source_version_id": source_version_id,
@@ -58,6 +59,7 @@ def contract_obligation_handover(
                     "clause_id": clause_id,
                     "clause_key": str(clause.get("clause_key") or ""),
                     "party": party,
+                    "category": str(clause.get("category") or ""),
                     "obligation": obligation,
                     "condition": str(clause.get("condition") or "").strip() or None,
                     "source_version_id": source_version_id,

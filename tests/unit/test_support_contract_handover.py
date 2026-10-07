@@ -108,3 +108,52 @@ def test_support_view_reads_contract_only_with_same_workspace_scope() -> None:
         ("contract", "owner-a", workspace_id),
     ]
     assert result["contract_obligation_candidates"] == []
+    assert result["contract_execution_conditions"] == []
+
+
+def test_support_execution_conditions_require_current_human_confirmation() -> None:
+    workspace_id = uuid4()
+    clause = {
+        "clause_id": "payment-4",
+        "clause_key": "4.2",
+        "category": "payment",
+        "source_version_id": str(uuid4()),
+        "source_locator_id": str(uuid4()),
+        "customer_obligation": "Pay accepted work.",
+    }
+    candidates = contract_obligation_handover({"clauses": [clause]}, workspace_id=workspace_id)
+    candidate = candidates[0]
+    decisions = [
+        {
+            "candidate_id": candidate["candidate_id"],
+            "action": "confirmed",
+            "original_value": {"candidate_digest": candidate["candidate_digest"]},
+        }
+    ]
+    service = object.__new__(ProductSpineService)
+    service._support_production = SimpleNamespace(
+        view=lambda **kwargs: {"requirements": [], "matrix": None, "package": None}
+    )
+    service._tender_contract_analysis = SimpleNamespace(
+        latest=lambda **kwargs: {"clauses": [clause]}
+    )
+    service._contract_obligation_reviews = SimpleNamespace(
+        latest_decisions=lambda **kwargs: decisions
+    )
+
+    result = service.support_production_view(owner_identity_id="owner-a", workspace_id=workspace_id)
+    assert len(result["contract_execution_conditions"]) == 1
+    assert result["contract_execution_conditions"][0]["category"] == "payment"
+    assert (
+        result["contract_execution_conditions"][0]["source_locator_id"]
+        == clause["source_locator_id"]
+    )
+
+    clause["customer_obligation"] = "Pay only after separate approval."
+    stale_result = service.support_production_view(
+        owner_identity_id="owner-a", workspace_id=workspace_id
+    )
+    assert stale_result["contract_execution_conditions"] == []
+    assert stale_result["contract_obligation_candidates"][0]["review_state"] == (
+        "stale_requires_review"
+    )

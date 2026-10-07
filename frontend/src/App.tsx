@@ -3947,12 +3947,70 @@ function SupportProductionBody({
   const fieldRows = mergeFieldResolutionRows(fields);
   const sourceFieldCandidates = value.source_field_candidates ?? [];
   const contractObligations = value.contract_obligation_candidates ?? [];
+  const contractExecutionConditions = value.contract_execution_conditions ?? [];
   const [contractReviewReasons, setContractReviewReasons] = useState<
     Record<string, string>
   >({});
   const supportProcess = value.support_process;
   return (
     <>
+      {contractExecutionConditions.length ? (
+        <section className="panel">
+          <h2>Подтверждённые договорные условия исполнения</h2>
+          <p>
+            Эти условия проверены пользователем по указанным пунктам договора.
+            Проверка не заменяет согласование изменений договора и не
+            подтверждает выполнение работ на площадке.
+          </p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Пункт и вид условия</th>
+                  <th>Сторона</th>
+                  <th>Требуемое действие</th>
+                  <th>Когда применяется</th>
+                  <th>Документ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contractExecutionConditions.map((item) => (
+                  <tr key={`${displayValue(item.candidate_id, "")}:condition`}>
+                    <td>
+                      {displayValue(item.clause_key, "—")}
+                      <small>
+                        {humanizeStatus(displayValue(item.category, ""))}
+                      </small>
+                    </td>
+                    <td>
+                      {item.party === "customer" ? "Заказчик" : "Подрядчик"}
+                    </td>
+                    <td>{displayValue(item.obligation, "—")}</td>
+                    <td>
+                      {displayValue(item.condition, "Условие не выделено")}
+                    </td>
+                    <td>
+                      {displayValue(item.source_locator_id, "") ? (
+                        <Link
+                          to={workspaceRoute(
+                            "Support",
+                            workspaceId,
+                            `/evidence/locators/${displayValue(item.source_locator_id, "")}`,
+                          )}
+                        >
+                          {displayValue(item.source_name, "Открыть источник")}
+                        </Link>
+                      ) : (
+                        "Источник не привязан"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
       <section className="panel">
         <h2>Договорные обязательства для проверки перед выполнением работ</h2>
         <p>

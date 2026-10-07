@@ -3443,6 +3443,14 @@
             "title": "Consistency",
             "type": "object"
           },
+          "contract_execution_conditions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Contract Execution Conditions",
+            "type": "array"
+          },
           "contract_obligation_candidates": {
             "items": {
               "additionalProperties": true,

@@ -617,6 +617,20 @@ test("Support shows source-linked contract duties as review candidates", async (
             review_state: reviewed ? "confirmed" : "unreviewed",
           },
         ],
+        contract_execution_conditions: reviewed
+          ? [
+              {
+                candidate_id: challengeId,
+                clause_key: "4.2",
+                party: "customer",
+                category: "payment",
+                obligation: "Pay accepted work.",
+                condition: "After acceptance.",
+                source_locator_id: documentId,
+                source_name: "changed-contract.docx",
+              },
+            ]
+          : [],
       });
     if (path.endsWith("/support/scope-readiness"))
       return json(route, error("support_scope_not_configured"), 404);
@@ -635,13 +649,22 @@ test("Support shows source-linked contract duties as review candidates", async (
     .fill("Source clause checked.");
   await page.getByRole("button", { name: "Подтвердить" }).click();
   await expect(page.getByText("Подтверждено пользователем")).toBeVisible();
-  expect(reviewed).toBe(true);
   await expect(
-    page.getByRole("link", { name: "changed-contract.docx" }),
-  ).toHaveAttribute(
-    "href",
-    `/modes/support/workspaces/${workspaceA}/evidence/locators/${documentId}`,
-  );
+    page.getByRole("heading", {
+      name: "Подтверждённые договорные условия исполнения",
+    }),
+  ).toBeVisible();
+  expect(reviewed).toBe(true);
+  const contractSourceLinks = page.getByRole("link", {
+    name: "changed-contract.docx",
+  });
+  await expect(contractSourceLinks).toHaveCount(2);
+  for (const link of await contractSourceLinks.all()) {
+    await expect(link).toHaveAttribute(
+      "href",
+      `/modes/support/workspaces/${workspaceA}/evidence/locators/${documentId}`,
+    );
+  }
 });
 
 test("reviewer selects only desired contract revisions for draft export", async ({

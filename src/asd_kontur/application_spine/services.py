@@ -1395,12 +1395,14 @@ class ProductSpineService:
         decisions = self._contract_obligation_reviews.latest_decisions(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
         )
+        reviewed_obligations = apply_contract_obligation_reviews(obligations, decisions)
         return {
             **view,
             "consistency": assess_id_package_consistency(view),
-            "contract_obligation_candidates": apply_contract_obligation_reviews(
-                obligations, decisions
-            ),
+            "contract_obligation_candidates": reviewed_obligations,
+            "contract_execution_conditions": [
+                item for item in reviewed_obligations if item["review_state"] == "confirmed"
+            ],
         }
 
     def review_contract_obligation(
