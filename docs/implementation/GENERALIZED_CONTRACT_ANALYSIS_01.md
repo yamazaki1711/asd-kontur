@@ -1,5 +1,28 @@
 # Generalized Contract Analysis 01
 
+## 2026-10-07 source-bound revision review (source checkpoint)
+
+The contract screen now separates Qwen-proposed wording from a human decision
+to include it in a contractor draft. Proposals start unselected and are never
+described as agreed amendments. A reviewer may record `confirmed` (checked for
+the draft) or `rejected` with a reason. The decision is workspace-scoped,
+append-only, idempotent and bound to the exact source clause locator, source
+text and proposed wording. Changed source/proposal text marks the old decision
+stale. A separate ZIP link selects only current confirmed proposals; the
+existing ad-hoc selection path remains explicitly a draft, not approval.
+
+Migration `0131_contract_revision_review` only extends the allowed candidate
+kind on the existing review table. The new API route is protected by the
+authenticated mutation principal and a workspace-write or Tender-review
+grant. It does not edit original contract files, accept the counterparty's
+position, authorize signatures or silently transfer the draft into Support.
+The isolated PostgreSQL integration check passed source-bound persistence,
+idempotent replay, staleness, read-only denial and cross-workspace denial. The
+isolated browser check passed explicit reviewer action and reviewed-draft link
+creation. Contract unit checks passed 33/33. This checkpoint is not a public
+deployment or a legal-coherence acceptance; those remain open. The public
+runtime remains on migration `0130` until a backed-up controlled release.
+
 ## 2026-10-07 editable execution-condition register
 
 The current, human-confirmed Support contract conditions can now be downloaded

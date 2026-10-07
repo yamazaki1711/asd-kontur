@@ -73,6 +73,7 @@ from asd_kontur.support.scope_commands import (
     SupportScopeReadinessService,
 )
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisError
+from asd_kontur.tender.contract_revision_review import ContractRevisionReviewError
 
 from ..application_spine.auth import AuthError, OwnerAuthService
 from ..application_spine.config import SpineSettings
@@ -98,6 +99,8 @@ from .schemas import (
     ConstructionConsultantQuestionRequest,
     ContractObligationReviewRequest,
     ContractObligationReviewView,
+    ContractRevisionReviewRequest,
+    ContractRevisionReviewView,
     DocumentPage,
     ErrorDetail,
     ErrorEnvelope,
@@ -322,6 +325,19 @@ def _install_middleware(app: FastAPI) -> None:
     @app.exception_handler(ContractObligationReviewError)
     async def contract_obligation_review_error(
         request: Request, exc: ContractObligationReviewError
+    ) -> JSONResponse:
+        status_code = (
+            404
+            if str(exc).endswith("not_found")
+            else 403
+            if str(exc).endswith("forbidden")
+            else 409
+        )
+        return _error(request, str(exc), status_code)
+
+    @app.exception_handler(ContractRevisionReviewError)
+    async def contract_revision_review_error(
+        request: Request, exc: ContractRevisionReviewError
     ) -> JSONResponse:
         status_code = (
             404
@@ -1200,6 +1216,29 @@ def _api_router() -> APIRouter:
                 "ETag": f'"{value.content_digest[7:]}"',
             },
         )
+
+    @router.post(
+        "/workspaces/{workspace_id}/tender/contract-revisions/{candidate_id}/review",
+        response_model=ContractRevisionReviewView,
+        tags=["tender"],
+    )
+    def review_contract_revision(
+        request: Request,
+        workspace_id: UUID,
+        candidate_id: UUID,
+        payload: ContractRevisionReviewRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> ContractRevisionReviewView:
+        value = _container(request).service.review_contract_revision(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            candidate_id=candidate_id,
+            candidate_digest=payload.candidate_digest,
+            action=payload.action,
+            reason=payload.reason,
+            idempotency_key=payload.idempotency_key,
+        )
+        return ContractRevisionReviewView(**jsonable_encoder(value))
 
     @router.get(
         "/workspaces/{workspace_id}/tender/revised-contract-package.zip",

@@ -1336,6 +1336,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/tender/contract-revisions/{candidate_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Contract Revision */
+        post: operations["review_contract_revision_api_v1_workspaces__workspace_id__tender_contract_revisions__candidate_id__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/tender/disagreement-protocol.docx": {
         parameters: {
             query?: never;
@@ -1691,6 +1708,40 @@ export interface components {
         };
         /** ContractObligationReviewView */
         ContractObligationReviewView: {
+            /**
+             * Candidate Id
+             * Format: uuid
+             */
+            candidate_id: string;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /** Idempotent Replay */
+            idempotent_replay: boolean;
+            /**
+             * Review State
+             * @enum {string}
+             */
+            review_state: "confirmed" | "rejected";
+        };
+        /** ContractRevisionReviewRequest */
+        ContractRevisionReviewRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "confirmed" | "rejected";
+            /** Candidate Digest */
+            candidate_digest: string;
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Reason */
+            reason: string;
+        };
+        /** ContractRevisionReviewView */
+        ContractRevisionReviewView: {
             /**
              * Candidate Id
              * Format: uuid
@@ -2993,6 +3044,10 @@ export interface components {
             }[];
             /** Revised Contracts */
             revised_contracts: {
+                [key: string]: unknown;
+            }[];
+            /** Revision Review Candidates */
+            revision_review_candidates?: {
                 [key: string]: unknown;
             }[];
             /** Revision Selection Fingerprint */
@@ -5826,6 +5881,44 @@ export interface operations {
                 };
                 content: {
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_contract_revision_api_v1_workspaces__workspace_id__tender_contract_revisions__candidate_id__review_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContractRevisionReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractRevisionReviewView"];
                 };
             };
             /** @description Validation Error */

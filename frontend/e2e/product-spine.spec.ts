@@ -678,9 +678,32 @@ test("reviewer selects only desired contract revisions for draft export", async 
 }) => {
   const first = "018f5c3e-7b00-7000-8000-000000002111";
   const second = "018f5c3e-7b00-7000-8000-000000002112";
+  let reviewedSecond = false;
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/v1/session") return json(route, session());
+    if (
+      path.endsWith(`/tender/contract-revisions/${second}/review`) &&
+      route.request().method() === "POST"
+    ) {
+      const body = route.request().postDataJSON() as {
+        candidate_digest: string;
+        action: string;
+        reason: string;
+      };
+      expect(body).toMatchObject({
+        candidate_digest: digest("d"),
+        action: "confirmed",
+        reason: "Checked source clause",
+      });
+      reviewedSecond = true;
+      return json(route, {
+        candidate_id: second,
+        review_state: "confirmed",
+        decided_at: timestamp,
+        idempotent_replay: false,
+      });
+    }
     if (path.endsWith("/tender/contract-analysis"))
       return json(route, {
         status: "drafted",
@@ -706,6 +729,18 @@ test("reviewer selects only desired contract revisions for draft export", async 
             revised_clause_id: second,
             disagreement_item_id: "item-b",
             revised_text: "Proposed B",
+          },
+        ],
+        revision_review_candidates: [
+          {
+            candidate_id: first,
+            candidate_digest: digest("c"),
+            review_state: "unreviewed",
+          },
+          {
+            candidate_id: second,
+            candidate_digest: digest("d"),
+            review_state: reviewedSecond ? "confirmed" : "unreviewed",
           },
         ],
         revised_contracts: [
@@ -742,6 +777,18 @@ test("reviewer selects only desired contract revisions for draft export", async 
   await expect(exportLink).toHaveAttribute("href", new RegExp(second));
   await expect(exportLink).not.toHaveAttribute("href", new RegExp(first));
   await expect(exportLink).toHaveAttribute("href", /revision_fingerprint=/);
+  const secondRow = page.getByRole("row").filter({ hasText: "5.1" });
+  await secondRow
+    .getByRole("textbox", { name: "Основание решения по пункту 5.1" })
+    .fill("Checked source clause");
+  await secondRow
+    .getByRole("button", { name: "Проверено для черновика" })
+    .click();
+  const reviewedLink = page.getByRole("link", {
+    name: "Скачать черновик по проверенным предложениям (ZIP)",
+  });
+  await expect(reviewedLink).toHaveAttribute("href", new RegExp(second));
+  await expect(reviewedLink).not.toHaveAttribute("href", new RegExp(first));
 });
 
 for (const viewport of [

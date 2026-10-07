@@ -467,6 +467,20 @@ class ContractObligationReviewView(ApiModel):
     idempotent_replay: bool
 
 
+class ContractRevisionReviewRequest(ApiModel):
+    candidate_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    action: Literal["confirmed", "rejected"]
+    reason: str = Field(min_length=3, max_length=1000)
+    idempotency_key: str = Field(min_length=8, max_length=256)
+
+
+class ContractRevisionReviewView(ApiModel):
+    candidate_id: UUID
+    review_state: Literal["confirmed", "rejected"]
+    decided_at: datetime
+    idempotent_replay: bool
+
+
 class SupportFieldCorrectionRequest(ApiModel):
     work_package_id: UUID
     field_key: str = Field(min_length=1, max_length=128)
@@ -564,6 +578,7 @@ class TenderContractAnalysisView(ApiModel):
     gaps: list[str]
     authority_boundary: str
     revision_selection_fingerprint: str | None = None
+    revision_review_candidates: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AuditReportProjectionView(ApiModel):

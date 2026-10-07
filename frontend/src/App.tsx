@@ -2796,11 +2796,58 @@ function TenderContractAnalysisBody({
   const revisedClauses = value.revised_clauses as Array<
     Record<string, unknown>
   >;
+  const revisionReviewCandidates = (value.revision_review_candidates ?? []) as Array<
+    Record<string, unknown>
+  >;
   const [selectedRevisionIds, setSelectedRevisionIds] = useState<string[]>([]);
+  const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
+  const queryClient = useQueryClient();
+  const reviewRevision = useMutation({
+    mutationFn: async ({
+      candidate,
+      action,
+      reason,
+    }: {
+      candidate: Record<string, unknown>;
+      action: "confirmed" | "rejected";
+      reason: string;
+    }) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/tender/contract-revisions/{candidate_id}/review",
+        {
+          params: {
+            path: {
+              workspace_id: workspaceId,
+              candidate_id: String(candidate.candidate_id),
+            },
+          },
+          body: {
+            candidate_digest: String(candidate.candidate_digest),
+            action,
+            reason,
+            idempotency_key: globalThis.crypto.randomUUID(),
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["tender-contract-analysis", workspaceId],
+      });
+    },
+  });
   const revisionFingerprint = value.revision_selection_fingerprint;
   const selectedPackageHref =
     revisionFingerprint && selectedRevisionIds.length
       ? `/api/v1/workspaces/${workspaceId}/tender/revised-contract-package.zip?revision_ids=${encodeURIComponent(selectedRevisionIds.join(","))}&revision_fingerprint=${encodeURIComponent(revisionFingerprint)}`
+      : null;
+  const reviewedRevisionIds = revisionReviewCandidates
+    .filter((candidate) => candidate.review_state === "confirmed")
+    .map((candidate) => String(candidate.candidate_id));
+  const reviewedPackageHref =
+    revisionFingerprint && reviewedRevisionIds.length
+      ? `/api/v1/workspaces/${workspaceId}/tender/revised-contract-package.zip?revision_ids=${encodeURIComponent(reviewedRevisionIds.join(","))}&revision_fingerprint=${encodeURIComponent(revisionFingerprint)}`
       : null;
   const revisedContracts = value.revised_contracts as Array<
     Record<string, unknown>
@@ -2976,6 +3023,16 @@ function TenderContractAnalysisBody({
             Скачать выбранные редакции договорных документов (ZIP)
           </a>
         ) : null}
+        {reviewedPackageHref &&
+        revisedContracts.some(
+          (candidate) =>
+            String(candidate.package_state) ===
+            "exact_source_package_available",
+        ) ? (
+          <a className="button-link secondary" href={reviewedPackageHref}>
+            Скачать черновик по проверенным предложениям (ZIP)
+          </a>
+        ) : null}
       </div>
       {exactRevisedContract && externalRevisionCount > 0 ? (
         <InfoNotice>
@@ -3120,6 +3177,7 @@ function TenderContractAnalysisBody({
                   <th>Исходное положение</th>
                   <th>Предлагаемая редакция</th>
                   <th>Практическое последствие</th>
+                  <th>Решение по предложению</th>
                 </tr>
               </thead>
               <tbody>
@@ -3150,6 +3208,13 @@ function TenderContractAnalysisBody({
                   const sourceLabel = sourceName
                     ? `${sourceName}${sourcePage ? `, лист/страница ${sourcePage}` : ""}`
                     : "Открыть исходный фрагмент";
+                  const review = revisionReviewCandidates.find(
+                    (candidate) =>
+                      String(candidate.candidate_id) ===
+                      String(revised?.revised_clause_id),
+                  );
+                  const reviewId = displayValue(review?.candidate_id, "");
+                  const reviewReason = reviewReasons[reviewId] ?? "";
                   return (
                     <tr key={String(item.item_id)}>
                       <td>
@@ -3196,6 +3261,66 @@ function TenderContractAnalysisBody({
                         )}
                       </td>
                       <td>{displayValue(item.consequence_code, "—")}</td>
+                      <td>
+                        {review ? (
+                          <>
+                            <p>
+                              {review.review_state === "confirmed"
+                                ? "Проверено для черновика"
+                                : review.review_state === "rejected"
+                                  ? "Отклонено"
+                                  : review.review_state === "stale"
+                                    ? "Решение устарело — требуется новая проверка"
+                                    : "Не проверено"}
+                            </p>
+                            <input
+                              aria-label={`Основание решения по пункту ${displayValue(sourceClause?.clause_key, "без номера")}`}
+                              value={reviewReason}
+                              onChange={(event) =>
+                                setReviewReasons((current) => ({
+                                  ...current,
+                                  [reviewId]: event.target.value,
+                                }))
+                              }
+                              placeholder="Основание решения"
+                            />
+                            <button
+                              type="button"
+                              disabled={
+                                reviewRevision.isPending ||
+                                reviewReason.trim().length < 3
+                              }
+                              onClick={() =>
+                                reviewRevision.mutate({
+                                  candidate: review,
+                                  action: "confirmed",
+                                  reason: reviewReason,
+                                })
+                              }
+                            >
+                              Проверено для черновика
+                            </button>
+                            <button
+                              type="button"
+                              disabled={
+                                reviewRevision.isPending ||
+                                reviewReason.trim().length < 3
+                              }
+                              onClick={() =>
+                                reviewRevision.mutate({
+                                  candidate: review,
+                                  action: "rejected",
+                                  reason: reviewReason,
+                                })
+                              }
+                            >
+                              Отклонить предложение
+                            </button>
+                          </>
+                        ) : (
+                          "Проверка недоступна: требуется точный источник"
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -3208,6 +3333,12 @@ function TenderContractAnalysisBody({
             переработанного договора ещё не подготовлены.
           </p>
         )}
+        {reviewRevision.isError ? (
+          <InfoNotice>
+            Решение не сохранено: источник или редакция могли измениться.
+            Обновите анализ и проверьте предложение заново.
+          </InfoNotice>
+        ) : null}
       </section>
       <section className="panel">
         <h2>Состояние и исходные данные</h2>

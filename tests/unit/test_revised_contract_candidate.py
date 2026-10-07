@@ -5,6 +5,7 @@ import io
 import json
 import zipfile
 from copy import deepcopy
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 from xml.etree import ElementTree as ET
@@ -369,6 +370,7 @@ class _ObjectStore:
 def _service(source: bytes, view: dict[str, Any]) -> ProductSpineService:
     service = ProductSpineService.__new__(ProductSpineService)
     service._tender_contract_analysis = _ContractProjection(view)  # type: ignore[assignment]
+    service._contract_revision_reviews = SimpleNamespace(latest_decisions=lambda **kwargs: [])  # type: ignore[assignment]
     service._repository = _SourceRepository()  # type: ignore[assignment]
     service._object_store = _ObjectStore(source)  # type: ignore[assignment]
     return service
@@ -720,6 +722,7 @@ def test_exact_candidate_changes_only_primary_contract_source_revisions() -> Non
     service = ProductSpineService.__new__(ProductSpineService)
     service._tender_contract_analysis = _ContractProjection(view)  # type: ignore[assignment]
     service._repository = _SourceByIdRepository()  # type: ignore[assignment]
+    service._contract_revision_reviews = SimpleNamespace(latest_decisions=lambda **kwargs: [])  # type: ignore[assignment]
     service._object_store = _ObjectStoreByKey(  # type: ignore[assignment]
         {
             primary_id: _source_docx(primary_clause),

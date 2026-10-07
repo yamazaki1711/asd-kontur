@@ -50,6 +50,12 @@ from asd_kontur.tender.contract_analysis_report import (
     render_tender_disagreement_protocol_docx,
 )
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
+from asd_kontur.tender.contract_revision_review import (
+    ContractRevisionReviewError,
+    ContractRevisionReviewRepository,
+    apply_revision_reviews,
+    revision_review_candidates,
+)
 from asd_kontur.tender.contract_revision_selection import (
     contract_revision_fingerprint,
     select_contract_revisions,
@@ -169,6 +175,7 @@ class ProductSpineService:
         self._settings = settings
         self._support_production = SupportProductionRepository(repository.engine)
         self._contract_obligation_reviews = ContractObligationReviewRepository(repository.engine)
+        self._contract_revision_reviews = ContractRevisionReviewRepository(repository.engine)
         self._tender_contract_analysis = TenderContractAnalysisRepository(repository.engine)
         self._restoration_recovery = RestorationRecoveryRepository(repository.engine)
         self._pilot = PilotResultService(
@@ -615,6 +622,12 @@ class ProductSpineService:
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
         )
         view["revision_selection_fingerprint"] = contract_revision_fingerprint(view)
+        view["revision_review_candidates"] = apply_revision_reviews(
+            revision_review_candidates(view),
+            self._contract_revision_reviews.latest_decisions(
+                owner_identity_id=owner_identity_id, workspace_id=workspace_id
+            ),
+        )
         view["project_context"] = self._contract_project_context(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
@@ -810,6 +823,40 @@ class ProductSpineService:
             0,
             len(data),
             (data,),
+        )
+
+    def review_contract_revision(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        candidate_id: UUID,
+        candidate_digest: str,
+        action: str,
+        reason: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        view = self._tender_contract_analysis.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        candidate = next(
+            (
+                item
+                for item in revision_review_candidates(view)
+                if item["candidate_id"] == str(candidate_id)
+            ),
+            None,
+        )
+        if candidate is None:
+            raise ContractRevisionReviewError("contract_revision_candidate_not_found")
+        return self._contract_revision_reviews.record(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            candidate=candidate,
+            expected_digest=candidate_digest,
+            action=action,
+            reason=reason,
+            idempotency_key=idempotency_key,
         )
 
     def tender_revised_contract_package(
