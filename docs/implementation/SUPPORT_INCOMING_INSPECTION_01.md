@@ -137,3 +137,17 @@ Qwen and NTD-worker PIDs were unchanged. The current real workspace has no
 saved incoming-inspection preflight, so an authenticated owner download of a
 real inspection register remains unverified. No material was admitted by this
 release.
+
+## Material-admission evaluator boundary (source checkpoint)
+
+The previously unused deterministic admission evaluator could return
+`admitted` from the mere presence of an incoming-control UUID, even if the
+linked preflight was incomplete or nonconforming, and did not check that its
+professional authority had the material-admission capability. The typed input
+now requires the incoming-control outcome. An incomplete result blocks,
+nonconformity quarantines, non-positive/non-finite delivered quantity blocks,
+and a grant for another capability fails closed. This does **not** create an
+admission command or a confirmed batch: persistence must still resolve an
+actual batch/work/evidence/preflight/grant in one workspace before it may call
+the evaluator. No public material-admission result is claimed from this source
+checkpoint.

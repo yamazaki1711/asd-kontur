@@ -57,7 +57,14 @@ def evaluate_work_readiness(value: WorkReadinessInput) -> WorkReadinessResult:
 
 
 def evaluate_material_admission(value: MaterialBatchEvidence) -> MaterialAdmissionResult:
+    if (
+        value.authority.capability != "support.material.admit"
+        or not value.authority.qualification_ref.strip()
+    ):
+        raise ValueError("material_admission_authority_invalid")
     reasons: list[str] = []
+    if not value.quantity.value.is_finite() or value.quantity.value <= 0:
+        reasons.append("MATERIAL_QUANTITY_INVALID")
     if not value.material_class_ref or not value.batch_reference:
         reasons.append("MATERIAL_IDENTITY_MISSING")
     if not value.manufacturer_ref or not value.supplier_ref:
@@ -66,6 +73,10 @@ def evaluate_material_admission(value: MaterialBatchEvidence) -> MaterialAdmissi
         reasons.append("QUALITY_DOCUMENT_MISSING")
     if value.incoming_control_id is None:
         reasons.append("INCOMING_CONTROL_MISSING")
+    elif value.incoming_control_outcome == "nonconforming":
+        reasons.append("INCOMING_CONTROL_NONCONFORMING")
+    elif value.incoming_control_outcome != "ready_for_authorized_admission_review":
+        reasons.append("INCOMING_CONTROL_NOT_READY")
     if not value.custody_chain_complete:
         reasons.append("CUSTODY_GAP")
     if not value.applicable_to_work:
@@ -73,7 +84,7 @@ def evaluate_material_admission(value: MaterialBatchEvidence) -> MaterialAdmissi
     if value.conflict_ids:
         reasons.append("MATERIAL_CONFLICT")
     reasons.extend(value.gap_codes)
-    if "MATERIAL_CONFLICT" in reasons:
+    if "MATERIAL_CONFLICT" in reasons or "INCOMING_CONTROL_NONCONFORMING" in reasons:
         outcome = MaterialAdmission.QUARANTINED
     elif reasons:
         outcome = MaterialAdmission.WAITING_FOR_DOCUMENTS

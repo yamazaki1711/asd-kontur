@@ -99,6 +99,7 @@ def material(**changes: object) -> MaterialBatchEvidence:
         (uid(5),),
         (uid(6),),
         uid(7),
+        "ready_for_authorized_admission_review",
         True,
         True,
         authority("support.material.admit", "human:incoming-control"),
@@ -253,6 +254,32 @@ def test_material_requires_quality_documents_custody_and_control() -> None:
 def test_material_conflict_quarantines_instead_of_fuzzy_match() -> None:
     result = evaluate_material_admission(material(conflict_ids=(uid(99),)))
     assert result.outcome is MaterialAdmission.QUARANTINED
+
+
+def test_material_admission_rejects_unauthorized_professional_capability() -> None:
+    with pytest.raises(ValueError, match="material_admission_authority_invalid"):
+        evaluate_material_admission(
+            material(authority=authority("support.scope.configure", "human:planner"))
+        )
+
+
+@pytest.mark.parametrize("outcome", ["incomplete", None])
+def test_material_admission_requires_completed_incoming_control(outcome: str | None) -> None:
+    result = evaluate_material_admission(material(incoming_control_outcome=outcome))
+    assert result.outcome is MaterialAdmission.WAITING_FOR_DOCUMENTS
+    assert "INCOMING_CONTROL_NOT_READY" in result.reason_codes
+
+
+def test_nonconforming_incoming_control_quarantines_material() -> None:
+    result = evaluate_material_admission(material(incoming_control_outcome="nonconforming"))
+    assert result.outcome is MaterialAdmission.QUARANTINED
+    assert "INCOMING_CONTROL_NONCONFORMING" in result.reason_codes
+
+
+def test_material_admission_requires_positive_finite_delivered_quantity() -> None:
+    result = evaluate_material_admission(material(quantity=quantity("0", "kg")))
+    assert result.outcome is MaterialAdmission.WAITING_FOR_DOCUMENTS
+    assert "MATERIAL_QUANTITY_INVALID" in result.reason_codes
 
 
 def test_control_tolerance_boundary_is_inclusive_and_negative_is_preserved() -> None:

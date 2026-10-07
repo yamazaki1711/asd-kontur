@@ -168,6 +168,7 @@ class MaterialBatchEvidence:
     certificate_evidence_ids: tuple[UUID, ...]
     passport_evidence_ids: tuple[UUID, ...]
     incoming_control_id: UUID | None
+    incoming_control_outcome: str | None
     custody_chain_complete: bool
     applicable_to_work: bool
     authority: ProfessionalAuthority
