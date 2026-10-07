@@ -130,6 +130,24 @@ def test_contract_report_explains_role_reclassification_in_product_language() ->
     assert "CONTRACT_SOURCE_RECLASSIFICATION_PENDING" not in report_xml
 
 
+def test_contract_report_explains_multi_source_revision_limit() -> None:
+    content = render_tender_contract_analysis_docx(
+        {
+            "status": "drafted",
+            "clauses": [],
+            "issues": [],
+            "disagreement_items": [],
+            "revised_clauses": [],
+            "deliverables": [],
+            "gaps": ["REVISED_CONTRACT_EXCLUDES_NON_PRIMARY_SOURCE_REVISIONS"],
+        }
+    )
+    with zipfile.ZipFile(io.BytesIO(content)) as package:
+        report_xml = package.read("word/document.xml").decode("utf-8")
+    assert "предложения относятся к нескольким договорным файлам" in report_xml
+    assert "REVISED_CONTRACT_EXCLUDES_NON_PRIMARY_SOURCE_REVISIONS" not in report_xml
+
+
 def test_contract_reference_is_visible_in_editable_outputs_without_false_absence_claim() -> None:
     view = {
         "status": "drafted",

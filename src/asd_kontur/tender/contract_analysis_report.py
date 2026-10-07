@@ -475,6 +475,10 @@ def _gap_summary(value: Any) -> str:
         "CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED": (
             "связь части договорных ссылок с загруженными документами не установлена"
         ),
+        "REVISED_CONTRACT_EXCLUDES_NON_PRIMARY_SOURCE_REVISIONS": (
+            "предложения относятся к нескольким договорным файлам; отдельный Word-файл "
+            "основного договора не содержит все правки"
+        ),
         "CONTRACT_RISKS_NOT_IDENTIFIED_IN_COMPLETED_BATCHES": (
             "в обработанной части договора риски не установлены"
         ),
