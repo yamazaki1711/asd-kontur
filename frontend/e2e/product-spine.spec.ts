@@ -504,6 +504,95 @@ test("Tender shows confirmed work pairing with both document sides", async ({
   ).toBeVisible();
 });
 
+test("Tender accepts contractor cost lines without inventing a price", async ({
+  page,
+}) => {
+  let savedCost: Record<string, unknown> = {};
+  let hasSaved = false;
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v1/session") return json(route, session());
+    if (path.endsWith("/project-understanding")) {
+      return json(route, {
+        project_definition: { definition: { fields: {} } },
+        matrix: { matrix: { rows: [] } },
+        materialization: { state: "partial" },
+        evidence_index: {},
+        candidates: {},
+        defects: [],
+        project_engineering: { project: {}, summary: {}, unresolved: {} },
+      });
+    }
+    if (path.endsWith("/tender/participation-decision")) {
+      if (route.request().method() === "PUT") {
+        savedCost = route.request().postDataJSON() as Record<string, unknown>;
+        hasSaved = true;
+      }
+      return json(route, {
+        decision: "INSUFFICIENT_INPUT",
+        blockers: [],
+        missing_inputs: ["project_price_ceiling"],
+        project_price_ceiling: { state: "not_established", value_rub: null },
+        contractor_assessment: hasSaved ? savedCost : {},
+        cost_build_up: hasSaved
+          ? {
+              items: savedCost.cost_items,
+              cost_subtotal_rub: "450.00",
+              derived_minimum_viable_price_rub: "500.00",
+            }
+          : { items: [], cost_subtotal_rub: "0.00" },
+        professional_issue_count: 0,
+        project_analysis_complete: false,
+        authority:
+          "human_contractor_assessment_plus_source_derived_project_facts",
+        decision_digest: digest("a"),
+        assessment_id: hasSaved ? workspaceB : null,
+        assessment_submitted_at: hasSaved ? timestamp : null,
+      });
+    }
+    return json(route, error("synthetic_route_not_defined"), 404);
+  });
+
+  await page.goto(
+    `/modes/tender/workspaces/${workspaceA}/project-understanding?section=general`,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Решение об участии" }),
+  ).toBeVisible();
+  await page.getByText("Представить новую оценку Подрядчика").click();
+  const costs = page.getByRole("group", {
+    name: "Расчёт цены по известным затратам Подрядчика",
+  });
+  await costs.getByRole("button", { name: "Добавить статью затрат" }).click();
+  await costs.getByLabel("Работа / ресурс").fill("Delivery of beams");
+  await costs.getByLabel("Количество").fill("3");
+  await costs.getByLabel("Единица").fill("trip");
+  await costs.getByLabel("Ставка, руб. за единицу").fill("150");
+  await costs
+    .getByLabel("Основание количества и ставки")
+    .fill("Signed carrier offer");
+  await costs
+    .getByLabel("Требуемая прибыль, руб. (укажите 0, если она не требуется)")
+    .fill("50");
+  await costs
+    .getByLabel("Подтверждаю, что все необходимые затраты учтены")
+    .check();
+  await page.getByRole("button", { name: "Сохранить оценку" }).click();
+  await expect(
+    page.getByText(/минимальная цена с заявленной прибылью 500.00 руб/),
+  ).toBeVisible();
+  expect(savedCost.minimum_viable_price_rub).toBeNull();
+  expect(savedCost.cost_scope_complete).toBe(true);
+  expect(savedCost.cost_items).toEqual([
+    expect.objectContaining({
+      description: "Delivery of beams",
+      quantity: "3",
+      unit_rate_rub: "150",
+      basis: "Signed carrier offer",
+    }),
+  ]);
+});
+
 test("contract analysis refreshes as supervised work publishes clauses", async ({
   page,
 }) => {
