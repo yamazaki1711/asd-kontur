@@ -1821,8 +1821,12 @@ function DocumentsPage() {
                 )
               }
             >
-              <option value="project_evidence">Проектные и договорные исходные данные</option>
-              <option value="field_document">Документы фактического выполнения работ</option>
+              <option value="project_evidence">
+                Проектные и договорные исходные данные
+              </option>
+              <option value="field_document">
+                Документы фактического выполнения работ
+              </option>
             </select>
           </label>
           {sourceKind === "field_document" ? (
@@ -3627,9 +3631,7 @@ function MaterialApplicationPanel({
   context,
 }: {
   workspaceId: string;
-  context:
-    | components["schemas"]["MaterialAdmissionContextView"]
-    | undefined;
+  context: components["schemas"]["MaterialAdmissionContextView"] | undefined;
 }) {
   const queryClient = useQueryClient();
   const [admissionId, setAdmissionId] = useState("");
@@ -3683,7 +3685,9 @@ function MaterialApplicationPanel({
   const confirmUse = useMutation({
     mutationFn: async () => {
       if (!selected || !grant || !fieldLocatorId) {
-        throw new Error("Не хватает допуска, полевого документа или полномочия");
+        throw new Error(
+          "Не хватает допуска, полевого документа или полномочия",
+        );
       }
       const { data, error } = await api.POST(
         "/api/v1/workspaces/{workspace_id}/support/material-use-evidence",
@@ -3712,7 +3716,9 @@ function MaterialApplicationPanel({
   const submit = useMutation({
     mutationFn: async () => {
       if (!selected || !grant || !evidenceId) {
-        throw new Error("Не хватает допуска, подтверждения работы или полномочия");
+        throw new Error(
+          "Не хватает допуска, подтверждения работы или полномочия",
+        );
       }
       const { data, error } = await api.POST(
         "/api/v1/workspaces/{workspace_id}/support/material-applications",
@@ -3747,11 +3753,11 @@ function MaterialApplicationPanel({
   });
   const canSubmit = Boolean(
     selected &&
-      grant &&
-      evidenceId &&
-      quantity &&
-      basis.trim().length >= 3 &&
-      !context?.truncated_sections.length,
+    grant &&
+    evidenceId &&
+    quantity &&
+    basis.trim().length >= 3 &&
+    !context?.truncated_sections.length,
   );
   return (
     <div>
@@ -3765,39 +3771,55 @@ function MaterialApplicationPanel({
         <p>Нет действующего допуска партии к работе.</p>
       ) : null}
       {context && !context.application_grants.length ? (
-        <p>Нет действующего полномочия на подтверждение применения материала.</p>
+        <p>
+          Нет действующего полномочия на подтверждение применения материала.
+        </p>
       ) : null}
       {balance.data ? (
         <div role="status">
           <h4>Учётный баланс партии {balance.data.batch_reference}</h4>
           {balance.data.status === "recorded_balance" ? (
             <p>
-              Поставка: {displayValue(balance.data.delivered_quantity)} {balance.data.unit_code};
-              подтверждённое применение: {displayValue(balance.data.applied_quantity)} {balance.data.unit_code};
-              расчётный остаток: {displayValue(balance.data.remaining_quantity)} {balance.data.unit_code}.
+              Поставка: {displayValue(balance.data.delivered_quantity)}{" "}
+              {balance.data.unit_code}; подтверждённое применение:{" "}
+              {displayValue(balance.data.applied_quantity)}{" "}
+              {balance.data.unit_code}; расчётный остаток:{" "}
+              {displayValue(balance.data.remaining_quantity)}{" "}
+              {balance.data.unit_code}.
             </p>
           ) : (
             <p>
-              Расчёт остатка не подтверждён: {(
+              Расчёт остатка не подтверждён:{" "}
+              {(
                 {
                   no_delivery_basis: "нет единого основания поставки",
-                  conflicting_delivery_basis: "объёмы или единицы поставки противоречат друг другу",
-                  revision_scope_unresolved: "изменилась версия партии — требуется сверка остатков",
-                  unit_scope_unresolved: "единицы применения несовместимы с поставкой",
+                  conflicting_delivery_basis:
+                    "объёмы или единицы поставки противоречат друг другу",
+                  revision_scope_unresolved:
+                    "изменилась версия партии — требуется сверка остатков",
+                  unit_scope_unresolved:
+                    "единицы применения несовместимы с поставкой",
                   over_applied: "учтённое применение превышает поставку",
                 } as Record<string, string>
-              )[balance.data.status] ?? "требуется проверка"}.
+              )[balance.data.status] ?? "требуется проверка"}
+              .
             </p>
           )}
-          <p>Это сверка записей, не физическая инвентаризация и не приёмка работы.</p>
+          <p>
+            Это сверка записей, не физическая инвентаризация и не приёмка
+            работы.
+          </p>
         </div>
       ) : null}
-      {balance.error ? <p role="alert">Баланс недоступен: {String(balance.error)}</p> : null}
+      {balance.error ? (
+        <p role="alert">Баланс недоступен: {String(balance.error)}</p>
+      ) : null}
       {context && !context.field_locators.length ? (
         <p>
-          Нет принятого полевого документа. Загрузите акт, журнал или иной документ
-          фактического выполнения на вкладке «Документы», указав тип «Полевой
-          документ». Документ о поставке сам по себе не подтверждает применение.
+          Нет принятого полевого документа. Загрузите акт, журнал или иной
+          документ фактического выполнения на вкладке «Документы», указав тип
+          «Полевой документ». Документ о поставке сам по себе не подтверждает
+          применение.
         </p>
       ) : null}
       {context ? (
@@ -3810,8 +3832,8 @@ function MaterialApplicationPanel({
           <h4>Подтвердить источник фактического применения</h4>
           <p>
             Ответственный специалист подтверждает, что выбранное место в полевом
-            документе относится к этой работе. Система не выводит факт применения
-            из одной лишь загрузки файла.
+            документе относится к этой работе. Система не выводит факт
+            применения из одной лишь загрузки файла.
           </p>
           <div className="form-row">
             <label>
@@ -3862,7 +3884,9 @@ function MaterialApplicationPanel({
             Подтвердить полевой источник
           </button>
           {confirmUse.error ? (
-            <p role="alert">Источник не подтверждён: {String(confirmUse.error)}</p>
+            <p role="alert">
+              Источник не подтверждён: {String(confirmUse.error)}
+            </p>
           ) : null}
           {confirmUse.data ? (
             <p role="status">Источник привязан к выбранной работе.</p>
@@ -3906,7 +3930,8 @@ function MaterialApplicationPanel({
                       value={String(item.admission_id)}
                     >
                       {displayValue(batch?.batch_reference, "Партия")} —{" "}
-                      {displayValue(work?.work_name, "работа")} ({displayValue(item.delivered_quantity)}{" "}
+                      {displayValue(work?.work_name, "работа")} (
+                      {displayValue(item.delivered_quantity)}{" "}
                       {displayValue(item.delivered_unit)})
                     </option>
                   );
@@ -3944,7 +3969,10 @@ function MaterialApplicationPanel({
               >
                 <option value="">Выберите полномочие</option>
                 {context.application_grants.map((item) => (
-                  <option key={String(item.grant_id)} value={String(item.grant_id)}>
+                  <option
+                    key={String(item.grant_id)}
+                    value={String(item.grant_id)}
+                  >
                     {String(item.professional_qualification_ref)}
                   </option>
                 ))}
@@ -3959,7 +3987,8 @@ function MaterialApplicationPanel({
           ) : null}
           <div className="form-row">
             <label>
-              Фактически применено ({displayValue(selected?.delivered_unit, "ед.")})
+              Фактически применено (
+              {displayValue(selected?.delivered_unit, "ед.")})
               <input
                 required
                 type="number"
@@ -4027,13 +4056,17 @@ function MaterialApplicationPanel({
                 );
                 const linkedAdmission = context.decisions.find(
                   (candidate) =>
-                    String(candidate.admission_id) === String(item.admission_id),
+                    String(candidate.admission_id) ===
+                    String(item.admission_id),
                 );
                 return (
                   <tr key={String(item.material_application_id)}>
-                    <td>{displayValue(work?.work_name, "Работа требует проверки")}</td>
                     <td>
-                      {displayValue(item.quantity)} {displayValue(item.unit_code)}
+                      {displayValue(work?.work_name, "Работа требует проверки")}
+                    </td>
+                    <td>
+                      {displayValue(item.quantity)}{" "}
+                      {displayValue(item.unit_code)}
                     </td>
                     <td>
                       {source ? (
@@ -4044,7 +4077,8 @@ function MaterialApplicationPanel({
                             `/evidence/locators/${String(source.source_locator_id)}`,
                           )}
                         >
-                          {String(source.source_title)}: {String(source.locator_key)}
+                          {String(source.source_title)}:{" "}
+                          {String(source.locator_key)}
                         </Link>
                       ) : (
                         "Источник требует проверки"
@@ -4069,12 +4103,49 @@ function MaterialApplicationPanel({
 
 function AuditExpectedActualPreflightPage() {
   const { workspaceId = "" } = useParams();
+  return (
+    <AuditExpectedActualPreflightWorkspace
+      key={workspaceId}
+      workspaceId={workspaceId}
+    />
+  );
+}
+
+function AuditExpectedActualPreflightWorkspace({
+  workspaceId,
+}: {
+  workspaceId: string;
+}) {
+  const [documentCursor, setDocumentCursor] = useState<string | null>(null);
+  const [documentCursorHistory, setDocumentCursorHistory] = useState<
+    (string | null)[]
+  >([]);
   const preflight = useQuery({
     queryKey: ["audit-expected-actual-preflight", workspaceId],
     queryFn: async () => {
       const { data, error } = await api.GET(
         "/api/v1/workspaces/{workspace_id}/audit/expected-actual-preflight",
         { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  const uploadedDocuments = useQuery({
+    queryKey: ["audit-uploaded-documents", workspaceId, documentCursor],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/documents",
+        {
+          params: {
+            path: { workspace_id: workspaceId },
+            query: {
+              limit: 100,
+              cursor: documentCursor,
+              processing_status: null,
+              sort: "recorded_asc",
+            },
+          },
+        },
       );
       return requireData(data, error);
     },
@@ -4092,6 +4163,97 @@ function AuditExpectedActualPreflightPage() {
           />
         )}
       </QueryState>
+      <section className="panel">
+        <h2>Загруженные документы для инвентаризации</h2>
+        <p>
+          Здесь показаны текущие версии загруженных файлов, включая проектные
+          основания и документы фактического выполнения. Их наличие ещё не
+          подтверждает тип, содержание, подписи или комплектность ИД.
+        </p>
+        <QueryState query={uploadedDocuments}>
+          {(page) => (
+            <>
+              {page.items.length ? (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Документ</th>
+                        <th>Назначение при загрузке</th>
+                        <th>Приём и извлечение</th>
+                        <th>Состояние проверки</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {page.items.map((document) => (
+                        <tr
+                          key={`${document.document_id}:${String(document.version)}`}
+                        >
+                          <td>
+                            <Link
+                              to={workspaceRoute(
+                                "Audit",
+                                workspaceId,
+                                `/documents/${document.document_id}`,
+                              )}
+                            >
+                              {document.safe_display_name}
+                            </Link>
+                            <small>Версия {document.version}</small>
+                          </td>
+                          <td>
+                            {document.source_kind === "field_document"
+                              ? "Документ фактического выполнения"
+                              : "Проектное или договорное основание"}
+                          </td>
+                          <td>
+                            {humanizeStatus(document.admission_status)} ·{" "}
+                            {humanizeStatus(document.extraction_status)}
+                          </td>
+                          <td>
+                            Содержание и обязательные реквизиты не проверены
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <InfoNotice>
+                  Документы для инвентаризации не загружены.
+                </InfoNotice>
+              )}
+              <div className="inline-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!documentCursorHistory.length}
+                  onClick={() => {
+                    setDocumentCursor(documentCursorHistory.at(-1) ?? null);
+                    setDocumentCursorHistory((history) => history.slice(0, -1));
+                  }}
+                >
+                  Назад
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!page.next_cursor}
+                  onClick={() => {
+                    setDocumentCursorHistory((history) => [
+                      ...history,
+                      documentCursor,
+                    ]);
+                    setDocumentCursor(page.next_cursor);
+                  }}
+                >
+                  Далее
+                </button>
+              </div>
+            </>
+          )}
+        </QueryState>
+      </section>
     </Page>
   );
 }
@@ -4360,10 +4522,16 @@ function TenderContractAnalysisBody({
                       <td>{displayValue(item.target_description, "—")}</td>
                       <td>
                         {item.match_decision === "matched"
-                          ? displayValue(item.matched_source_name, "Сопоставлен")
+                          ? displayValue(
+                              item.matched_source_name,
+                              "Сопоставлен",
+                            )
                           : item.match_decision === "partially_matched"
                             ? `Частично представлен: ${displayValue(
-                                (item.matched_source_names as string[] | undefined)?.join(", "),
+                                (
+                                  item.matched_source_names as
+                                    string[] | undefined
+                                )?.join(", "),
                                 "документы не указаны",
                               )}; полнота требует уточнения`
                             : "Связь с загруженным документом не установлена"}

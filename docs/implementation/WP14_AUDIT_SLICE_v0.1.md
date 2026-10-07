@@ -26,6 +26,14 @@ PostgreSQL cluster; the integration case attempted to publish a forged clean
 report over persisted missing/blocked evidence and was rejected. This does not
 constitute a real uploaded-ID audit, 19-check coverage or an Audit-mode PASS.
 
+The Audit screen's next source checkpoint places the actual paginated admitted
+document inventory beside the requirement/package preflight. Each current
+document version links to its viewer and shows the declared upload purpose and
+admission/extraction state. It explicitly says that document type, content,
+signatures and ID completeness remain unexamined. This prevents an empty
+Support package from being mistaken for an inventory of user-uploaded ID; it
+does not yet classify individual ID forms or generate independent findings.
+
 ## 1. Scope and boundary
 
 WP-14 implements a universal workspace-scoped acquisition/corpus capability and
