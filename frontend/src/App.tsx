@@ -2747,7 +2747,7 @@ function IncomingInspectionPanel({ workspaceId }: { workspaceId: string }) {
         <button type="submit" disabled={submit.isPending}>Сохранить лист проверки</button>
         {submit.error ? <p role="alert">Не удалось сохранить проверку: {String(submit.error)}</p> : null}
       </form>
-      {records.data?.length ? <div><h3>Сохранённые проверки</h3><ul>{records.data.map((record) => {
+      {records.data?.length ? <div><h3>Последние проверки (до 100)</h3><ul>{records.data.map((record) => {
         const result = record.result as { outcome?: string; actions?: { check_key: string; action: string }[] };
         return <li key={record.preflight_id}><details><summary><strong>{record.material_name}</strong> — {record.batch_reference}: {result.outcome === "nonconforming" ? "Несоответствие — изолировать партию" : result.outcome === "incomplete" ? "Проверка не завершена" : "Подготовлено к решению ответственного лица"}</summary><p>Материал не допущен к применению этим листом. Решение принимает ответственное лицо после проверки подтверждений и фактического осмотра.</p>{result.actions?.length ? <ul>{result.actions.map((action) => <li key={`${action.check_key}:${action.action}`}>{INCOMING_INSPECTION_CHECKS.find(([key]) => key === action.check_key)?.[1] ?? action.check_key}: {action.action === "isolate_batch_and_resolve_nonconformity" ? "изолировать партию и устранить несоответствие" : action.action === "perform_or_obtain_check" ? "выполнить проверку или получить документ" : "указать подтверждение либо основание неприменимости"}</li>)}</ul> : null}</details></li>;
       })}</ul></div> : <p>Сохранённых проверок пока нет.</p>}
