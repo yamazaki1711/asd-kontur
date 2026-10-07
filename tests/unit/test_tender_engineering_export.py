@@ -180,6 +180,22 @@ def test_primary_tender_report_discloses_missing_participation_inputs() -> None:
     assert "минимальная экономически допустимая цена Подрядчика" in xml
 
 
+def test_primary_decision_and_findings_precede_raw_context_tables() -> None:
+    model = _model()
+    model["participants"] = [{"label": "Customer", "value": "Changed Party"}]
+    model["participation_decision"] = {
+        "decision": "INSUFFICIENT_INPUT",
+        "blockers": [],
+        "missing_inputs": ["company_scope_fit"],
+    }
+    data = render_engineering_tender_report_docx(model)
+    with zipfile.ZipFile(io.BytesIO(data)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert xml.index("Предварительное решение об участии") < xml.index("Участники проекта")
+    assert xml.index("Ключевые выводы для участия") < xml.index("Участники проекта")
+    assert "Changed Party" in xml
+
+
 def test_primary_tender_report_shows_cost_basis_and_refuses_partial_total_as_viability() -> None:
     model = _model()
     model["participation_decision"] = {

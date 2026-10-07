@@ -243,12 +243,6 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                 ],
             )
 
-    add_context_section("participants", "Участники проекта")
-    add_context_section("commercial_conditions", "Коммерческие условия / цена")
-    add_context_section("time_requirements", "Сроки")
-    add_context_section("procurement_requirements", "Требования закупки")
-    add_context_section("contract_conditions", "Договорные условия и гарантии")
-
     participation = dict(model.get("participation_decision") or {})
     if participation:
         decision_labels = {
@@ -319,6 +313,12 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
             "Ключевые выводы для участия в тендере",
             [_bullet_list(primary_findings, empty="")],
         )
+
+    add_context_section("participants", "Участники проекта")
+    add_context_section("commercial_conditions", "Коммерческие условия / цена")
+    add_context_section("time_requirements", "Сроки")
+    add_context_section("procurement_requirements", "Требования закупки")
+    add_context_section("contract_conditions", "Договорные условия и гарантии")
 
     facilities = list(model.get("facilities") or ())
     if facilities:

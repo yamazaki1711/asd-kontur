@@ -1,5 +1,17 @@
 # Primary Tender Report Compaction 01
 
+## Decision-first follow-up — source checkpoint
+
+The rendered primary report was readable after compaction but still placed raw
+participant, price, time and procurement tables before the professional
+participation decision and key findings. The report now places the existing
+decision and source-derived key conclusions immediately after the object
+summary. The underlying facts, calculations and findings do not change;
+context tables follow the conclusion and the full schedules remain in the
+archive. A changed-party test verifies section order. The focused report suite
+passed 16/16. This follow-up is source-only until an exact release is checked
+and deployed; the prior 28-page release remains the public baseline.
+
 ## Observed product defect
 
 The live owner workspace has a useful structured Tender model and an editable
