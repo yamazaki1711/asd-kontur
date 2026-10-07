@@ -121,6 +121,26 @@ def _model() -> dict[str, object]:
     }
 
 
+def test_primary_report_discloses_partial_scope_without_claiming_a_full_match() -> None:
+    model = _model()
+    comparisons = model["scope_comparisons"]
+    assert isinstance(comparisons, list)
+    comparisons.append(
+        {
+            "classification": "PARTIAL_SCOPE_MATCH",
+            "professional_status": "Часть операций сопоставлена",
+            "facility": "Депо C",
+            "work": "Монтаж ферм",
+        }
+    )
+
+    payload = render_engineering_tender_report_docx(model)
+    with zipfile.ZipFile(io.BytesIO(payload)) as package:
+        document = package.read("word/document.xml").decode()
+
+    assert "Часть операций сопоставлена: 1 поз." in document
+
+
 def test_primary_report_is_bounded_while_full_work_schedule_remains_exportable() -> None:
     model = _model()
     model["facility_cards"] = [

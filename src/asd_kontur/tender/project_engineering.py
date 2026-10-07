@@ -30,7 +30,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v84"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v85"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -4968,6 +4968,7 @@ def _scope_comparisons(
         design = roles.intersection(design_roles)
         commercial = roles.intersection(commercial_roles)
         paired_row: Mapping[str, Any] | None = None
+        partial_peers: list[Mapping[str, Any]] = []
         if not design:
             if commercial:
                 possible_design = design_by_family.get(str(row.get("family_key") or ""), [])
@@ -4996,6 +4997,21 @@ def _scope_comparisons(
                             "Операция относится к установленному проектному объёму "
                             "этого сооружения."
                         )
+                    )
+                elif partial_peers := [
+                    design_row
+                    for design_row in possible_design
+                    if _explicit_work_locations_compatible(design_row, row)
+                    and _reviewed_cross_work_pair(design_row, row)
+                    and _work_pair_scope_compatibility(design_row, row) is not True
+                ]:
+                    paired_row = partial_peers[0] if len(partial_peers) == 1 else None
+                    status = "PARTIAL_SCOPE_MATCH"
+                    professional_status = "Часть операций сопоставлена"
+                    conclusion = (
+                        "Отдельные проектные и коммерческие позиции взаимно сопоставлены "
+                        "по точным источникам, но весь объём этой группы работ не подтверждён. "
+                        "Оставшиеся операции и распределение количества требуют проверки."
                     )
                 elif possible_design:
                     status = "UNRESOLVED_SCOPE_MATCH"
@@ -5028,8 +5044,7 @@ def _scope_comparisons(
                 semantic_operation is not None and len(row.get("project_wording") or ()) <= 2
             )
             if pair_compatibility is True or (
-                pair_compatibility is None
-                and (row.get("facility_id") or exact_operation or bounded_semantic_match)
+                pair_compatibility is None and (exact_operation or bounded_semantic_match)
             ):
                 status = "MATCH"
                 professional_status = "Состав сопоставлен"
@@ -5048,6 +5063,13 @@ def _scope_comparisons(
                 for value in possible
                 if _work_pair_scope_compatibility(row, value) is True
                 and _explicit_work_locations_compatible(row, value)
+            ]
+            partial_peers = [
+                value
+                for value in possible
+                if _explicit_work_locations_compatible(row, value)
+                and _reviewed_cross_work_pair(row, value)
+                and _work_pair_scope_compatibility(row, value) is not True
             ]
             facility_id = str(row.get("facility_id") or "")
             possible_at_facility = [
@@ -5098,6 +5120,15 @@ def _scope_comparisons(
                 conclusion = (
                     "Для проектной работы найдено несколько сопоставимых коммерческих "
                     "позиций; нельзя выбрать одну без уточнения границ объёма."
+                )
+            elif partial_peers:
+                paired_row = partial_peers[0] if len(partial_peers) == 1 else None
+                status = "PARTIAL_SCOPE_MATCH"
+                professional_status = "Часть операций сопоставлена"
+                conclusion = (
+                    "Отдельные проектные и коммерческие позиции взаимно сопоставлены "
+                    "по точным источникам, но весь объём этой группы работ не подтверждён. "
+                    "Оставшиеся операции и распределение количества требуют проверки."
                 )
             elif covering_commercial_scope is not None:
                 paired_row = covering_commercial_scope
@@ -5155,11 +5186,15 @@ def _scope_comparisons(
                     "Для сооружения пока не установлен достаточный коммерческий состав, "
                     "чтобы подтвердить наличие или отсутствие этой работы."
                 )
-        paired_roles = {str(value) for value in (paired_row or {}).get("document_roles") or ()}
+        paired_roles = {
+            str(value)
+            for peer in ((paired_row,) if paired_row is not None else tuple(partial_peers))
+            for value in peer.get("document_roles") or ()
+        }
         source_locator_ids = sorted(
             {
                 str(value)
-                for source_row in (row, paired_row)
+                for source_row in (row, paired_row, *partial_peers)
                 if source_row is not None
                 for value in source_row.get("source_locator_ids") or ()
                 if value
@@ -5174,6 +5209,8 @@ def _scope_comparisons(
                     }
                 ),
                 "classification": status,
+                "work_scope_id": row.get("work_scope_id"),
+                "paired_work_scope_id": paired_row.get("work_scope_id") if paired_row else None,
                 "professional_status": professional_status,
                 "facility": row.get("facility"),
                 "facility_id": row.get("facility_id"),

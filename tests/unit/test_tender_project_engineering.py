@@ -3276,6 +3276,95 @@ def test_reciprocal_different_scope_rejects_false_work_match() -> None:
     assert {value["classification"] for value in comparisons} == {"UNRESOLVED_SCOPE_MATCH"}
 
 
+def test_mixed_reciprocal_work_pairs_report_partial_coverage_with_both_sources() -> None:
+    same = "The two rows identify the same beam installation."
+    different = "One row is welding; the other is protective painting."
+    common = {
+        "facility_id": "depot-c",
+        "facility": "Depot C",
+        "family_key": "structural_steel",
+    }
+    design = {
+        **common,
+        "work_scope_id": "design-steel",
+        "candidate_ids": ["design-beam", "design-welding"],
+        "work_scope_assertions": [
+            {
+                "source_candidate_id": "design-beam",
+                "related_candidate_id": "commercial-beam",
+                "scope_compatibility": "SAME_SCOPE",
+                "normalized_operation": "Install beams",
+                "reason": same,
+            },
+            {
+                "source_candidate_id": "design-welding",
+                "related_candidate_id": "commercial-painting",
+                "scope_compatibility": "DIFFERENT_SCOPE",
+                "normalized_operation": None,
+                "reason": different,
+            },
+        ],
+        "work_name": "Steel works",
+        "document_roles": ["РД"],
+        "source_locator_ids": ["design-source"],
+    }
+    commercial = {
+        **common,
+        "work_scope_id": "commercial-steel",
+        "candidate_ids": ["commercial-beam", "commercial-painting"],
+        "work_scope_assertions": [
+            {
+                "source_candidate_id": "commercial-beam",
+                "related_candidate_id": "design-beam",
+                "scope_compatibility": "SAME_SCOPE",
+                "normalized_operation": "Install beams",
+                "reason": same,
+            },
+            {
+                "source_candidate_id": "commercial-painting",
+                "related_candidate_id": "design-welding",
+                "scope_compatibility": "DIFFERENT_SCOPE",
+                "normalized_operation": None,
+                "reason": different,
+            },
+        ],
+        "work_name": "Steel package",
+        "document_roles": ["Смета"],
+        "source_locator_ids": ["commercial-source"],
+    }
+
+    comparisons = _scope_comparisons([design, commercial])
+
+    assert len(comparisons) == 2
+    assert {row["classification"] for row in comparisons} == {"PARTIAL_SCOPE_MATCH"}
+    assert {row["work_scope_id"] for row in comparisons} == {
+        "design-steel",
+        "commercial-steel",
+    }
+    assert all(
+        row["source_locator_ids"] == ["commercial-source", "design-source"] for row in comparisons
+    )
+
+
+def test_shared_facility_alone_cannot_authorize_design_commercial_match() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "depot-steel",
+                "candidate_ids": ["design-steel", "commercial-steel"],
+                "facility_id": "depot-c",
+                "facility": "Depot C",
+                "family_key": "structural_steel",
+                "work_name": "Steel works",
+                "document_roles": ["РД", "Смета"],
+                "source_locator_ids": ["design-source", "commercial-source"],
+            }
+        ]
+    )
+
+    assert comparisons[0]["classification"] == "UNRESOLVED_SCOPE_MATCH"
+
+
 def test_commercial_work_is_not_called_unsupported_while_design_rows_are_unclassified() -> None:
     comparisons = _scope_comparisons(
         [
@@ -3709,7 +3798,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v84"
+    assert model["model_version"] == "project-engineering-model-v85"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

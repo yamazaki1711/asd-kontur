@@ -1003,7 +1003,10 @@ def render_engineering_disagreement_protocol_docx(model: Mapping[str, Any]) -> b
 def _scope_comparison_uncertainties(rows: object) -> list[str]:
     counts: dict[str, int] = {}
     for raw in rows if isinstance(rows, (list, tuple)) else ():
-        if not isinstance(raw, Mapping) or raw.get("classification") != "UNRESOLVED_SCOPE_MATCH":
+        if not isinstance(raw, Mapping) or raw.get("classification") not in {
+            "UNRESOLVED_SCOPE_MATCH",
+            "PARTIAL_SCOPE_MATCH",
+        }:
             continue
         status = str(raw.get("professional_status") or "Сопоставление объёма требует уточнения")
         counts[status] = counts.get(status, 0) + 1
