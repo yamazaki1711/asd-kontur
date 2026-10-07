@@ -19,6 +19,7 @@ from asd_kontur.tender.contract_coherence import (
     CONTRACT_COHERENCE_PROFILE,
     MAX_CONTRACT_COHERENCE_REVISIONS,
     contract_coherence_tasks,
+    unreviewed_explicit_reference_count,
 )
 from asd_kontur.tender.qwen_contract_analysis import (
     CONTRACT_ANALYSIS_PROFILE,
@@ -776,6 +777,11 @@ class TenderContractAnalysisRepository:
         unscheduled_revision_count = max(0, len(revised_clauses) - MAX_CONTRACT_COHERENCE_REVISIONS)
         if unscheduled_revision_count:
             gaps.append("CONTRACT_COHERENCE_REVISION_LIMIT")
+        unreviewed_reference_count = unreviewed_explicit_reference_count(
+            {"clauses": clauses, "revised_clauses": revised_clauses}, coherence_tasks
+        )
+        if unreviewed_reference_count:
+            gaps.append("CONTRACT_COHERENCE_REFERENCES_UNREVIEWED")
         coherence_digests = [str(task["context_digest"]) for task in coherence_tasks]
         coherence_rows = (
             list(
@@ -815,7 +821,7 @@ class TenderContractAnalysisRepository:
             else "bounded_context_unavailable"
             if not coherence_tasks
             else "partial_with_blockers"
-            if unscheduled_revision_count
+            if unscheduled_revision_count or unreviewed_reference_count
             else "reviewed_bounded_context"
             if len(accepted_digests) == len(coherence_tasks)
             else "partial_with_blockers"
@@ -912,6 +918,7 @@ class TenderContractAnalysisRepository:
                 "scheduled_contexts": len(coherence_tasks),
                 "accepted_contexts": len(accepted_digests),
                 "unscheduled_revision_count": unscheduled_revision_count,
+                "unreviewed_explicit_reference_count": unreviewed_reference_count,
                 "reviews": coherence_reviews,
                 "conflicts": [
                     {

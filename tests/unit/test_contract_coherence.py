@@ -15,6 +15,7 @@ from asd_kontur.tender.contract_analysis_report import render_tender_contract_an
 from asd_kontur.tender.contract_coherence import (
     contract_coherence_job_key,
     contract_coherence_tasks,
+    unreviewed_explicit_reference_count,
 )
 from asd_kontur.tender.qwen_contract_coherence import (
     QwenContractCoherenceReviewer,
@@ -147,6 +148,7 @@ def test_explicit_cross_references_overflow_into_separate_bounded_review() -> No
     assert tasks[1]["coverage"]["total_explicit_reference_overflow"] == 2
     assert tasks[0]["context_digest"] != tasks[1]["context_digest"]
     assert contract_coherence_tasks(view) == tasks
+    assert unreviewed_explicit_reference_count(view, tasks) == 0
     overflow_result = parse_contract_coherence(
         json.dumps(
             {
@@ -167,6 +169,26 @@ def test_explicit_cross_references_overflow_into_separate_bounded_review() -> No
         context=tasks[1],
     )
     assert overflow_result[0]["other_clause_id"] == "related-13"
+
+
+def test_unroutable_explicit_reference_remains_visible_as_coverage_gap() -> None:
+    view = _view(conflicting=False)
+    view["clauses"] = [
+        view["clauses"][0],
+        {
+            "clause_id": "long-cross-reference",
+            "clause_version": 1,
+            "source_version_id": "source-a",
+            "source_locator_id": "locator-long",
+            "source_page": 90,
+            "display_clause_ref": "12.4",
+            "category": "scope",
+            "source_text": "12.4. Согласно п. 4.1 " + "условия  " * 300,
+        },
+    ]
+    tasks = contract_coherence_tasks(view)
+    assert tasks == ()
+    assert unreviewed_explicit_reference_count(view, tasks) == 1
 
 
 def test_same_number_as_measurement_does_not_create_contract_reference() -> None:

@@ -244,3 +244,56 @@ def current_coherence_digests(view: Mapping[str, Any]) -> set[str]:
     """Only results for the current exact source/proposal context may be shown."""
 
     return {str(task["context_digest"]) for task in contract_coherence_tasks(view)}
+
+
+def unreviewed_explicit_reference_count(
+    view: Mapping[str, Any], tasks: tuple[dict[str, Any], ...]
+) -> int:
+    """Count source-backed explicit clause links outside scheduled Qwen contexts.
+
+    This is a coverage alarm, not a semantic-conflict finding. Long passages,
+    budget caps and missing locators cannot quietly become legal clearance.
+    """
+
+    clauses = [item for item in view.get("clauses") or () if isinstance(item, dict)]
+    revisions = [item for item in view.get("revised_clauses") or () if isinstance(item, dict)]
+    by_identity = {
+        (str(item.get("clause_id") or ""), str(item.get("clause_version") or "")): item
+        for item in clauses
+    }
+    scheduled: dict[str, set[str]] = {}
+    for task in tasks:
+        scheduled.setdefault(str(task["revision_id"]), set()).update(
+            str(item["clause_id"]) for item in task["related_clauses"]
+        )
+    unreviewed = 0
+    for revision in revisions:
+        revision_id = str(revision.get("revised_clause_id") or "")
+        source = by_identity.get(
+            (
+                str(revision.get("source_clause_id") or ""),
+                str(revision.get("source_clause_version") or ""),
+            )
+        )
+        if source is None:
+            continue
+        source_number = display_clause_reference(source)
+        if _CLAUSE_NUMBER.fullmatch(source_number) is None:
+            source_number = ""
+        forward_numbers = set(
+            _EXPLICIT_CLAUSE_REFERENCE.findall(str(revision.get("revised_text") or ""))
+        )
+        selected = scheduled.get(revision_id, set())
+        for other in clauses:
+            other_id = str(other.get("clause_id") or "")
+            if not other_id or other_id == str(source.get("clause_id")):
+                continue
+            other_number = display_clause_reference(other)
+            reverse = bool(
+                source_number
+                and source_number
+                in _EXPLICIT_CLAUSE_REFERENCE.findall(str(other.get("source_text") or ""))
+            )
+            if (reverse or other_number in forward_numbers) and other_id not in selected:
+                unreviewed += 1
+    return unreviewed

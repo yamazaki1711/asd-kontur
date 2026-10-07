@@ -3195,6 +3195,21 @@ function TenderContractAnalysisBody({
             Отсутствие найденного противоречия не означает проверки всего
             договора или юридического согласования.
           </p>
+          {Number(coherenceReview.unreviewed_explicit_reference_count ?? 0) >
+          0 ? (
+            <p>
+              Не проверены прямые ссылки на положения договора:{" "}
+              {String(coherenceReview.unreviewed_explicit_reference_count)}.
+              Требуется ручная проверка исходных пунктов.
+            </p>
+          ) : null}
+          {Number(coherenceReview.unscheduled_revision_count ?? 0) > 0 ? (
+            <p>
+              Предлагаемые изменения вне текущего объёма автоматической
+              проверки: {String(coherenceReview.unscheduled_revision_count)}. Не
+              согласовывайте проект без проверки этих изменений.
+            </p>
+          ) : null}
           {coherenceConflicts.length ? (
             <div className="table-wrap">
               <table>
