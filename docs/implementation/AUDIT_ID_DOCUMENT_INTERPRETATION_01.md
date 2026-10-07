@@ -32,9 +32,14 @@ Seven source-boundary unit cases pass. The application-spine and
 document-understanding unit selection passes 235/235; Ruff, mypy, frontend
 lint/typecheck, frontend unit tests and build pass. Public DB read-only
 inspection confirmed migration head 0141 and both expected fairness-function
-source patterns. No public migration, release cutover or live Audit acceptance
-has occurred in this checkpoint because a dedicated disposable PostgreSQL test
-target was not configured. Browser control was unavailable in this session.
+source patterns. Migration 0142 upgraded, downgraded and re-upgraded on a
+separate disposable database using a dedicated non-production role. The
+broader integration suite could not migrate its newly created databases under
+that restricted role because `CREATE EXTENSION vector` requires superuser
+privileges. The exact disposable database and role were removed afterward;
+other historical test databases were left untouched. No public migration,
+release cutover or live Audit acceptance has occurred. Browser control was
+unavailable in this session.
 
 ## Still required for Audit
 
