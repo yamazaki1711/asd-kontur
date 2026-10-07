@@ -12,6 +12,7 @@ import json
 import os
 import plistlib
 from pathlib import Path
+from typing import cast
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -31,7 +32,7 @@ def _manifest(path: Path, expected_digest: str) -> dict[str, object]:
     raw = path.read_bytes()
     if hashlib.sha256(raw).hexdigest() != expected_digest:
         raise RuntimeError("cleanup_manifest_digest_mismatch")
-    value = json.loads(raw)
+    value = cast(dict[str, object], json.loads(raw))
     if not isinstance(value, dict) or value.get("schema") != (
         "asd-kontur-explicit-workspace-cleanup@1"
     ):
@@ -39,10 +40,20 @@ def _manifest(path: Path, expected_digest: str) -> dict[str, object]:
     ids = value.get("unwanted_workspace_ids")
     if not isinstance(ids, list) or not ids or len(ids) != len(set(ids)):
         raise RuntimeError("cleanup_manifest_targets_invalid")
-    for identity in [*ids, value.get("retain_workspace_id"), value.get("organization_id")]:
+    identities = [*ids, value.get("organization_id")]
+    if value.get("retain_workspace_id") is not None:
+        identities.append(value["retain_workspace_id"])
+    for identity in identities:
         UUID(str(identity))
-    if value["retain_workspace_id"] in ids:
+    if value.get("retain_workspace_id") in ids:
         raise RuntimeError("cleanup_manifest_retained_targeted")
+    names = value.get("target_display_names")
+    if names is not None and (
+        not isinstance(names, dict)
+        or set(names) != set(ids)
+        or not all(isinstance(name, str) and name.strip() for name in names.values())
+    ):
+        raise RuntimeError("cleanup_manifest_target_names_invalid")
     return value
 
 
@@ -70,7 +81,7 @@ def _load_journal(path: Path, manifest_digest: str) -> dict[str, object]:
         return {"manifest_sha256": manifest_digest, "workspaces": {}}
     if path.is_symlink():
         raise RuntimeError("cleanup_journal_symlink")
-    value = json.loads(path.read_text(encoding="utf-8"))
+    value = cast(dict[str, object], json.loads(path.read_text(encoding="utf-8")))
     if value.get("manifest_sha256") != manifest_digest or not isinstance(
         value.get("workspaces"), dict
     ):
@@ -85,28 +96,34 @@ def _assert_inventory(
     allow_partial: bool,
 ) -> tuple[str, ...]:
     owner = str(manifest["owner_identity_id"])
-    retain = str(manifest["retain_workspace_id"])
-    targets = {str(value) for value in manifest["unwanted_workspace_ids"]}
+    retain = str(manifest["retain_workspace_id"]) if manifest.get("retain_workspace_id") else None
+    targets = {str(value) for value in cast(list[str], manifest["unwanted_workspace_ids"])}
     rows = repository.list_workspaces(owner_identity_id=owner)
     actual = {str(row.workspace_id) for row in rows}
-    expected = targets | {retain}
-    if retain not in actual or not actual <= expected:
+    expected = targets | ({retain} if retain is not None else set())
+    if not actual <= expected or (retain is not None and retain not in actual):
         raise RuntimeError("cleanup_authorized_inventory_conflict")
     if not allow_partial and (
         actual != expected or len(actual) != manifest["expected_authorized_workspace_count_before"]
     ):
         raise RuntimeError("cleanup_authorized_inventory_not_exact")
-    retained = next(row for row in rows if str(row.workspace_id) == retain)
-    if (
-        str(retained.organization_id) != manifest["organization_id"]
-        or retained.display_name != manifest["retain_display_name"]
-        or retained.lifecycle_state != "ACTIVE"
-    ):
-        raise RuntimeError("cleanup_retained_workspace_mismatch")
+    if retain is not None:
+        retained = next(row for row in rows if str(row.workspace_id) == retain)
+        if (
+            str(retained.organization_id) != manifest["organization_id"]
+            or retained.display_name != manifest["retain_display_name"]
+            or retained.lifecycle_state != "ACTIVE"
+        ):
+            raise RuntimeError("cleanup_retained_workspace_mismatch")
+    target_names = manifest.get("target_display_names")
     for row in rows:
         if str(row.workspace_id) in targets and (
             str(row.organization_id) != manifest["organization_id"]
-            or "Control" not in row.display_name
+            or (
+                row.display_name != target_names[str(row.workspace_id)]
+                if isinstance(target_names, dict)
+                else "Control" not in row.display_name
+            )
             or row.lifecycle_state not in {"ACTIVE", "RESET_PLANNING"}
         ):
             raise RuntimeError(f"cleanup_target_metadata_mismatch:{row.workspace_id}")
@@ -165,11 +182,12 @@ def main() -> int:
         journal_path = args.manifest.parent / "journal.json"
         journal = _load_journal(journal_path, args.manifest_sha256)
         inventory = _assert_inventory(repository, manifest, allow_partial=journal_path.exists())
+        target_ids = cast(list[str], manifest["unwanted_workspace_ids"])
         print(
             json.dumps(
                 {
                     "authorized_count": len(inventory),
-                    "target_count": len(manifest["unwanted_workspace_ids"]),
+                    "target_count": len(target_ids),
                 }
             )
         )
@@ -189,7 +207,7 @@ def main() -> int:
         )
         states = journal["workspaces"]
         assert isinstance(states, dict)
-        for raw_id in manifest["unwanted_workspace_ids"]:
+        for raw_id in target_ids:
             workspace_id = UUID(str(raw_id))
             state = states.get(str(workspace_id))
             if isinstance(state, dict) and state.get("state") == "destroyed":
@@ -223,9 +241,15 @@ def main() -> int:
             _assert_inventory(repository, manifest, allow_partial=True)
             print(json.dumps({"destroyed_workspace_id": str(workspace_id)}))
         remaining = _assert_inventory(repository, manifest, allow_partial=True)
-        if remaining != (str(manifest["retain_workspace_id"]),):
+        retained_id = manifest.get("retain_workspace_id")
+        expected_remaining = (str(retained_id),) if retained_id else ()
+        if remaining != expected_remaining:
             raise RuntimeError("cleanup_remaining_workspace_mismatch")
-        print(json.dumps({"outcome": "all_manifest_workspaces_destroyed", "remaining_count": 1}))
+        print(
+            json.dumps(
+                {"outcome": "all_manifest_workspaces_destroyed", "remaining_count": len(remaining)}
+            )
+        )
         return 0
     finally:
         engine.dispose()
