@@ -8,9 +8,43 @@ import zipfile
 from asd_kontur.application_spine.services import _contract_cross_check_coverage
 from asd_kontur.tender.contract_analysis_export import render_tender_contract_analysis_csv
 from asd_kontur.tender.contract_analysis_report import (
+    _display_clause_reference,
     render_tender_contract_analysis_docx,
     render_tender_disagreement_protocol_docx,
 )
+
+
+def test_contract_report_uses_only_source_supported_clause_references() -> None:
+    assert (
+        _display_clause_reference(
+            {"source_text": "4.7. Оплата производится", "clause_key": "clause_3"}
+        )
+        == "4.7"
+    )
+    assert (
+        _display_clause_reference({"source_text": "Оплата производится", "clause_key": "п. 8.2"})
+        == "Пункт без номера — см. источник"
+    )
+    assert (
+        _display_clause_reference(
+            {"source_text": "Выезд на объект", "clause_key": "clause_3", "source_page": 12}
+        )
+        == "Пункт без номера (стр./лист 12)"
+    )
+    assert (
+        _display_clause_reference({"source_text": "Выезд на объект", "clause_key": "batch-1"})
+        == "Пункт без номера — см. источник"
+    )
+    assert (
+        _display_clause_reference(
+            {
+                "source_text": "Выезд на объект",
+                "clause_key": "payment.acceptance",
+                "locator_label": "6.4",
+            }
+        )
+        == "Пункт без номера — см. источник"
+    )
 
 
 def test_contract_analysis_export_preserves_lineage_and_neutralizes_formulas() -> None:

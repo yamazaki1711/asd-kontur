@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import io
+import re
 import zipfile
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 from xml.sax.saxutils import escape
 
 _FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
+_SOURCE_CLAUSE_NUMBER = re.compile(r"^\s*(\d{1,3}(?:\.\d{1,3}){1,4})\.(?=\s|$)")
 
 
 def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
@@ -19,7 +21,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
     obligation_rows = [
         (
             str(ordinal),
-            str(clause.get("clause_key") or "Не указан"),
+            _display_clause_reference(clause),
             party,
             obligation,
             str(clause.get("condition") or "Не выделено из текста"),
@@ -62,7 +64,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
         disagreement_rows.append(
             (
                 str(ordinal),
-                str(clause.get("clause_key") or "Не указано"),
+                _display_clause_reference(clause),
                 str(clause.get("source_text") or "Текст исходного пункта не извлечён"),
                 _source_reference(clause),
                 str(revised.get("revised_text") or item.get("proposed_clause_text") or ""),
@@ -320,7 +322,7 @@ def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
         rows.append(
             (
                 str(ordinal),
-                str(clause.get("clause_key") or "Не указано"),
+                _display_clause_reference(clause),
                 str(clause.get("source_text") or "Текст исходного пункта не извлечён"),
                 str(revision.get("revised_text") or item.get("proposed_clause_text") or ""),
                 _disagreement_basis(issue, item) + "; Источник: " + _source_reference(clause),
@@ -381,6 +383,17 @@ def _source_reference(clause: Mapping[str, Any]) -> str:
         "; ".join(f"{label}: {value}" for label, value in values if value)
         or "Источник доступен по ссылке результата"
     )
+
+
+def _display_clause_reference(clause: Mapping[str, Any]) -> str:
+    """Never present a model's working identifier as a numbered contract clause."""
+
+    source_text = str(clause.get("source_text") or "")
+    source_match = _SOURCE_CLAUSE_NUMBER.match(source_text)
+    if source_match:
+        return source_match.group(1)
+    page = clause.get("source_page") or clause.get("page_number")
+    return f"Пункт без номера (стр./лист {page})" if page else "Пункт без номера — см. источник"
 
 
 def _status_label(value: Any) -> str:
