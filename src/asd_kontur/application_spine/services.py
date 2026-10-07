@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, BinaryIO
 from uuid import UUID
 
 import sqlalchemy as sa
 
+from asd_kontur.audit.inventory_export import render_uploaded_document_inventory_csv
 from asd_kontur.audit.package_preflight import build_expected_actual_preflight
 from asd_kontur.audit.preflight_export import render_expected_actual_preflight_csv
 from asd_kontur.audit.report_export import render_audit_report_projection_csv
@@ -1719,6 +1720,43 @@ class ProductSpineService:
             len(data),
             digest,
             f"audit-expected-actual-preflight-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def audit_uploaded_document_inventory_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export all current admitted versions, not just the visible UI page."""
+
+        documents: list[dict[str, Any]] = []
+        cursor: str | None = None
+        seen_cursors: set[str] = set()
+        while True:
+            page, next_cursor = self.list_documents(
+                owner_identity_id=owner_identity_id,
+                workspace_id=workspace_id,
+                limit=200,
+                cursor=cursor,
+                media_type=None,
+                status=None,
+                sort="recorded_asc",
+            )
+            documents.extend(asdict(document) for document in page)
+            if next_cursor is None:
+                break
+            if next_cursor in seen_cursors:
+                raise ValueError("document_inventory_cursor_cycle")
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
+        data = render_uploaded_document_inventory_csv(documents)
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"audit-uploaded-document-inventory-{workspace_id}.csv",
             0,
             len(data),
             (data,),

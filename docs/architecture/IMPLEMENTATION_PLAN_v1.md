@@ -59,6 +59,14 @@ that exact release with API readiness/frontend HTTP 200; Qwen/NTD remain
 unchanged. The next dependency is a genuine Qwen-grounded ID document type
 and work-scope interpretation feeding independent document/content checks,
 not another package-only projection. FFC-04 remains `NOT VERIFIED`.
+Application release `8f9929fbff92592bb7c18aa97c763ec08cf208ff` now shows
+the persisted Qwen preliminary roles of active admitted document versions in
+that Audit inventory, with no new Qwen processing and no assertion of a passed
+document check. Four supervised application roles passed exact-release
+preflight and API readiness after cutover; Qwen/NTD were unchanged. A follow-up
+source slice adds an editable, full-inventory CSV with explicitly unperformed
+content checks. The genuine ID subtype/work-link and independent content-check
+engine remains the next Audit dependency; neither slice is FFC-04 acceptance.
 
 Checkpoint 2026-10-07 (later): the owner-supplied mandate in
 `/Users/oleg/Downloads/ASD_KONTUR_FULL_FUNCTIONAL_COMPLETION_EN.md` was read

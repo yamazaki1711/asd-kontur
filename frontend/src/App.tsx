@@ -4164,7 +4164,15 @@ function AuditExpectedActualPreflightWorkspace({
         )}
       </QueryState>
       <section className="panel">
-        <h2>Загруженные документы для инвентаризации</h2>
+        <div className="entity-heading">
+          <h2>Загруженные документы для инвентаризации</h2>
+          <a
+            className="button-link secondary"
+            href={`/api/v1/workspaces/${workspaceId}/audit/uploaded-document-inventory.csv`}
+          >
+            Скачать рабочий реестр
+          </a>
+        </div>
         <p>
           Здесь показаны текущие версии загруженных файлов, включая проектные
           основания и документы фактического выполнения. Их наличие ещё не

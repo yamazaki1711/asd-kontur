@@ -60,6 +60,24 @@ Specific ID subtype extraction, work linkage, document checks and independent
 Audit findings remain the next required capability; FFC-04 remains
 `NOT VERIFIED`.
 
+The role-inventory bridge is now deployed as application release
+`8f9929fbff92592bb7c18aa97c763ec08cf208ff` on unchanged migration
+`0141_contract_reference_partial_package`. Four application launchd roles passed
+exact-SHA preflight and API readiness/frontend HTTP 200 after cutover. The
+project queue was idle at cutover; Qwen and NTD processes were not restarted.
+The repository branch push reached the same SHA. Authenticated browser review
+is still unverified.
+
+The next source checkpoint adds an authenticated, editable CSV inventory of
+**all** active admitted document versions, independent of the UI page. It
+includes preliminary Qwen role, source identity and intake state while marking
+independent content review `not_performed`; blank identity/revision/signature/
+quantity review columns are human working fields, not persisted Audit facts.
+Uploaded filenames are escaped against spreadsheet formula execution. An
+isolated API case proves both field and project documents export with their
+own roles, without converting either into an Audit pass. The checkpoint does
+not yet inspect content, satisfy required ID positions or produce findings.
+
 ## 1. Scope and boundary
 
 WP-14 implements a universal workspace-scoped acquisition/corpus capability and

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import io
 import json
 from decimal import Decimal
@@ -202,6 +203,21 @@ def test_field_document_upload_keeps_declared_role_and_rejects_path_role_conflic
         }
         assert roles_by_document[document_id] == ["executive_documentation"]
         assert roles_by_document[project_document_id] == []
+        inventory = client.get(
+            f"/api/v1/workspaces/{workspace['workspace_id']}/audit/uploaded-document-inventory.csv"
+        )
+        assert inventory.status_code == 200, inventory.text
+        inventory_rows = list(csv.DictReader(io.StringIO(inventory.content.decode("utf-8-sig"))))
+        assert {row["document_id"] for row in inventory_rows} == {
+            document_id,
+            project_document_id,
+        }
+        inventory_by_id = {row["document_id"]: row for row in inventory_rows}
+        assert inventory_by_id[document_id]["preliminary_document_roles"] == (
+            "executive_documentation"
+        )
+        assert inventory_by_id[project_document_id]["preliminary_document_roles"] == ""
+        assert all(row["independent_content_review"] == "not_performed" for row in inventory_rows)
         assert client.post(project_run, headers=_csrf(client)).status_code == 202
         with postgres_environment.owner_engine.connect() as connection:
             sources = dict(

@@ -6817,6 +6817,47 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/audit/uploaded-document-inventory.csv": {
+      "get": {
+        "operationId": "audit_uploaded_document_inventory_export_api_v1_workspaces__workspace_id__audit_uploaded_document_inventory_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Uploaded Document Inventory Export",
+        "tags": [
+          "audit-preflight"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
         "operationId": "list_documents_api_v1_workspaces__workspace_id__documents_get",
