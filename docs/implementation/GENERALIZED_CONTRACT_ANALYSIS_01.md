@@ -1863,3 +1863,34 @@ contract-only journey, including a missing referenced attachment, passed in
 acceptance and does not by itself establish source-contract legal coherence,
 all missing attachments, or complete product readiness. The feature branch
 does not trigger the repository's mainline CI workflow; these are local gates.
+
+## 2026-10-07 exact revision register in complete source package
+
+The multi-source revised-contract ZIP now contains an editable
+`change-register.csv` beside the amended DOCX files. Each row gives the source
+document, page if known, source-grounded clause label, exact original passage,
+proposed Contractor wording and an explicit draft/approval warning. The ZIP
+manifest records the register count and SHA-256. Spreadsheet formula-leading
+cells are escaped, including after leading whitespace. Unselected contract
+sources remain byte-for-byte unchanged; selected changes still fail closed
+if the exact source passage cannot be located uniquely. A generic test changed
+the contract, source names and proposed language and checked both edited and
+untouched DOCX files, two register rows and manifest consistency.
+
+Release `181e58009be6189c8d265579c051e380bb8f65f4` is pinned in the
+public application at migration `0132_tender_participation_assessments`. The
+four application roles passed preflight and restarted with API readiness;
+Qwen and NTD retained their process IDs. A read-only, in-memory render through
+the release service from the retained owner's current contract produced a
+valid ZIP containing two admitted DOCX sources and five change-register rows
+(122,508 bytes). Neither the project nor its documents were changed. The
+isolated browser test for reviewed/selected export passed against a separate
+temporary PostgreSQL cluster, with no owner workspace fixture. The currently
+available source package remains a professional candidate requiring human
+and legal review. Cross-clause coherence, legal validity and full four-mode
+acceptance are not established by the change register.
+The exact-release disposable PostgreSQL suite passed with 1,491 tests passed
+and two skipped; the targeted browser E2E, Python static checks and frontend
+checks also passed. The read-only authorized owner list still contains exactly
+one real workspace, `01a0eba7-70ba-7770-9601-1a713dd359cf`. Neither the
+isolated browser runs nor the release created a live test workspace.
