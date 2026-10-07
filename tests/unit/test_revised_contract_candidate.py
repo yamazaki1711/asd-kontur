@@ -260,6 +260,58 @@ def test_revised_contract_does_not_carry_invalidated_source_signature() -> None:
         render_revised_contract_candidate_docx(source.getvalue(), _view("1. Условие договора."))
 
 
+def test_revised_contract_rejects_unresolved_source_tracked_changes() -> None:
+    paragraph = "1. Payment follows acceptance."
+    document = (
+        f'<w:document xmlns:w="{_WORD_NS}"><w:body><w:p><w:ins w:id="1">'
+        f"<w:r><w:t>{paragraph}</w:t></w:r>"
+        "</w:ins></w:p></w:body></w:document>"
+    ).encode()
+    source = io.BytesIO()
+    with zipfile.ZipFile(source, "w") as package:
+        package.writestr("word/document.xml", document)
+
+    with pytest.raises(
+        RevisedContractCandidateError,
+        match="revised_contract_source_tracked_changes_unsupported",
+    ):
+        render_revised_contract_candidate_docx(source.getvalue(), _view(paragraph))
+
+    with pytest.raises(
+        RevisedContractCandidateError,
+        match="revised_contract_source_tracked_changes_unsupported",
+    ):
+        render_revised_contract_source_package(
+            [
+                {
+                    "source_version_id": "edited-source",
+                    "content": _source_docx(paragraph),
+                },
+                {
+                    "source_version_id": "untouched-source",
+                    "content": source.getvalue(),
+                },
+            ],
+            {
+                "clauses": [
+                    {
+                        "clause_id": "one",
+                        "clause_version": 1,
+                        "source_version_id": "edited-source",
+                        "source_text": paragraph,
+                    }
+                ],
+                "revised_clauses": [
+                    {
+                        "source_clause_id": "one",
+                        "source_clause_version": 1,
+                        "revised_text": "1. Payment follows signed acceptance.",
+                    }
+                ],
+            },
+        )
+
+
 def _view(source_text: str) -> dict[str, Any]:
     return {
         "clauses": [

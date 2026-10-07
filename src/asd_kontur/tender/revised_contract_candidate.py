@@ -15,6 +15,9 @@ _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 _MARKUP_COMPATIBILITY_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 _TEXT = f"{{{_WORD_NS}}}t"
 _PARAGRAPH = f"{{{_WORD_NS}}}p"
+_TRACKED_CHANGE_TAGS = frozenset(
+    f"{{{_WORD_NS}}}{name}" for name in ("ins", "del", "moveFrom", "moveTo")
+)
 _CLAUSE_NUMBER = re.compile(r"^(?P<prefix>\s*(?P<number>\d+(?:\.\d+){1,5})\.?\s+)")
 
 
@@ -74,6 +77,7 @@ def render_revised_contract_source_package(
             with zipfile.ZipFile(io.BytesIO(original)) as package:
                 if package.testzip() is not None or "word/document.xml" not in package.namelist():
                     raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
+                _parse_source_document(package.read("word/document.xml"))
         except zipfile.BadZipFile as exc:
             raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
         selected = revisions_by_source.get(source_id, [])
@@ -195,10 +199,7 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
         raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
 
     source_namespaces = _register_source_namespaces(document)
-    try:
-        root = ET.fromstring(document)
-    except ET.ParseError as exc:
-        raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
+    root = _parse_source_document(document)
 
     paragraphs = list(root.iter(_PARAGRAPH))
     original_tags = tuple(node.tag for node in root.iter())
@@ -307,6 +308,16 @@ def _replace_paragraph_span(
 
 def _paragraph_text(paragraph: ET.Element) -> str:
     return "".join(node.text or "" for node in paragraph.iter(_TEXT))
+
+
+def _parse_source_document(document: bytes) -> ET.Element:
+    try:
+        root = ET.fromstring(document)
+    except ET.ParseError as exc:
+        raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
+    if any(node.tag in _TRACKED_CHANGE_TAGS for node in root.iter()):
+        raise RevisedContractCandidateError("revised_contract_source_tracked_changes_unsupported")
+    return root
 
 
 def _exact_fragment_span(paragraph_text: str, source_text: str) -> tuple[int, int] | None:
