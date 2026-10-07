@@ -5959,6 +5959,10 @@ def _material_comparisons(
                     for kind in shared_properties
                     if design_properties[kind] != commercial_properties[kind]
                 ]
+                multiple_item_scope = bool(differences) and any(
+                    len(values) > 1
+                    for values in (*design_properties.values(), *commercial_properties.values())
+                )
                 if not differences and not missing_commercial_properties:
                     continue
                 locator_ids = sorted(
@@ -5983,7 +5987,14 @@ def _material_comparisons(
                 design_material = design_values[0]
                 commercial_material = commercial_values[0]
                 classification = (
-                    "MATERIAL_DIFFERENCE" if differences else "MATERIAL_SCOPE_UNRESOLVED"
+                    "MATERIAL_SCOPE_UNRESOLVED"
+                    if multiple_item_scope
+                    else "MATERIAL_DIFFERENCE"
+                    if differences
+                    else "MATERIAL_SCOPE_UNRESOLVED"
+                )
+                unresolved_reason = (
+                    "MULTIPLE_ITEM_VALUES_WITHOUT_IDENTITY" if multiple_item_scope else None
                 )
                 result.append(
                     {
@@ -5996,11 +6007,18 @@ def _material_comparisons(
                                 "commercial_role": commercial_role,
                                 "differences": differences,
                                 "missing_commercial_properties": missing_commercial_properties,
+                                **(
+                                    {"unresolved_reason": unresolved_reason}
+                                    if unresolved_reason
+                                    else {}
+                                ),
                             }
                         ),
                         "classification": classification,
                         "professional_status": (
-                            "Характеристики материала различаются"
+                            "Требуется сопоставить характеристики отдельных элементов"
+                            if multiple_item_scope
+                            else "Характеристики материала различаются"
                             if differences
                             else "В коммерческих документах указаны не все характеристики"
                         ),
@@ -6016,11 +6034,20 @@ def _material_comparisons(
                         "material": design_material.get("name") or commercial_material.get("name"),
                         "material_kind": design_material.get("material_kind")
                         or commercial_material.get("material_kind"),
-                        "description": "; ".join(descriptions) + ".",
+                        "description": (
+                            "; ".join(descriptions)
+                            + (
+                                "; соответствие отдельных элементов не установлено"
+                                if multiple_item_scope
+                                else ""
+                            )
+                            + "."
+                        ),
                         "design_roles": [design_role],
                         "commercial_roles": [commercial_role],
-                        "property_differences": differences,
+                        "property_differences": [] if multiple_item_scope else differences,
                         "missing_commercial_properties": missing_commercial_properties,
+                        "unresolved_reason": unresolved_reason,
                         "source_locator_ids": locator_ids,
                         "sources": _source_refs(locator_ids, source_context),
                     }
@@ -6315,8 +6342,12 @@ def _issues(
     for comparison in material_comparisons:
         if comparison.get("classification") == "MATERIAL_MATCH":
             continue
+        multiple_item_scope = (
+            comparison.get("unresolved_reason") == "MULTIPLE_ITEM_VALUES_WITHOUT_IDENTITY"
+        )
         material_information_missing = (
             comparison.get("classification") == "MATERIAL_SCOPE_UNRESOLVED"
+            and not multiple_item_scope
         )
         facility_established = bool(comparison.get("facility_id"))
         material = str(comparison.get("material") or "материала")
@@ -6327,11 +6358,13 @@ def _issues(
                 "issue_id": str(comparison["material_comparison_id"]),
                 "finding_kind": (
                     ProfessionalFindingKind.MISSING_PROJECT_INFORMATION
-                    if material_information_missing
+                    if material_information_missing or multiple_item_scope
                     else ProfessionalFindingKind.MATERIAL_MISMATCH
                 ),
                 "kind": (
-                    "Не указана характеристика материала"
+                    "Не установлено соответствие элементов материала"
+                    if multiple_item_scope
+                    else "Не указана характеристика материала"
                     if material_information_missing
                     else "Различие характеристик материала"
                     if facility_established
@@ -6341,7 +6374,10 @@ def _issues(
                 "subject": f"{comparison.get('work')} — {material}",
                 "description": comparison.get("description"),
                 "practical_consequence": (
-                    "Без полного коммерческого обозначения нельзя подтвердить, что поставка "
+                    "Без привязки характеристик к отдельным элементам нельзя подтвердить "
+                    "сопоставимость проекта и коммерческой позиции."
+                    if multiple_item_scope
+                    else "Без полного коммерческого обозначения нельзя подтвердить, что поставка "
                     "соответствует проектной характеристике материала."
                     if material_information_missing
                     else "После подтверждения единого места применения различие характеристик "
@@ -6351,7 +6387,11 @@ def _issues(
                     "материала."
                 ),
                 "recommended_action": (
-                    f"Просим указать в коммерческих документах недостающую характеристику "
+                    f"Просим указать, каким отдельным элементам материала «{material}» "
+                    f"в {facility} соответствуют приведённые характеристики, и после этого "
+                    "подтвердить коммерческую позицию."
+                    if multiple_item_scope
+                    else f"Просим указать в коммерческих документах недостающую характеристику "
                     f"материала «{material}» для {facility} и подтвердить её соответствие "
                     "проекту."
                     if material_information_missing
@@ -6362,7 +6402,9 @@ def _issues(
                 "source_locator_ids": locators,
                 "sources": _source_refs(locators, source_context),
                 "status": (
-                    "Недостающая информация в коммерческих документах"
+                    "Требуется установить идентичность элементов перед сравнением"
+                    if multiple_item_scope
+                    else "Недостающая информация в коммерческих документах"
                     if material_information_missing
                     else "Установленное расхождение маркировки"
                     if facility_established

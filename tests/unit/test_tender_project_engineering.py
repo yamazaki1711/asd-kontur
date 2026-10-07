@@ -6619,6 +6619,51 @@ def test_project_material_comparison_keeps_distinct_same_page_properties_ambiguo
     assert comparisons == []
 
 
+def test_material_values_for_multiple_items_are_not_published_as_one_mismatch() -> None:
+    common = {
+        "material_kind": "structural steel",
+        "associated_work_family_key": "structural_steel",
+        "location_scope_id": "hall-a",
+        "facility_id": "hall-a",
+        "facility": "Assembly hall",
+    }
+    comparisons = _material_comparisons(
+        [],
+        {},
+        material_rows=[
+            {
+                **common,
+                "document_role": "РД",
+                "name": "Column type A",
+                "properties": [{"kind": "PROFILE", "value": "I200", "unit": None}],
+                "source_locator_id": "design-a",
+            },
+            {
+                **common,
+                "document_role": "РД",
+                "name": "Beam type B",
+                "properties": [{"kind": "PROFILE", "value": "I300", "unit": None}],
+                "source_locator_id": "design-b",
+            },
+            {
+                **common,
+                "document_role": "ВОР",
+                "name": "Steelwork",
+                "properties": [{"kind": "PROFILE", "value": "I200", "unit": None}],
+                "source_locator_id": "commercial",
+            },
+        ],
+    )
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "MATERIAL_SCOPE_UNRESOLVED"
+    assert comparisons[0]["property_differences"] == []
+    assert comparisons[0]["unresolved_reason"] == "MULTIPLE_ITEM_VALUES_WITHOUT_IDENTITY"
+    issues = _issues([], [], [], [], [], {}, material_comparisons=comparisons)
+    assert len(issues) == 1
+    assert issues[0]["finding_kind"] == "MISSING_PROJECT_INFORMATION"
+    assert issues[0]["kind"] == "Не установлено соответствие элементов материала"
+
+
 def test_material_comparison_deduplicates_same_source_pages_across_kind_aliases() -> None:
     source_context = {
         "design-a": {
