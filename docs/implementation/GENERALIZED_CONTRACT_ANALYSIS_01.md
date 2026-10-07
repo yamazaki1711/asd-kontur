@@ -70,6 +70,18 @@ corruption check proves rejection, and the current owner-scoped two-DOCX
 package still renders read-only from the changed source code with a valid ZIP
 CRC. This is deterministic assembly assurance, not semantic legal review.
 
+The integrity guard is deployed as pinned release
+`408c3eec7ad04975bb336530b27d81471f64ccf7` at
+`~/.asd-kontur/public-demo/releases/20261007-408c3ee-contract-docx-integrity-v1`.
+All four application roles report that SHA; API readiness and the built
+frontend asset returned HTTP 200. The public database remains at migration
+`0130_contract_obligation_review`, with zero queued/running/leased jobs at
+cutover. The previous four plists are saved at
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-408c3ee-contract-docx-integrity/`.
+The project orchestrator was drained using the bounded wait helper before
+bootstrap, avoiding the previous launchd error. Qwen and NTD were not
+restarted. `ProductReady=false`.
+
 ## 2026-10-07 confirmed execution-conditions schedule
 
 The Support production view now separates reviewed contract candidates from
