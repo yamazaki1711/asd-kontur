@@ -4381,8 +4381,8 @@ function TenderContractAnalysisBody({
             </div>
           ) : null}
           <p>
-            Несопоставленная ссылка требует проверки состава. Она сама по себе
-            не доказывает, что приложение отсутствует.
+            Не полностью подтверждённая связь с документами требует проверки
+            состава. Она сама по себе не доказывает, что приложение отсутствует.
           </p>
           {referenceReview.status === "complete" &&
           attachmentReferences.some(
@@ -4392,7 +4392,7 @@ function TenderContractAnalysisBody({
               className="button-link secondary"
               href={`/api/v1/workspaces/${workspaceId}/tender/contract-unresolved-references.csv`}
             >
-              Скачать реестр несопоставленных договорных документов (CSV)
+              Скачать реестр ссылок, требующих уточнения (CSV)
             </a>
           ) : null}
         </section>
