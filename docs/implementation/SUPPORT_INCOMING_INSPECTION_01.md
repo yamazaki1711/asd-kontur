@@ -123,3 +123,17 @@ This is a usable register correction, not a material-admission decision: the
 current real workspace has no registered material batches or active
 professional grants, and the application does not infer either from a
 preflight. ProductReady remains false.
+
+The corrected renderer was deployed as exact application SHA
+`d382c627437f9f872d7b8e6358c21dbc123877c9` on unchanged migration
+`0135_support_incoming_inspection_preflights`. The staged archive passed 10/10
+focused unit and isolated PostgreSQL/API tests, frontend typecheck/build and
+4/4 private launchd preflight. All four supervised application roles restarted
+from that pinned release; a one-second drain between bootout and bootstrap
+avoided the immediate launchd I/O race seen in the previous cutover. API
+readiness and frontend HTTP 200 passed. The public workspace retained 21
+source versions and 274 contract-analysis results with no active durable job;
+Qwen and NTD-worker PIDs were unchanged. The current real workspace has no
+saved incoming-inspection preflight, so an authenticated owner download of a
+real inspection register remains unverified. No material was admitted by this
+release.
