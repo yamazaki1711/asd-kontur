@@ -1179,3 +1179,34 @@ qualification receipt is
 (`sha256:f9419de0bef33af2f33ca8bec4dcfdfec0cbaed8ecf984b2ef04ae9d6c362ff1`).
 This is real Qwen task acceptance on synthetic context, not an autonomous
 project run or a real-contract conclusion.
+
+## 2026-10-07 controlled public contract-reference release
+
+The exact code release `b973ec392bce41aeed8054220cb1b7fd46894eeb` is
+pinned at `~/.asd-kontur/public-demo/releases/20261007-b973ec3-contract-reference-v1`.
+The four application roles (API, document worker, project orchestrator and
+assistant worker) were switched together; Qwen, NTD and ingress were not
+restarted. The public database advanced from `0128_destroyed_object_redaction`
+to `0129_contract_reference_review` after a consistent 71 MB custom-format
+backup at
+`~/.asd-kontur/public-demo/backups/pre-0129-contract-reference.KM8h8J/public-before-0129.dump`
+(SHA-256 `381119936141cb2535859f8ed1e8584837aa5c87c145b07e4c65918b346fecb8`).
+A separate restored copy passed upgrade, explicit disposable downgrade and
+re-upgrade. The restored pre/post workspace counts were exactly 44 workspaces,
+22 source versions, 7,060 durable jobs, 261 contract result rows and 10,939
+native layout elements. Both disposable restored databases were then removed;
+the public rollback backup remains. A deterministic platform-data dump with
+fixed PostgreSQL restrict key retained SHA-256
+`1742758f99279a4f4114a693bc1cd0addf36747ae3751d3b8d611ee79eaa31a1`
+before and after rehearsal and public migration.
+
+The active local API returned HTTP 200 `ready` at migration `0129`, its exact
+built frontend asset returned HTTP 200, and an unauthenticated contract route
+returned HTTP 401. The supervised orchestrator autonomously created eight
+`CONTRACT_REFERENCE_REVIEW` jobs from currently admitted contract sources; the
+local Qwen service accepted and completed the first batches without a Codex
+queue command. The owner-scoped read projection exposed the accepted references
+and marked the review in progress. The in-app/external browser was unavailable
+to this execution session, so authenticated visual acceptance is not claimed.
+No legal approval, full contract-only journey, or direct all-page DOCX visual
+acceptance is implied by this incremental release. `ProductReady=false`.
