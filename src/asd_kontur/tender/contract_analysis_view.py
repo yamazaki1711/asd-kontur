@@ -195,6 +195,12 @@ class TenderContractAnalysisRepository:
                     {"o": organization_id, "w": workspace_id, "p": process_id},
                 ).mappings()
             )
+            # The canonical Tender process and autonomous contract analysis are
+            # separate read paths over the same workspace. Preserve autonomous
+            # attachment review when a canonical process already exists.
+            autonomous_review = self._candidate_projection(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
         missing = [] if assessment is None else list(assessment["missing_source_classes"])
         gaps = [] if assessment is not None else ["TENDER_CONTRACT_CORPUS_NOT_ASSESSED"]
         if "draft_contract" in missing:
@@ -219,6 +225,8 @@ class TenderContractAnalysisRepository:
             "process": _row(process),
             "assessment": _row(assessment) if assessment else None,
             "clauses": [_row(x) for x in clauses],
+            "attachment_references": autonomous_review["attachment_references"],
+            "reference_review": autonomous_review["reference_review"],
             "issues": [_row(x) for x in issues],
             "protocols": [_row(x) for x in protocols],
             "disagreement_items": [_row(x) for x in disagreement_items],

@@ -1145,8 +1145,13 @@ remain on the older pinned release. No real-project reference result or live
 Qwen output from this new stage is claimed. The v1 routing gate can miss an
 unusual implicit document reference; inventories above 64 active sources are
 explicitly marked outside its current comparison bound. The separate legacy
-Tender-process read path does not yet merge this new reference projection.
+Tender-process read path now merges this workspace-scoped autonomous reference
+projection when a canonical process already exists; a disposable PostgreSQL
+integration check covers the merge alongside the autonomous candidate path.
 Substantive all-page Word rendering, live contract-only acceptance and legal
 review remain open. A local Pages automation attempt on a trivial DOCX did
 not return a PDF; it was stopped. LibreOffice still stalls before its main
 code despite verified signing and a targeted quarantine-attribute removal.
+The local bundled ONLYOFFICE x2t converter also returned an `open` error on
+a trivial synthetic DOCX, so its failure is not evidence that the generated
+contract file is malformed. All-page visual qualification remains open.

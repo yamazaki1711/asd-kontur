@@ -633,6 +633,26 @@ def test_at_pe_41_tender_end_to_end_lineage_authority_archive_and_reset(
     )
     assert projection["gaps"] == []
 
+    # An existing canonical Tender process must not hide a newer autonomous
+    # reference-review result from the same workspace.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            TenderContractAnalysisRepository,
+            "_candidate_projection",
+            staticmethod(
+                lambda session, *, organization_id, workspace_id: {
+                    "attachment_references": [{"reference_id": "synthetic-reference"}],
+                    "reference_review": {"status": "complete", "reviewed_batches": 1},
+                }
+            ),
+        )
+        merged = TenderContractAnalysisRepository(postgres_environment.application_engine).latest(
+            owner_identity_id=owner_identity_id,
+            workspace_id=tenant.workspace_id,
+        )
+    assert merged["attachment_references"] == [{"reference_id": "synthetic-reference"}]
+    assert merged["reference_review"]["status"] == "complete"
+
     exported_contract = render_tender_contract_analysis_csv(projection).decode("utf-8-sig")
     assert "disagreement_item" in exported_contract
     assert "revised_clause" in exported_contract
