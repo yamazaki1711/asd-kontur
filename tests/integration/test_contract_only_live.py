@@ -238,6 +238,20 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
             if outcome is None:
                 time.sleep(0.5)
 
+        with postgres_environment.owner_engine.connect() as connection:
+            job_diagnostics = [
+                dict(row)
+                for row in connection.execute(
+                    sa.text(
+                        "SELECT job_kind,state,attempt_count,typed_failure_code,"
+                        "input_digest FROM workspace.durable_jobs WHERE "
+                        "organization_id=:o AND workspace_id=:w AND "
+                        "job_kind IN ('CONTRACT_ANALYSIS','CONTRACT_REFERENCE_REVIEW',"
+                        "'CONTRACT_COHERENCE_REVIEW') ORDER BY created_at"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                ).mappings()
+            ]
         issue_rows = view.get("issues")
         assert view.get("disagreement_items"), {
             "status": view.get("status"),
@@ -245,6 +259,7 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
             "revised_contracts": view.get("revised_contracts"),
             "gaps": view.get("gaps"),
             "jobs": seen_jobs,
+            "job_diagnostics": job_diagnostics,
         }
         clauses = view.get("clauses")
         assert isinstance(clauses, list)
