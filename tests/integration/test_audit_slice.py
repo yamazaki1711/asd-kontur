@@ -845,6 +845,28 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
                 action_request_refs=(ActionRequestReference(uuid7(), 1),),
             ),
         )
+    with pytest.raises(ValueError, match="resolved exact deltas"):
+        store.finalize_report(
+            context,
+            AuditCommand(
+                uuid7(),
+                AuditCommandType.FINALIZE_AUDIT_REPORT,
+                scope.audit_process_id,
+                10,
+                f"audit-process:{scope.audit_process_id}:false-clean-report",
+                "service:synthetic-audit",
+                "audit.report.finalize",
+                uuid7(),
+                uuid7(),
+                DIGEST,
+            ),
+            replace(
+                report,
+                audit_report_id=uuid7(),
+                outcome=AuditTerminalOutcome.COMPLETE,
+                unresolved_codes=(),
+            ),
+        )
     finalized = store.finalize_report(
         context,
         AuditCommand(

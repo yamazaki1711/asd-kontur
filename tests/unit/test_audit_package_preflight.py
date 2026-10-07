@@ -108,6 +108,19 @@ def test_preflight_exposes_unformed_and_unresolved_boundaries() -> None:
     assert {"ID_PACKAGE_NOT_FORMED", "REQUIREMENT_AUTHORITY_UNRESOLVED"} <= set(value["gaps"])
 
 
+def test_preflight_does_not_hide_empty_required_document_scope() -> None:
+    value = build_expected_actual_preflight(
+        (),
+        matrix={"matrix_id": "matrix", "version": 1},
+        package={"id_package_id": "package", "version": 1, "status": "complete"},
+        memberships=(),
+    )
+
+    assert value["items"] == []
+    assert value["counts"] == {}
+    assert "REQUIRED_DOCUMENT_SCOPE_UNEXAMINED" in value["gaps"]
+
+
 def test_preflight_export_keeps_scope_specific_identity_and_authority_boundary() -> None:
     preflight = build_expected_actual_preflight(
         (

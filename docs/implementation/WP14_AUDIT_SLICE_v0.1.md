@@ -3,6 +3,29 @@
 **Status:** `PASS` as a synthetic/disposable implementation slice on local
 PostgreSQL 17 and canonical PostgreSQL 18 + pgvector CI. **ProductReady:** `false`.
 
+## 2026-10-08 full-product correction (source checkpoint)
+
+The historical WP-14 PASS below is **not** Audit-mode acceptance under the
+owner's full functional completion mandate. The normal Audit screen still has
+only a Support-package preflight and an optional immutable report projection;
+uploaded ID is not yet autonomously inspected end to end. FFC-04 therefore
+remains `NOT VERIFIED`, and `ProductReady=false`.
+
+This checkpoint closes one false-completion boundary without modifying owner
+project data or global NTD. The pure report assembler now returns `partial`
+with exact unexamined document keys when its required-document denominator is
+empty/incomplete, and it blocks an open corrective request. The canonical
+Audit publication store independently refuses a caller-supplied `complete`
+report if the snapshot, exact delta states, required document items, rule-set
+identity or latest corrective-action states do not support it. The owner-facing
+preflight explicitly reports an empty required-document scope; the UI renders
+that blocker and unresolved item keys in professional language.
+
+Evidence: 50 Audit unit/integration cases passed against a fresh disposable
+PostgreSQL cluster; the integration case attempted to publish a forged clean
+report over persisted missing/blocked evidence and was rejected. This does not
+constitute a real uploaded-ID audit, 19-check coverage or an Audit-mode PASS.
+
 ## 1. Scope and boundary
 
 WP-14 implements a universal workspace-scoped acquisition/corpus capability and

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -580,6 +581,93 @@ def test_audit_runs_only_after_exact_reconciled_snapshot_and_has_three_fingerpri
         == 3
     )
     assert not report.product_ready
+
+
+def test_audit_cannot_complete_with_empty_required_document_scope() -> None:
+    snapshot, document, causal, package = audit_values()
+    empty_denominator = replace(document.denominator, required_item_keys=())
+    empty_document = replace(document, denominator=empty_denominator, items=())
+
+    report = assemble_audit_report(
+        snapshot, document.audit_scope, empty_document, causal, package, ()
+    )
+
+    assert report.outcome is AuditTerminalOutcome.PARTIAL
+    assert "DOCUMENT_SCOPE_UNEXAMINED" in report.unresolved_codes
+
+
+def test_audit_cannot_complete_when_declared_document_was_not_evaluated() -> None:
+    snapshot, document, causal, package = audit_values()
+    expanded_denominator = replace(
+        document.denominator,
+        required_item_keys=("quality-document", "as-built-scheme"),
+    )
+    partial_document = replace(document, denominator=expanded_denominator)
+
+    report = assemble_audit_report(
+        snapshot, document.audit_scope, partial_document, causal, package, ()
+    )
+
+    assert report.outcome is AuditTerminalOutcome.PARTIAL
+    assert "DOCUMENT_SCOPE_UNEXAMINED" in report.unresolved_codes
+    assert "DOCUMENT_ITEM_UNEXAMINED:as-built-scheme" in report.unresolved_codes
+
+
+def test_audit_rejects_delta_from_another_scope_or_rule_set() -> None:
+    snapshot, document, causal, package = audit_values()
+    unrelated_scope = replace(causal.audit_scope, audit_process_id=uuid4())
+    with pytest.raises(ValueError, match="exact report scope"):
+        assemble_audit_report(
+            snapshot,
+            document.audit_scope,
+            document,
+            replace(causal, audit_scope=unrelated_scope),
+            package,
+            (),
+        )
+    unrelated_rule_set = replace(package.denominator, rule_set_version_id=uuid4())
+    with pytest.raises(ValueError, match="exact report rule set"):
+        assemble_audit_report(
+            snapshot,
+            document.audit_scope,
+            document,
+            causal,
+            replace(package, denominator=unrelated_rule_set),
+            (),
+        )
+
+
+def test_audit_cannot_complete_with_open_corrective_action() -> None:
+    snapshot, document, causal, package = audit_values()
+    action = ActionRequest(
+        uuid4(),
+        1,
+        document.audit_scope,
+        "verify_missing_inspection",
+        "role:technical-office",
+        "work:changed-scope",
+        ("source:inspection-record",),
+        None,
+        ("ACCEPTANCE_UNPROVEN",),
+        "role:auditor",
+        "role:independent-verifier",
+        ActionRequestState.OPEN,
+    )
+
+    report = assemble_audit_report(
+        snapshot, document.audit_scope, document, causal, package, (action,)
+    )
+
+    assert report.outcome is AuditTerminalOutcome.BLOCKED
+    assert "ACTION_REQUEST_UNRESOLVED" in report.unresolved_codes
+
+    closed = replace(
+        action, state=ActionRequestState.VERIFIED_CLOSED, executor_identity_id="role:pto"
+    )
+    resolved = assemble_audit_report(
+        snapshot, document.audit_scope, document, causal, package, (closed,)
+    )
+    assert resolved.outcome is AuditTerminalOutcome.COMPLETE
 
 
 def test_missing_document_is_gap_with_downstream_impact_not_no_risk() -> None:

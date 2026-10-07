@@ -12115,6 +12115,8 @@ function humanizeReadiness(value: string) {
 }
 
 function humanizeGap(value: string) {
+  if (value.startsWith("DOCUMENT_ITEM_UNEXAMINED:"))
+    return `Документ не проверен: ${value.slice("DOCUMENT_ITEM_UNEXAMINED:".length)}.`;
   if (value.startsWith("PROJECT_FIELD_CANDIDATE_ONLY:"))
     return "Сведения найдены в нескольких источниках как согласованный кандидат, но ещё не подтверждены как факт проекта.";
   if (value.startsWith("PROJECT_FIELD_CONFLICT:"))
@@ -12123,6 +12125,12 @@ function humanizeGap(value: string) {
     return "Обязательное проектное сведение пока не установлено.";
   const labels: Record<string, string> = {
     WORK_REQUIREMENT_MATRIX_UNAVAILABLE: "Матрица работ ещё не сформирована.",
+    REQUIRED_DOCUMENT_SCOPE_UNEXAMINED:
+      "Состав требуемой исполнительной документации пока не определён; аудит не завершён.",
+    DOCUMENT_SCOPE_UNEXAMINED:
+      "Не все требуемые документы вошли в область проверки.",
+    ACTION_REQUEST_UNRESOLVED:
+      "Запрос на устранение замечания ещё не закрыт независимой проверкой.",
     VERIFIED_NTD_SUBSET: "Не все нормативные основания проверены.",
     TEMPLATE_NOT_PRODUCTION_QUALIFIED:
       "Форма документа ещё не квалифицирована для выпуска.",

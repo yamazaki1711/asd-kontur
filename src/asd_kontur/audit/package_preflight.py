@@ -49,6 +49,8 @@ def build_expected_actual_preflight(
     global_gaps: set[str] = set()
     if matrix is None:
         global_gaps.add("WORK_REQUIREMENT_MATRIX_UNAVAILABLE")
+    elif not requirement_rows:
+        global_gaps.add("REQUIRED_DOCUMENT_SCOPE_UNEXAMINED")
     if package is None:
         global_gaps.add("ID_PACKAGE_NOT_FORMED")
 

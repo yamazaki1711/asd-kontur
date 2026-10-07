@@ -10,6 +10,7 @@ from asd_kontur.domain import uuid7
 from .models import (
     ActionRequest,
     ActionRequestReference,
+    ActionRequestState,
     AuditReport,
     AuditScope,
     AuditTerminalOutcome,
@@ -82,6 +83,31 @@ def assemble_audit_report(
         raise ValueError("Audit scope must use the exact reconciled CorpusSnapshot")
     if not snapshot.reconciliation_ids:
         raise ValueError("Audit cannot run before exact corpus reconciliation")
+    deltas = (document_delta, causal_delta, package_readiness)
+    if any(delta.audit_scope != scope for delta in deltas):
+        raise ValueError("Audit deltas must use the exact report scope")
+    if any(delta.denominator.rule_set_version_id != scope.rule_set_version_id for delta in deltas):
+        raise ValueError("Audit denominators must use the exact report rule set")
+    document_keys = tuple(item.item_key for item in document_delta.items)
+    if len(document_keys) != len(set(document_keys)):
+        raise ValueError("Audit document item keys must be unique")
+    if any(request.audit_scope != scope for request in action_requests):
+        raise ValueError("Audit action requests must use the exact report scope")
+    declared_document_keys = document_delta.denominator.required_item_keys
+    required_document_keys = set(declared_document_keys)
+    unexamined_document_keys = required_document_keys.difference(document_keys)
+    # An empty denominator or an omitted evaluated item cannot establish a
+    # clean audit merely because every state that *was* supplied is satisfied.
+    document_scope_unexamined = (
+        not required_document_keys
+        or len(declared_document_keys) != len(required_document_keys)
+        or bool(unexamined_document_keys)
+    )
+    open_actions = tuple(
+        request
+        for request in action_requests
+        if request.state is not ActionRequestState.VERIFIED_CLOSED
+    )
     states = [item.state for item in document_delta.items]
     states.extend(path.state for path in causal_delta.paths)
     for package in package_readiness.packages:
@@ -102,12 +128,21 @@ def assemble_audit_report(
         }
         | {code for path in causal_delta.paths for code in path.gap_codes}
         | {code for package in package_readiness.packages for code in package.blocker_codes}
+        | ({"DOCUMENT_SCOPE_UNEXAMINED"} if document_scope_unexamined else set())
+        | {f"DOCUMENT_ITEM_UNEXAMINED:{key}" for key in unexamined_document_keys}
+        | ({"ACTION_REQUEST_UNRESOLVED"} if open_actions else set())
     )
     if snapshot.outcome in {CorpusOutcome.QUARANTINED, CorpusOutcome.RECOVERY_REQUIRED}:
         outcome = AuditTerminalOutcome.BLOCKED
-    elif any(state in {DeltaState.BLOCKED, DeltaState.CONFLICT} for state in states):
+    elif any(state in {DeltaState.BLOCKED, DeltaState.CONFLICT} for state in states) or any(
+        request.blocking_impacts for request in open_actions
+    ):
         outcome = AuditTerminalOutcome.BLOCKED
-    elif any(state in {DeltaState.MISSING, DeltaState.INDETERMINATE} for state in states):
+    elif (
+        document_scope_unexamined
+        or open_actions
+        or any(state in {DeltaState.MISSING, DeltaState.INDETERMINATE} for state in states)
+    ):
         outcome = AuditTerminalOutcome.PARTIAL
     elif snapshot.outcome is not CorpusOutcome.COMPLETE:
         outcome = AuditTerminalOutcome.UNRESOLVED

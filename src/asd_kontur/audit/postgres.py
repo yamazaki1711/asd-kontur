@@ -1083,6 +1083,14 @@ class PostgresCorpusAuditStore:
         )
         if value.outcome.value == "complete" and value.unresolved_codes:
             raise ValueError("A complete Audit report cannot retain unresolved codes")
+        if value.outcome.value == "complete":
+            PostgresCorpusAuditStore._require_complete_report_evidence(
+                session,
+                scope,
+                document_delta=(value.document_delta_id, document_version),
+                causal_delta=(value.causal_delta_id, causal_version),
+                package_delta=(value.package_readiness_id, package_version),
+            )
 
         existing = session.scalar(
             sa.text(
@@ -1149,6 +1157,110 @@ class PostgresCorpusAuditStore:
                     "request_version": version,
                 },
             )
+
+    @staticmethod
+    def _require_complete_report_evidence(
+        session: Session,
+        scope: AuditScope,
+        *,
+        document_delta: tuple[UUID, int],
+        causal_delta: tuple[UUID, int],
+        package_delta: tuple[UUID, int],
+    ) -> None:
+        """Do not publish a clean report for an empty or unexamined scope.
+
+        A caller may construct ``AuditReport`` directly, bypassing the pure
+        assembler. The persisted boundary therefore checks the exact evidence
+        versions again before it publishes an owner-visible outcome.
+        """
+
+        snapshot_outcome = session.scalar(
+            sa.text(
+                "SELECT outcome FROM workspace.corpus_snapshot_versions WHERE "
+                "organization_id=:o AND workspace_id=:w AND corpus_snapshot_id=:snapshot "
+                "AND version=:version"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "snapshot": scope.corpus_snapshot_id,
+                "version": scope.corpus_snapshot_version,
+            },
+        )
+        if snapshot_outcome != "complete":
+            raise ValueError("A complete Audit report requires a complete corpus snapshot")
+        for delta_id, version in (document_delta, causal_delta, package_delta):
+            row = (
+                session.execute(
+                    sa.text(
+                        "SELECT denominator.required_item_keys,denominator.rule_set_version_id,"
+                        "delta.missing_count,delta.conflict_count,delta.indeterminate_count,"
+                        "delta.blocked_count FROM workspace.audit_delta_versions delta JOIN "
+                        "workspace.audit_denominator_versions denominator ON "
+                        "denominator.organization_id=delta.organization_id AND "
+                        "denominator.workspace_id=delta.workspace_id AND "
+                        "denominator.denominator_id=delta.denominator_id AND "
+                        "denominator.version=delta.denominator_version WHERE "
+                        "delta.organization_id=:o AND delta.workspace_id=:w AND "
+                        "delta.audit_process_id=:process AND delta.audit_delta_id=:delta "
+                        "AND delta.version=:version"
+                    ),
+                    {
+                        "o": scope.organization_id,
+                        "w": scope.workspace_id,
+                        "process": scope.audit_process_id,
+                        "delta": delta_id,
+                        "version": version,
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            if row["rule_set_version_id"] != scope.rule_set_version_id or any(
+                row[f"{state}_count"]
+                for state in ("missing", "conflict", "indeterminate", "blocked")
+            ):
+                raise ValueError("A complete Audit report requires resolved exact deltas")
+            if delta_id != document_delta[0]:
+                continue
+            required = tuple(str(key) for key in row["required_item_keys"] or ())
+            observed = tuple(
+                str(key)
+                for key in session.scalars(
+                    sa.text(
+                        "SELECT item_key FROM workspace.audit_delta_items WHERE "
+                        "organization_id=:o AND workspace_id=:w AND audit_delta_id=:delta "
+                        "AND delta_version=:version"
+                    ),
+                    {
+                        "o": scope.organization_id,
+                        "w": scope.workspace_id,
+                        "delta": delta_id,
+                        "version": version,
+                    },
+                )
+            )
+            if (
+                not required
+                or len(required) != len(set(required))
+                or not set(required) <= set(observed)
+            ):
+                raise ValueError("A complete Audit report requires examined document scope")
+        open_request = session.scalar(
+            sa.text(
+                "SELECT EXISTS(SELECT 1 FROM (SELECT DISTINCT ON (action_request_id) state "
+                "FROM workspace.audit_action_request_versions WHERE organization_id=:o AND "
+                "workspace_id=:w AND audit_process_id=:process ORDER BY action_request_id,"
+                "version DESC) latest WHERE latest.state<>'verified_closed')"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "process": scope.audit_process_id,
+            },
+        )
+        if open_request:
+            raise ValueError("A complete Audit report cannot leave corrective actions unresolved")
 
     @staticmethod
     def _resolve_action_request_refs(
