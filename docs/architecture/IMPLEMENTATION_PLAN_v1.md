@@ -51,6 +51,17 @@ application SHA. Contract FFC-01 and ProductReady remain `PARTIAL` and false,
 respectively. Continue the full accepted-register sequence; this checkpoint
 is not the stopping boundary.
 
+Source-only lifecycle checkpoint `e8365df98d0b0a84acceb4b37fa3ffc03c64045b`:
+the final destroy phase now records terminal adapter receipts and a recovery
+checkpoint before entering `RECOVERY_REQUIRED` on incomplete purge or
+verification; platform-integrity or quarantine outcomes enter `QUARANTINED`
+instead of attempting to claim `DESTROYED`. The existing successful deletion
+path and a fault-injected incomplete destroy passed in a disposable PostgreSQL
+cluster (2/2 focused integration cases); 156 focused unit cases passed. The
+public release above is unchanged. This correction does not yet provide an
+operator-facing retry of a recovery checkpoint, eliminate the transient
+prepare-stage ZIP, or prove complete cross-store deletion in every deployment.
+
 Earlier 2026-10-07 checkpoint (superseded release identity): source HEAD
 `90ae82aa3fe26bff2c76684000e97d3f66194081`; deployed application SHA
 `85628fda3a1cbb69bde78bcee3b164cefb767b12`, migration
