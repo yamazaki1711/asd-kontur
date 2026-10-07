@@ -68,51 +68,68 @@ class IncomingInspectionRepository:
         digest = semantic_digest(inspection)
         with Session(self._engine) as session, session.begin():
             organization_id = self._scope(session, owner_identity_id, workspace_id)
-            existing = session.execute(
-                sa.text(
-                    "SELECT preflight_id,payload_digest,result,submitted_at FROM "
-                    "workspace.support_incoming_inspection_preflights WHERE "
-                    "organization_id=:o AND workspace_id=:w AND idempotency_key=:k"
-                ),
-                {"o": organization_id, "w": workspace_id, "k": idempotency_key},
-            ).mappings().first()
-            if existing is not None:
-                if existing["payload_digest"] != digest:
-                    raise IncomingInspectionError("incoming_inspection_idempotency_conflict")
-                return self._view(existing, inspection)
-            preflight_id = uuid7()
-            row = session.execute(
-                sa.text(
-                    "INSERT INTO workspace.support_incoming_inspection_preflights "
-                    "(organization_id,workspace_id,preflight_id,idempotency_key,material_name,"
-                    "batch_reference,inspection,result,payload_digest,submitted_by) VALUES "
-                    "(:o,:w,:id,:k,:material,:batch,CAST(:inspection AS jsonb),"
-                    "CAST(:result AS jsonb),:digest,:owner) ON CONFLICT "
-                    "(organization_id,workspace_id,idempotency_key) DO NOTHING "
-                    "RETURNING preflight_id,payload_digest,result,submitted_at"
-                ),
-                {
-                    "o": organization_id,
-                    "w": workspace_id,
-                    "id": preflight_id,
-                    "k": idempotency_key,
-                    "material": material_name,
-                    "batch": batch_reference,
-                    "inspection": json.dumps(inspection, ensure_ascii=False),
-                    "result": json.dumps(result, ensure_ascii=False),
-                    "digest": digest,
-                    "owner": owner_identity_id,
-                },
-            ).mappings().first()
-            if row is None:
-                row = session.execute(
+            existing = (
+                session.execute(
                     sa.text(
                         "SELECT preflight_id,payload_digest,result,submitted_at FROM "
                         "workspace.support_incoming_inspection_preflights WHERE "
                         "organization_id=:o AND workspace_id=:w AND idempotency_key=:k"
                     ),
                     {"o": organization_id, "w": workspace_id, "k": idempotency_key},
-                ).mappings().one()
+                )
+                .mappings()
+                .first()
+            )
+            if existing is not None:
+                if existing["payload_digest"] != digest:
+                    raise IncomingInspectionError("incoming_inspection_idempotency_conflict")
+                return self._view(existing, inspection)
+            preflight_id = uuid7()
+            try:
+                row = (
+                    session.execute(
+                        sa.text(
+                            "INSERT INTO workspace.support_incoming_inspection_preflights "
+                            "(organization_id,workspace_id,preflight_id,idempotency_key,material_name,"
+                            "batch_reference,inspection,result,payload_digest,submitted_by) VALUES "
+                            "(:o,:w,:id,:k,:material,:batch,CAST(:inspection AS jsonb),"
+                            "CAST(:result AS jsonb),:digest,:owner) ON CONFLICT "
+                            "(organization_id,workspace_id,idempotency_key) DO NOTHING "
+                            "RETURNING preflight_id,payload_digest,result,submitted_at"
+                        ),
+                        {
+                            "o": organization_id,
+                            "w": workspace_id,
+                            "id": preflight_id,
+                            "k": idempotency_key,
+                            "material": material_name,
+                            "batch": batch_reference,
+                            "inspection": json.dumps(inspection, ensure_ascii=False),
+                            "result": json.dumps(result, ensure_ascii=False),
+                            "digest": digest,
+                            "owner": owner_identity_id,
+                        },
+                    )
+                    .mappings()
+                    .first()
+                )
+            except sa.exc.DBAPIError as exc:
+                if "support_workspace_not_active" in str(exc.orig):
+                    raise IncomingInspectionError("support_workspace_not_active") from exc
+                raise
+            if row is None:
+                row = (
+                    session.execute(
+                        sa.text(
+                            "SELECT preflight_id,payload_digest,result,submitted_at FROM "
+                            "workspace.support_incoming_inspection_preflights WHERE "
+                            "organization_id=:o AND workspace_id=:w AND idempotency_key=:k"
+                        ),
+                        {"o": organization_id, "w": workspace_id, "k": idempotency_key},
+                    )
+                    .mappings()
+                    .one()
+                )
                 if row["payload_digest"] != digest:
                     raise IncomingInspectionError("incoming_inspection_idempotency_conflict")
             return self._view(row, inspection)
@@ -131,13 +148,17 @@ class IncomingInspectionRepository:
     def list(self, *, owner_identity_id: str, workspace_id: UUID) -> list[dict[str, Any]]:
         with Session(self._engine) as session, session.begin():
             organization_id = self._scope(session, owner_identity_id, workspace_id)
-            rows = session.execute(
-                sa.text(
-                    "SELECT preflight_id,material_name,batch_reference,payload_digest,"
-                    "result,submitted_at FROM workspace.support_incoming_inspection_preflights "
-                    "WHERE organization_id=:o AND workspace_id=:w "
-                    "ORDER BY submitted_at DESC,preflight_id DESC LIMIT 100"
-                ),
-                {"o": organization_id, "w": workspace_id},
-            ).mappings().all()
+            rows = (
+                session.execute(
+                    sa.text(
+                        "SELECT preflight_id,material_name,batch_reference,payload_digest,"
+                        "result,submitted_at FROM workspace.support_incoming_inspection_preflights "
+                        "WHERE organization_id=:o AND workspace_id=:w "
+                        "ORDER BY submitted_at DESC,preflight_id DESC LIMIT 100"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                )
+                .mappings()
+                .all()
+            )
             return [self._view(row, row) for row in rows]

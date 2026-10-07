@@ -26,13 +26,16 @@ inferred from uploaded paperwork or asserted by Qwen.
 
 ## Qualification and release limit
 
-Four deterministic unit tests pass, frontend typechecking/build pass, and the
-OpenAPI contract has been regenerated. The isolated PostgreSQL integration
-test exists but has not run because `ASD_TEST_DATABASE_URL` is not configured
-in this session. Migration 0135 has **not** been applied to the owner database;
-the deployed release remains the prior version. Before deployment, run the
-isolated migration/integration test, then perform the required backup/restore
-upgrade verification and a controlled application acceptance.
+Four deterministic unit tests and two isolated PostgreSQL integration tests
+pass; frontend typechecking/build pass, and the OpenAPI contract has been
+regenerated. The integration tests used a verified disposable PostgreSQL 17
+cluster under `/tmp`, not the owner database. They covered migration 0135,
+workspace isolation, immutable writes, owner-scoped replay/conflict, the
+authenticated submit/list API, and late-write rejection during lifecycle
+freezing. Migration 0135 has **not**
+been applied to the owner database; the deployed release remains the prior
+version. Before deployment, perform the required backup/restore upgrade
+verification and a controlled application/browser acceptance.
 
 This is one Support result, not Support-mode readiness. It does not yet bind
 the preflight to a material-admission decision, field evidence, work-package
