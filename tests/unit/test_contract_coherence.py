@@ -12,7 +12,10 @@ import pytest
 
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
 from asd_kontur.tender.contract_analysis_report import render_tender_contract_analysis_docx
-from asd_kontur.tender.contract_coherence import contract_coherence_tasks
+from asd_kontur.tender.contract_coherence import (
+    contract_coherence_job_key,
+    contract_coherence_tasks,
+)
 from asd_kontur.tender.qwen_contract_coherence import (
     QwenContractCoherenceReviewer,
     parse_contract_coherence,
@@ -66,6 +69,12 @@ def _view(*, conflicting: bool) -> dict[str, object]:
             }
         ],
     }
+
+
+def test_coherence_key_uses_result_schema_generation() -> None:
+    assert contract_coherence_job_key("sha256:input") == (
+        "contract-coherence:qwen-contract-coherence-v2:schema-0134:sha256:input"
+    )
 
 
 def test_changed_contract_routes_related_clause_without_claiming_full_coverage() -> None:

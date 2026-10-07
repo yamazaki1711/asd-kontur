@@ -31,6 +31,7 @@ from asd_kontur.tender.analysis_harness import TenderAnalysisTask
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
 from asd_kontur.tender.contract_coherence import (
     CONTRACT_COHERENCE_PROFILE,
+    contract_coherence_job_key,
     contract_coherence_tasks,
 )
 from asd_kontur.tender.excavation_pit_inventory import build_excavation_pit_inventory
@@ -6546,10 +6547,7 @@ class SpinePostgresRepository:
         tasks = contract_coherence_tasks(view)
         if not tasks:
             return []
-        keys = {
-            f"contract-coherence:{CONTRACT_COHERENCE_PROFILE}:{task['context_digest']}"
-            for task in tasks
-        }
+        keys = {contract_coherence_job_key(str(task["context_digest"])) for task in tasks}
         scheduled: list[str] = []
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
@@ -6564,7 +6562,7 @@ class SpinePostgresRepository:
                 current_keys=keys,
             )
             for task in tasks:
-                key = f"contract-coherence:{CONTRACT_COHERENCE_PROFILE}:{task['context_digest']}"
+                key = contract_coherence_job_key(str(task["context_digest"]))
                 existing = session.scalar(
                     sa.text(
                         "SELECT job_id FROM workspace.durable_jobs WHERE "

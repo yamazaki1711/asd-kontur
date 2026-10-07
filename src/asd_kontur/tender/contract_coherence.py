@@ -12,6 +12,9 @@ from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.tender.clause_reference import display_clause_reference
 
 CONTRACT_COHERENCE_PROFILE = "qwen-contract-coherence-v2"
+# A failed v2 result write under schema 0133 must not reserve the same durable
+# scheduling identity after the compatible result constraint is installed.
+CONTRACT_COHERENCE_RESULT_SCHEMA = "0134"
 _MAX_REVISIONS = 16
 _MAX_RELATED_CLAUSES = 12
 _MAX_CONTEXT_CHARS = 10_000
@@ -23,6 +26,13 @@ _EXPLICIT_CLAUSE_REFERENCE = re.compile(
     re.IGNORECASE,
 )
 _CLAUSE_NUMBER = re.compile(r"\d{1,3}(?:\.\d{1,3}){1,4}")
+
+
+def contract_coherence_job_key(context_digest: str) -> str:
+    return (
+        f"contract-coherence:{CONTRACT_COHERENCE_PROFILE}:"
+        f"schema-{CONTRACT_COHERENCE_RESULT_SCHEMA}:{context_digest}"
+    )
 
 
 def contract_coherence_tasks(view: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:

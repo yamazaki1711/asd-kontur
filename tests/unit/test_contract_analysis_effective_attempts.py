@@ -1,6 +1,7 @@
 from asd_kontur.tender.contract_analysis_view import (
     _effective_profile_jobs,
     _is_docx_source,
+    _latest_coherence_context_attempts,
     _latest_job_attempts,
     _preferred_contract_results,
     _stable_source_page,
@@ -38,6 +39,23 @@ def test_latest_contract_attempt_replaces_historical_failure_without_hiding_othe
     effective = _latest_job_attempts(jobs)
 
     assert [job["job_id"] for job in effective] == ["replacement", "other"]
+
+
+def test_latest_coherence_attempt_replaces_historical_schema_failure() -> None:
+    jobs = [
+        {"job_id": "replacement", "context_digest": "sha256:a", "state": "queued"},
+        {
+            "job_id": "historical-schema-failure",
+            "context_digest": "sha256:a",
+            "state": "reconciliation_required",
+        },
+        {"job_id": "other", "context_digest": "sha256:b", "state": "succeeded"},
+    ]
+
+    assert [job["job_id"] for job in _latest_coherence_context_attempts(jobs)] == [
+        "replacement",
+        "other",
+    ]
 
 
 def test_current_contract_profile_switches_atomically_across_changed_batch_boundaries() -> None:

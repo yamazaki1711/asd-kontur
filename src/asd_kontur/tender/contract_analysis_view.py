@@ -784,7 +784,8 @@ class TenderContractAnalysisRepository:
                         "result.workspace_id=job.workspace_id AND result.job_id=job.job_id AND "
                         "result.profile_version=:profile WHERE job.organization_id=:o AND "
                         "job.workspace_id=:w AND job.job_kind='CONTRACT_COHERENCE_REVIEW' AND "
-                        "job.input_manifest->>'context_digest'=ANY(:digests)"
+                        "job.input_manifest->>'context_digest'=ANY(:digests) "
+                        "ORDER BY job.created_at DESC,job.job_id DESC"
                     ),
                     {
                         "o": organization_id,
@@ -797,6 +798,7 @@ class TenderContractAnalysisRepository:
             if coherence_digests
             else []
         )
+        coherence_rows = _latest_coherence_context_attempts(coherence_rows)
         coherence_reviews = [
             dict(row["result_manifest"])
             for row in coherence_rows
@@ -1079,6 +1081,15 @@ def _latest_job_attempts(jobs: list[Any]) -> list[Any]:
     latest: dict[str, Any] = {}
     for job in jobs:
         latest.setdefault(str(job["input_digest"]), job)
+    return list(latest.values())
+
+
+def _latest_coherence_context_attempts(jobs: list[Any]) -> list[Any]:
+    """Use the newest durable attempt per exact Qwen coherence context."""
+
+    latest: dict[str, Any] = {}
+    for job in jobs:
+        latest.setdefault(str(job["context_digest"]), job)
     return list(latest.values())
 
 

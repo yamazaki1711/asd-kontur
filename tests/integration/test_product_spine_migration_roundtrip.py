@@ -181,6 +181,8 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                 assert "qwen-contract-analysis-v8" in contract_profile_constraint
                 assert "qwen-contract-analysis-v9" in contract_profile_constraint
                 assert "qwen-contract-analysis-v10" in contract_profile_constraint
+                assert "qwen-contract-coherence-v1" in contract_profile_constraint
+                assert "qwen-contract-coherence-v2" in contract_profile_constraint
                 work_profile_constraint = str(
                     connection.scalar(
                         sa.text(
