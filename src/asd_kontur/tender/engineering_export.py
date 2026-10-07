@@ -351,7 +351,7 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                         else (representative.get("work_name") or "")
                     ),
                     (
-                        f"{len(group)} позиции; значения по каждой позиции — в ведомости"
+                        f"Позиций: {len(group)}; значения по каждой позиции — в ведомости"
                         if grouped
                         else (
                             "Объём требует смысловой проверки"
@@ -419,7 +419,13 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         for quantity in quantities or ()
     ]
     quantity_candidates.sort(key=lambda item: item[0])
-    quantity_rows = [row for _, row in quantity_candidates[:80]]
+    distinct_quantity_rows: list[tuple[str, str, str, str]] = []
+    seen_quantity_rows: set[tuple[str, str, str, str]] = set()
+    for _, row in quantity_candidates:
+        if row not in seen_quantity_rows:
+            seen_quantity_rows.add(row)
+            distinct_quantity_rows.append(row)
+    quantity_rows = distinct_quantity_rows[:80]
     unreviewed_quantity_rows = sum(
         len(quantities or ())
         for work in works
@@ -439,11 +445,24 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                     [
                         _paragraph(
                             f"В основном отчёте показано {len(quantity_rows)} из "
-                            f"{len(quantity_candidates)} проверенных по смыслу значений; "
+                            f"{len(distinct_quantity_rows)} различных проверенных по смыслу "
+                            "значений; "
                             "полная ведомость находится в экспорте Tender."
                         )
                     ]
-                    if len(quantity_candidates) > len(quantity_rows)
+                    if len(distinct_quantity_rows) > len(quantity_rows)
+                    else []
+                ),
+                *(
+                    [
+                        _paragraph(
+                            "Повторных упоминаний: "
+                            f"{len(quantity_candidates) - len(distinct_quantity_rows)}. "
+                            "Они свёрнуты только для показа, "
+                            "не как арифметическая сумма."
+                        )
+                    ]
+                    if len(quantity_candidates) > len(distinct_quantity_rows)
                     else []
                 ),
                 *(

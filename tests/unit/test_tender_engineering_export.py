@@ -225,6 +225,30 @@ def test_large_tender_report_summarizes_without_promoting_unreviewed_quantities(
     assert material_rows[-1]["Документ"] == "drawing.pdf"
 
 
+def test_tender_report_collapses_repeated_quantity_mentions_without_summing() -> None:
+    report = render_engineering_tender_report_docx(
+        {
+            "project": {"name": {"value": "Changed pipeline project"}},
+            "works": [
+                {
+                    "facility": "Area A",
+                    "work_name": "Pipe installation",
+                    "work_family": "Pipelines",
+                    "quantities_semantically_validated": True,
+                    "quantities_by_document": {
+                        "RD": [{"value": "42", "unit": "m"}, {"value": "42", "unit": "m"}]
+                    },
+                }
+            ],
+        }
+    )
+    with zipfile.ZipFile(io.BytesIO(report)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert "42 m" in xml
+    assert "Повторных упоминаний: 1" in xml
+    assert "84 m" not in xml
+
+
 def test_tender_report_omits_sections_without_project_inputs() -> None:
     payload = render_engineering_tender_report_docx(
         {
