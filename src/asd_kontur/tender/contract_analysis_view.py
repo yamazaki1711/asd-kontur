@@ -100,7 +100,12 @@ class TenderContractAnalysisRepository:
                         "clause.clause_version,clause.clause_key,clause.locator_label,"
                         "clause.authority_layer,clause.source_version_id,"
                         "clause.source_locator_id,clause.evidence_link_id,"
-                        "source.safe_display_name AS source_name,element.page_number AS source_page "
+                        "source.safe_display_name AS source_name,"
+                        "CASE WHEN source.media_type='application/vnd.openxmlformats-"
+                        "officedocument.wordprocessingml.document' OR "
+                        "(source.media_type='application/octet-stream' AND "
+                        "lower(source.safe_display_name) LIKE '%.docx') THEN NULL "
+                        "ELSE element.page_number END AS source_page "
                         "FROM workspace.tender_clause_versions clause "
                         "LEFT JOIN workspace.document_versions source ON "
                         "source.organization_id=clause.organization_id AND "
@@ -394,6 +399,10 @@ class TenderContractAnalysisRepository:
             str(source["source_version_id"]): str(source["safe_display_name"])
             for source in contract_sources
         }
+        source_is_docx_by_id = {
+            str(source["source_version_id"]): _is_docx_source(source)
+            for source in contract_sources
+        }
         source_ids = [UUID(value) for value in source_name_by_id]
         readable_elements = list(
             session.execute(
@@ -537,7 +546,10 @@ class TenderContractAnalysisRepository:
                         "reference_id": reference_id,
                         "source_version_id": source_id,
                         "source_name": source_name_by_id.get(source_id),
-                        "source_page": locator_page_by_id.get(locator_id),
+                        "source_page": _stable_source_page(
+                            source_is_docx_by_id.get(source_id, False),
+                            locator_page_by_id.get(locator_id),
+                        ),
                     }
                 )
         clauses: list[dict[str, Any]] = []
@@ -578,8 +590,9 @@ class TenderContractAnalysisRepository:
                     "source_name": source_name_by_id.get(str(result["source_version_id"])),
                     "source_locator_id": locator_ids[0] if locator_ids else None,
                     "source_locator_ids": locator_ids,
-                    "source_page": (
-                        locator_page_by_id.get(locator_ids[0]) if locator_ids else None
+                    "source_page": _stable_source_page(
+                        source_is_docx_by_id.get(str(result["source_version_id"]), False),
+                        locator_page_by_id.get(locator_ids[0]) if locator_ids else None,
                     ),
                     "source_text": clause.get("source_text"),
                     "category": clause.get("category"),
@@ -1007,6 +1020,12 @@ def _is_docx_source(source: Any) -> bool:
         media_type == "application/octet-stream"
         and str(source["safe_display_name"]).lower().endswith(".docx")
     )
+
+
+def _stable_source_page(is_docx: bool, page_number: int | None) -> int | None:
+    """DOCX native layout has logical locators, not stable printed page numbers."""
+
+    return None if is_docx else page_number
 
 
 def _set_scope(session: Session, organization_id: UUID, workspace_id: UUID) -> None:

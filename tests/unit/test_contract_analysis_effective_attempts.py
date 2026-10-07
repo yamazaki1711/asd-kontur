@@ -1,9 +1,27 @@
 from asd_kontur.tender.contract_analysis_view import (
     _effective_profile_jobs,
+    _is_docx_source,
     _latest_job_attempts,
     _preferred_contract_results,
+    _stable_source_page,
     _uncovered_contract_sources,
 )
+
+
+def test_docx_native_locator_is_not_reported_as_a_printed_page() -> None:
+    docx = {
+        "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "safe_display_name": "Contract.docx",
+    }
+    fallback_docx = {
+        "media_type": "application/octet-stream",
+        "safe_display_name": "Contract.DOCX",
+    }
+    pdf = {"media_type": "application/pdf", "safe_display_name": "Contract.pdf"}
+
+    assert _stable_source_page(_is_docx_source(docx), 1) is None
+    assert _stable_source_page(_is_docx_source(fallback_docx), 7) is None
+    assert _stable_source_page(_is_docx_source(pdf), 7) == 7
 
 
 def test_latest_contract_attempt_replaces_historical_failure_without_hiding_other_input() -> None:
