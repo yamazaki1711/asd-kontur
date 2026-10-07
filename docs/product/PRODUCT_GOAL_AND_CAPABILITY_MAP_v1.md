@@ -206,6 +206,18 @@ pass does not substitute for a sufficient-input success path.
 | FFC-11 | Delivery and acceptance | Run qualified diverse-corpus, false-negative/positive and representative thousands-of-documents acceptance | Qwen production tasks only; code measures work, replay, failure and time-to-value | Same tested/deployed release exposes all results and files | NOT VERIFIED |
 | FFC-12 | Application and field use | Use role-appropriate access and protected device/session data | Code enforces authentication, authorization, attempt limits and local-data controls | API/UI/field security and offline-lock boundary acceptance | NOT VERIFIED |
 
+The 7 October multi-source contract-output release
+`b008df9475a6be5d1eb5cb4bfb4fa053ef489e4c` prevents a standalone
+revised DOCX from silently omitting revisions belonging to another contract
+source. The real-workspace read-only check produced a complete two-source ZIP
+with five source-bound revisions and blocked the partial standalone output.
+The exact release also passed a disposable contract-only upload-to-editable-
+outputs run with live local Qwen (1/1, 183.73 seconds); both DOCX artifacts
+were reopened and visually reviewed. This proves the isolated path and the
+generic multi-source output boundary, not whole-contract legal coherence,
+owner adoption of proposals, authenticated public-browser download, or FFC-01
+PASS. FFC-01 remains `PARTIAL`; `ProductReady=false`.
+
 Current FFC-01 delivery checkpoint: application SHA
 `fea2395429b31c3e87c096af970976020d79668c`, migration
 `0134_contract_coherence_profile_v2`. The release preserves unchanged readable PDF

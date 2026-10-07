@@ -2234,3 +2234,14 @@ members and five revisions, and the expected blocker on the partial standalone
 DOCX. The public workspace/source/result counts remained 1/21/274, with zero
 active durable jobs; Qwen and NTD PIDs were unchanged. This was not an
 authenticated browser download or a full legal/professional acceptance.
+
+An isolated contract-only acceptance was then run from that exact deployed
+release, against disposable PostgreSQL and the existing persistent local Qwen
+service, without changing the public workspace or queue. It passed 1/1 in
+183.73 seconds. The run autonomously produced and reopened the editable
+protocol and revised-contract DOCX outputs. Their rendered first pages were
+visually inspected: the protocol table, parties, source clause, proposed
+wording, and the revised contract body were legible and not clipped. This
+qualification does not imply that the public workspace's 307 clauses have
+received whole-contract legal clearance or that an owner has accepted the
+proposals.
