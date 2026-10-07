@@ -2048,3 +2048,74 @@ download flow are not claimed visually accepted. FFC-01 remains `PARTIAL`:
 exact protocol/edit consistency is now enforced, while full legal/reference
 coherence, owner-selected commercial terms, and owner-browser acceptance are
 still outstanding.
+
+## 2026-10-07 contract-coherence v2 persistence incident and recovery
+
+The reverse-clause-reference selection change in `fe1c3c9` advanced Qwen work
+but exposed a release/schema compatibility defect. Five owner-workspace v2
+review jobs and one separately scoped control-workspace job ended
+`reconciliation_required` with a PostgreSQL `IntegrityError`: migration 0133
+allowed `qwen-contract-coherence-v1`, while the new worker wrote
+`qwen-contract-coherence-v2`. These six immutable failed attempts remain in
+history. The application roles were immediately rolled back to the last
+working `94704f0` release; neither Qwen nor NTD was restarted, and no job row
+was manually rewritten or enqueued.
+
+The correction in `039ce694a10200a2f24e7cadda61b9c8cd6a58ac` adds migration
+`0134_contract_coherence_profile_v2`, gives the schema-corrected work a new
+stable idempotency identity, and makes the product read model select the latest
+attempt for each exact coherence context. The replacement is scheduled by the
+supervised orchestrator, not a developer command. This does not reinterpret a
+failed model response as a professional finding or certify whole-contract
+coherence: the Qwen review remains bounded to selected source-linked clauses.
+
+The disposable migration round-trip passed. A real 72 MiB public-database
+backup at
+`~/.asd-kontur/public-demo/backups/20261007-pre-0134-contract-coherence-v2.dump`
+has SHA-256
+`0872b061d7fac6fcd29bea8a848c763aa7d3136b233d683cb5265b6a76a5d627`.
+It restored into a separate database; upgrade, downgrade and re-upgrade all
+passed there. The all-history platform-memory fingerprint remained
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+NTD documents/editions/semantic rows remained 15/15/1,669. A changed-party
+contract-only run in an isolated database used the persistent local Qwen and
+passed the full v2 result persistence path in 188.52 seconds. The Python gate
+passed 1,515 tests with two skips.
+
+The exact application SHA `039ce69` is deployed at
+`~/.asd-kontur/public-demo/releases/20261007-039ce69-contract-coherence-v2-schema`
+on migration 0134. The four application roles report this SHA, API readiness
+passes, and the prior Qwen and NTD processes remain running. The orchestrator
+created five owner-workspace v2 replacement jobs autonomously. A separate
+active control workspace was observed in another organization in the public
+database; it is not an authorized view of the owner's retaining-wall OKS, but
+its continued presence is a test-isolation/lifecycle defect and must not be
+treated as a real owner project. No workspace was deleted in this release.
+Contract and product readiness remain below PASS.
+
+After the controlled cutover, all five owner-workspace replacement jobs
+succeeded without Codex queue action. The owner-scoped read model moved from
+`in_progress` to `reviewed_bounded_context` with 5/5 accepted contexts and zero
+reported conflicts in those bounded contexts. Zero conflicts is not a legal
+clearance of the whole contract or of omitted clauses. Qwen's completed request
+counter rose from 967 after isolated acceptance to 974 after autonomous public
+work, then returned to `QWEN_READY_IDLE`. The platform-memory fingerprint was
+rechecked after inference and remained exactly unchanged.
+
+The separate active control workspace was then removed through
+`WorkspaceResetService.prepare` and `execute`, using an exact-ID cleanup
+manifest for its distinct test owner. The cleanup client now accepts a
+qualification owner whose correct terminal authorized-workspace count is zero;
+it still rejects any unlisted workspace and now checks each target's exact
+display name when supplied. This change is in `5802be8` and was tested in
+three isolated unit scenarios. Before deletion the control workspace held one
+document version, 51 jobs and 15 contract result rows. After verified
+destruction all three counts were zero, the object and reset-archive paths
+were absent, and the remaining lifecycle marker's display name was redacted.
+The real owner workspace kept its 21 document versions, 7,061 jobs and 272
+contract result rows; the owner's authorized list contains exactly that one
+active workspace. The independent platform-memory fingerprint and NTD counts
+remained unchanged. The temporary exact-ID manifest and confirmation journal
+were removed after verification. This cleanup did not delete the real project
+or any platform knowledge. The cleanup-client extension is a source checkpoint,
+not a newly deployed application release.
