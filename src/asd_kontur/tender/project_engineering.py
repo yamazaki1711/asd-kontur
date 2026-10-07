@@ -2112,22 +2112,26 @@ def _project_overview(
                 values[normalized_value].extend(rows)
         if not values:
             return None
-        _normalized_value, rows = max(
+        ranked = sorted(
             values.items(),
             key=lambda item: (
-                len({str(row.get("source_version_id")) for row in item[1]}),
-                len(item[1]),
-                max(
-                    len(str(row.get("normalized_value") or row.get("value") or ""))
-                    for row in item[1]
-                ),
+                -len({str(row.get("source_version_id")) for row in item[1]}),
+                -len(item[1]),
+                item[0],
             ),
         )
+        _normalized_value, rows = ranked[0]
+        independent_sources = len({str(row.get("source_version_id")) for row in rows})
+        if len(ranked) > 1:
+            runner_up_sources = len({str(row.get("source_version_id")) for row in ranked[1][1]})
+            # A tie between independent source groups is unresolved evidence,
+            # not a license to publish whichever wording happens to be longer.
+            if independent_sources <= runner_up_sources:
+                return None
         representative = max(
             rows,
             key=lambda row: len(str(row.get("normalized_value") or row.get("value") or "")),
         )
-        independent_sources = len({str(row.get("source_version_id")) for row in rows})
         return {
             "value": representative.get("normalized_value", representative.get("value")),
             "status": (
@@ -2146,8 +2150,12 @@ def _project_overview(
     # corroborated by the most independent sources instead of leaving the
     # overview dependent on one extractor label.
     name = select("object_name", "project_name", "construction_name")
-    purpose = select("purpose")
-    if purpose is None and name is not None:
+    purpose = select("purpose", "project_purpose")
+    if (
+        purpose is None
+        and name is not None
+        and not any(grouped.get(key) for key in ("purpose", "project_purpose"))
+    ):
         name_value = str(name.get("value") or "").strip()
         normalized_name = _normalized(name_value)
         if normalized_name.startswith(

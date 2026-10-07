@@ -32,6 +32,7 @@ from asd_kontur.tender.project_engineering import (
     _professional_document_role,
     _professional_material_values,
     _professional_quantity_issue_comparisons,
+    _project_overview,
     _project_scope_facility_label,
     _qualified_participant_context,
     _resolution_establishes_page_scope,
@@ -3821,6 +3822,55 @@ def test_project_overview_consolidates_professional_field_aliases() -> None:
     }
     assert model["project"]["location"]["value"].startswith("г. Новоград")
     assert model["project"]["foundation"]["value"] == ("Сборная труба на щебёночном основании")
+
+
+def test_project_overview_uses_project_purpose_but_does_not_pick_tied_conflicts() -> None:
+    definition = {"definition": {"fields": {}}}
+    supported = _project_overview(
+        definition,
+        [
+            {
+                "label": "project_purpose",
+                "value": "Repair a quay",
+                "source_version_id": "a",
+                "source_locator_id": "a1",
+            },
+            {
+                "label": "purpose",
+                "value": "Repair a quay",
+                "source_version_id": "b",
+                "source_locator_id": "b1",
+            },
+        ],
+    )
+    assert supported["purpose"]["value"] == "Repair a quay"
+    assert supported["purpose"]["source_count"] == 2
+
+    conflicted = _project_overview(
+        definition,
+        [
+            {
+                "label": "project_name",
+                "value": "Reconstruction of a quay",
+                "source_version_id": "a",
+                "source_locator_id": "name",
+            },
+            {
+                "label": "project_purpose",
+                "value": "Repair a quay",
+                "source_version_id": "a",
+                "source_locator_id": "a1",
+            },
+            {
+                "label": "purpose",
+                "value": "Build a quay",
+                "source_version_id": "b",
+                "source_locator_id": "b1",
+            },
+        ],
+    )
+    assert conflicted["purpose"] is None
+    assert "Назначение объекта" in conflicted["missing_information"]
 
 
 def test_project_status_becomes_established_after_composition_is_assembled() -> None:
