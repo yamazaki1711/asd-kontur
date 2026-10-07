@@ -1837,3 +1837,29 @@ Qwen's completed-request counter moved from 890 to 894 and returned idle. The
 disposable database was removed by teardown. This proves one missing-attachment
 case with live Qwen; it does not establish completeness of all attachment
 types, internal cross-clause consistency, legal correctness, or browser use.
+
+The contract projection now provides a source-grounded `display_clause_ref`
+separately from the stable machine `clause_key`. Tender and Support screens,
+their editable CSV exports, the primary Tender report, revision review, and
+compact consultant context prefer this display field. A source-text clause
+number is shown only when it appears at the beginning of the persisted exact
+passage; otherwise the user sees an explicitly unnumbered passage and its
+page where known. Stable candidate IDs and review digests were not changed.
+The deployed release is `1fb23d0f3db4ecbdacd63b9ad1c02cbd2fdbf41c`
+at migration `0132_tender_participation_assessments`. A read-only projection
+of the retained owner workspace under that release found 307 clauses with
+307 display labels; eight internal working keys remain in machine identity
+but none are displayed as clause numbers. The four application launchd roles
+were replaced together; Qwen and NTD processes were not restarted. API
+readiness recovered after the controlled restart.
+
+Qualification: the disposable PostgreSQL suite passed with 1,490 passed and
+two skipped; Python formatting, lint and type checks passed. Frontend format,
+type, lint, unit and bundle checks passed. A targeted browser E2E for the
+contract screen passed against a separately initialized disposable PostgreSQL
+cluster; its test database was removed on teardown. The live-Qwen changed-party
+contract-only journey, including a missing referenced attachment, passed in
+103.66 seconds before deployment. This is not authenticated owner-browser
+acceptance and does not by itself establish source-contract legal coherence,
+all missing attachments, or complete product readiness. The feature branch
+does not trigger the repository's mainline CI workflow; these are local gates.
