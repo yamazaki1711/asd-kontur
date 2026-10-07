@@ -1,14 +1,22 @@
 # Generalized Contract Analysis 01
 
-## Source-document ambiguity guards (source checkpoint)
+## Source-document ambiguity guards (deployed checkpoint)
 
 The exact-source revised-contract renderer now refuses a proposed clause text
 that appears only inside a different clause number (for example, a reference
 to 7.4 inside 17.4). It also refuses a selected or unchanged DOCX source with
 unresolved Word tracked-change elements, rather than silently presenting a
 candidate based on an ambiguous source revision. The tests use changed,
-project-independent clause text. This checkpoint is not yet deployed; it is
-deterministic output safety, not Qwen legal coherence or professional approval.
+project-independent clause text. The guard is deployed at exact SHA
+`8ce13f51d73fe69c02114ad89b24ddce395cc432` in
+`~/.asd-kontur/public-demo/releases/20261007-8ce13f5-contract-source-ambiguity-v1`.
+The four application launchd roles report that SHA and are running; API
+readiness returned `ready` with migration `0131_contract_revision_review`,
+and the existing frontend asset returned HTTP 200. The queue was empty at
+cutover. Qwen and NTD worker PIDs remained 9105 and 1356 respectively. The
+pre-cutover application plists are preserved under
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-8ce13f5-contract-source-ambiguity/`.
+This is deterministic output safety, not Qwen legal coherence or professional approval.
 `ProductReady=false`.
 
 ## Clause-number and overlapping-edit safety (deployed checkpoint)
