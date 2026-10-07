@@ -154,9 +154,7 @@ class DocumentWorker:
         self._organization_id = organization_id
         self._workspace_id = workspace_id
         self._stopping = False
-        self._next_idle_refill_at = 0.0
         self._next_model_retry_at = 0.0
-        self._semantic_processing_enabled = qwen_semantic_url is not None
         self._understanding = IndustrialDocumentUnderstandingPipeline(
             IndustrialUnderstandingRepository(repository.engine),
             qwen_vision=QwenVisionOcrAdapter(qwen_vision_url),
@@ -211,74 +209,11 @@ class DocumentWorker:
             workspace_id=self._workspace_id,
         )
         if claimed is None:
-            # A newly accepted successor reconnects terminal dependents in
-            # ``_execute``. Historical backfill is intentionally a separately
-            # scheduled, bounded maintenance operation: it must never make an
-            # otherwise idle product worker unavailable to claim new work.
-            claimed = self._repository.claim_next_job(
-                worker_identity=self._worker_identity,
-                lease_seconds=self._lease_seconds,
-                organization_id=self._organization_id,
-                workspace_id=self._workspace_id,
-            )
-        if claimed is None:
-            refill = getattr(
-                self._repository,
-                "refill_workspace_project_work_reconciliation_if_idle",
-                None,
-            )
-            now = time.monotonic()
-            if (
-                self._organization_id is not None
-                and self._workspace_id is not None
-                and getattr(self, "_semantic_processing_enabled", True)
-                and callable(refill)
-                and now >= self._next_idle_refill_at
-            ):
-                self._next_idle_refill_at = now + 30.0
-                scheduled = refill(
-                    organization_id=self._organization_id,
-                    workspace_id=self._workspace_id,
-                    correlation_id=uuid7(),
-                )
-                if scheduled:
-                    claimed = self._repository.claim_next_job(
-                        worker_identity=self._worker_identity,
-                        lease_seconds=self._lease_seconds,
-                        organization_id=self._organization_id,
-                        workspace_id=self._workspace_id,
-                    )
-            elif (
-                getattr(self, "_semantic_processing_enabled", True)
-                and callable(refill)
-                and now >= self._next_idle_refill_at
-            ):
-                refill_scopes = getattr(
-                    self._repository, "idle_project_work_reconciliation_scopes", None
-                )
-                if callable(refill_scopes):
-                    self._next_idle_refill_at = now + 30.0
-                    scheduled_any = False
-                    for organization_id, workspace_id in refill_scopes():
-                        scheduled_any = (
-                            bool(
-                                refill(
-                                    organization_id=organization_id,
-                                    workspace_id=workspace_id,
-                                    correlation_id=uuid7(),
-                                )
-                            )
-                            or scheduled_any
-                        )
-                    if scheduled_any:
-                        claimed = self._repository.claim_next_job(
-                            worker_identity=self._worker_identity,
-                            lease_seconds=self._lease_seconds,
-                            organization_id=None,
-                            workspace_id=None,
-                        )
-            if claimed is None:
-                return None
+            # Job completion requests direct successors. The independently
+            # supervised project orchestrator owns the periodic missing-work
+            # sweep; repeating its full semantic candidate scan in every idle
+            # worker cycle starves the machine without producing a job.
+            return None
         if callable(foreground_check) and foreground_check(
             organization_id=claimed.organization_id,
             workspace_id=claimed.workspace_id,
