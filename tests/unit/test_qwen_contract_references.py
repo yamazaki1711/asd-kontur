@@ -150,14 +150,14 @@ def test_output_exhaustion_splits_only_the_bounded_input(
     assert result["references"] == []
 
 
-def test_invalid_repair_splits_without_accepting_an_invented_quote(
+def test_invalid_multi_locator_output_splits_without_accepting_an_invented_quote(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
 
     def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
         calls.append(prompt)
-        if len(calls) <= 2:
+        if len(calls) == 1:
             return json.dumps(
                 {
                     "references": [
@@ -183,7 +183,7 @@ def test_invalid_repair_splits_without_accepting_an_invented_quote(
         ],
         admitted_sources=[{"source_version_id": "source-c", "safe_display_name": "Contract"}],
     )
-    assert len(calls) == 4
+    assert len(calls) == 3
     assert result["references"] == []
 
 
@@ -204,3 +204,25 @@ def test_invalid_single_locator_stays_failed_after_bounded_repair(
             admitted_sources=[{"source_version_id": "source-c", "safe_display_name": "Contract"}],
         )
     assert calls == 2
+
+
+def test_invalid_json_keeps_one_bounded_repair_before_splitting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        nonlocal calls
+        calls += 1
+        return "not-json" if calls == 1 else '{"references":[]}'
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_contract_references._complete", complete)
+    result = QwenContractReferenceReviewer("http://127.0.0.1:8765/v1").review(
+        [
+            {"source_locator_id": "a", "text": "Appendix A is incorporated."},
+            {"source_locator_id": "b", "text": "Annex B is incorporated."},
+        ],
+        admitted_sources=[{"source_version_id": "source-c", "safe_display_name": "Contract"}],
+    )
+    assert calls == 2
+    assert result["references"] == []

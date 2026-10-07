@@ -94,6 +94,12 @@ class QwenContractReferenceReviewer:
                 "qwen_contract_reference_invalid_item",
             }:
                 raise
+            # An invalid source-bound item in a multi-locator response is
+            # better isolated than re-asked with the same broad context. The
+            # live six-locator workload showed rejected broad repairs followed
+            # by successful narrower results. Keep one repair for a singleton.
+            if exc.code == "qwen_contract_reference_invalid_item" and len(rows) > 1:
+                return self._split_review(rows, sources)
             try:
                 repair = _complete(
                     self._endpoint,

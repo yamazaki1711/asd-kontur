@@ -1242,3 +1242,18 @@ supervised orchestrator's next sweep, exactly two versioned replacement jobs
 appeared for the two previously failed owner batches, without a manual queue
 operation; the first was claimed and Qwen began generation. This demonstrates
 autonomous repair scheduling, not yet successful completion of both batches.
+
+Read-only runtime observation found the first replacement accepted four
+source-bound references. The second six-locator replacement was still active
+after multiple completed local-Qwen requests with a fresh lease heartbeat.
+This measured cost motivated a further source-only refinement: when a
+multi-locator response contains an invalid source-bound item, split it
+immediately instead of spending one identical broad repair request first.
+Malformed JSON still receives one bounded repair; singleton invalidity still
+fails closed. The refinement does not interrupt or modify the running job.
+
+The failed launchd cutover also gained a read-only release preflight:
+`tools/check_launchd_release.py` verifies the exact four-argument command for
+each application role, executable/frontend presence, pinned SHA and migration
+head before bootout. A changed synthetic plist test rejects the duplicate
+Python argument that caused the outage. No secret environment value is printed.
