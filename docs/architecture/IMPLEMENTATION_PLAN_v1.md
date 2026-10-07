@@ -39,6 +39,22 @@ non-fabrication, not authority to narrow ASD-KONTUR's scope or retain an OKS
 archive after deletion. The plugin-owned skill file was inspected but not
 modified in place; its upstream/local maintainer must update it separately.
 
+Checkpoint 2026-10-08: application release
+`eea2fc3a607c0c43d49e72ac1ea0b726ae1da2cb` on migration
+`0141_contract_reference_partial_package` closes a false-clean Audit report
+boundary. Audit assembly and canonical publication now refuse `complete` when
+required documents were unexamined, the denominator was empty, persisted
+deltas remain unresolved, or corrective actions remain open. The normal Audit
+preflight exposes an empty required-document scope rather than silently
+showing zero findings. A fresh isolated PostgreSQL run passed 50/50 focused
+Audit cases, including a forged clean report rejection; frontend
+typecheck/build passed. All four application launchd roles run the exact SHA;
+API readiness and frontend HTTP 200 passed, Qwen/NTD were not restarted and
+the live application job queue was empty at cutover. This is a safety slice,
+not FFC-04 or Audit-mode acceptance. The next source checkpoint adds a
+paginated admitted-document inventory to the Audit screen, still explicitly
+unexamined until semantic ID classification and independent checks exist.
+
 Checkpoint 2026-10-07 (later): the owner-supplied mandate in
 `/Users/oleg/Downloads/ASD_KONTUR_FULL_FUNCTIONAL_COMPLETION_EN.md` was read
 in full and reconciled with this plan, AGENTS.md and the product capability
