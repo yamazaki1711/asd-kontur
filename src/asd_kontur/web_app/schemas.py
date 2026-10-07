@@ -101,6 +101,7 @@ class DocumentView(ApiModel):
     job_ids: list[UUID]
     source_artifact_id: UUID | None
     source_version_id: UUID | None
+    source_kind: str
     safe_display_name: str
     relative_path: str
     media_type: str
@@ -575,6 +576,8 @@ class MaterialAdmissionContextView(ApiModel):
     grants: list[dict[str, Any]]
     application_grants: list[dict[str, Any]]
     application_evidence: list[dict[str, Any]]
+    field_locators: list[dict[str, Any]]
+    use_confirmations: list[dict[str, Any]]
     applications: list[dict[str, Any]]
     decisions: list[dict[str, Any]]
     truncated_sections: list[str]
@@ -596,6 +599,22 @@ class MaterialApplicationView(ApiModel):
     quantity: Decimal
     unit_code: str
     application_digest: str
+    recorded_at: datetime
+
+
+class MaterialUseEvidenceRequest(ApiModel):
+    admission_id: UUID
+    source_locator_id: UUID
+    confirmation_statement: str = Field(min_length=3, max_length=1000)
+    professional_grant_id: UUID
+    professional_grant_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=200)
+
+
+class MaterialUseEvidenceView(ApiModel):
+    confirmation_id: UUID
+    evidence_link_id: UUID
+    confirmation_fingerprint: str
     recorded_at: datetime
 
 

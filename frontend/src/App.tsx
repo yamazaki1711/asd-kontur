@@ -1667,6 +1667,9 @@ function DocumentsPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [sourceKind, setSourceKind] = useState<
+    "project_evidence" | "field_document"
+  >("project_evidence");
   const [dragActive, setDragActive] = useState(false);
   const normalizedMode = modeFromSlug(mode) ?? "Tender";
   const documents = useQuery({
@@ -1698,6 +1701,7 @@ function DocumentsPage() {
         relative.push(file.webkitRelativePath || file.name);
       }
       form.append("relative_paths", JSON.stringify(relative));
+      form.append("source_kind", sourceKind);
       const { data, error } = await api.POST(
         "/api/v1/workspaces/{workspace_id}/documents",
         {
@@ -1805,6 +1809,29 @@ function DocumentsPage() {
       </section>
       {selectedFiles.length > 0 && (
         <section className="panel selected-upload" aria-live="polite">
+          <label>
+            Назначение загружаемого комплекта
+            <select
+              value={sourceKind}
+              onChange={(event) =>
+                setSourceKind(
+                  event.target.value === "field_document"
+                    ? "field_document"
+                    : "project_evidence",
+                )
+              }
+            >
+              <option value="project_evidence">Проектные и договорные исходные данные</option>
+              <option value="field_document">Документы фактического выполнения работ</option>
+            </select>
+          </label>
+          {sourceKind === "field_document" ? (
+            <p>
+              Выберите этот вид только для документов, фиксирующих выполненные
+              работы или фактическое применение материалов. ПД, РД и документы
+              поставки сами по себе не подтверждают фактическое применение.
+            </p>
+          ) : null}
           <div className="entity-heading">
             <div>
               <h2>Подготовлено к загрузке</h2>
@@ -1967,6 +1994,11 @@ function DocumentTable({
                   {document.safe_display_name}
                 </Link>
                 <small>{document.relative_path}</small>
+                <small>
+                  {document.source_kind === "field_document"
+                    ? "Документ фактического выполнения"
+                    : "Исходный документ проекта"}
+                </small>
               </td>
               <td>
                 {document.media_type}
@@ -3603,6 +3635,11 @@ function MaterialApplicationPanel({
   const [admissionId, setAdmissionId] = useState("");
   const [evidenceId, setEvidenceId] = useState("");
   const [grantId, setGrantId] = useState("");
+  const [fieldLocatorId, setFieldLocatorId] = useState("");
+  const [confirmationStatement, setConfirmationStatement] = useState("");
+  const [confirmationKey, setConfirmationKey] = useState(() =>
+    globalThis.crypto.randomUUID(),
+  );
   const [quantity, setQuantity] = useState("");
   const [basis, setBasis] = useState("");
   const [requestKey, setRequestKey] = useState(() =>
@@ -3624,6 +3661,35 @@ function MaterialApplicationPanel({
   const grant = (context?.application_grants ?? []).find(
     (item) => String(item.grant_id) === grantId,
   );
+  const confirmUse = useMutation({
+    mutationFn: async () => {
+      if (!selected || !grant || !fieldLocatorId) {
+        throw new Error("Не хватает допуска, полевого документа или полномочия");
+      }
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/material-use-evidence",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: {
+            admission_id: String(selected.admission_id),
+            source_locator_id: fieldLocatorId,
+            confirmation_statement: confirmationStatement,
+            professional_grant_id: grantId,
+            professional_grant_version: Number(grant.grant_version),
+            idempotency_key: confirmationKey,
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async (result) => {
+      setEvidenceId(result.evidence_link_id);
+      setConfirmationKey(globalThis.crypto.randomUUID());
+      await queryClient.invalidateQueries({
+        queryKey: ["support-material-admission-context", workspaceId],
+      });
+    },
+  });
   const submit = useMutation({
     mutationFn: async () => {
       if (!selected || !grant || !evidenceId) {
@@ -3677,6 +3743,82 @@ function MaterialApplicationPanel({
       {context && !context.application_grants.length ? (
         <p>Нет действующего полномочия на подтверждение применения материала.</p>
       ) : null}
+      {context && !context.field_locators.length ? (
+        <p>
+          Нет принятого полевого документа. Загрузите акт, журнал или иной документ
+          фактического выполнения на вкладке «Документы», указав тип «Полевой
+          документ». Документ о поставке сам по себе не подтверждает применение.
+        </p>
+      ) : null}
+      {context ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            confirmUse.mutate();
+          }}
+        >
+          <h4>Подтвердить источник фактического применения</h4>
+          <p>
+            Ответственный специалист подтверждает, что выбранное место в полевом
+            документе относится к этой работе. Система не выводит факт применения
+            из одной лишь загрузки файла.
+          </p>
+          <div className="form-row">
+            <label>
+              Место в полевом документе
+              <select
+                value={fieldLocatorId}
+                onChange={(event) => {
+                  setFieldLocatorId(event.target.value);
+                  setConfirmationKey(globalThis.crypto.randomUUID());
+                }}
+              >
+                <option value="">Выберите документ и место</option>
+                {context.field_locators.map((item) => (
+                  <option
+                    key={String(item.source_locator_id)}
+                    value={String(item.source_locator_id)}
+                  >
+                    {String(item.source_title)} — {String(item.locator_key)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Подтверждение специалиста
+              <textarea
+                required
+                minLength={3}
+                maxLength={1000}
+                value={confirmationStatement}
+                onChange={(event) => {
+                  setConfirmationStatement(event.target.value);
+                  setConfirmationKey(globalThis.crypto.randomUUID());
+                }}
+              />
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={
+              !selected ||
+              !grant ||
+              !fieldLocatorId ||
+              confirmationStatement.trim().length < 3 ||
+              Boolean(context.truncated_sections.length) ||
+              confirmUse.isPending
+            }
+          >
+            Подтвердить полевой источник
+          </button>
+          {confirmUse.error ? (
+            <p role="alert">Источник не подтверждён: {String(confirmUse.error)}</p>
+          ) : null}
+          {confirmUse.data ? (
+            <p role="status">Источник привязан к выбранной работе.</p>
+          ) : null}
+        </form>
+      ) : null}
       {context ? (
         <form
           onSubmit={(event) => {
@@ -3692,6 +3834,7 @@ function MaterialApplicationPanel({
                 onChange={(event) => {
                   setAdmissionId(event.target.value);
                   setEvidenceId("");
+                  setFieldLocatorId("");
                   setRequestKey(globalThis.crypto.randomUUID());
                 }}
               >

@@ -328,3 +328,27 @@ Authenticated owner-screen acceptance was unavailable because the browser
 connection was absent. A verified material-use evidence
 link must already exist, and material balance, work acceptance and KS/payment
 readiness are **not** established by this slice. `ProductReady=false`.
+
+## Field-document to actual-use evidence bridge (source qualification)
+
+The 0137 application command was safe but its ordinary user path was incomplete:
+the upload endpoint assigned every source the `project_evidence` role, while the
+command required a verified `field_document` locator. Migration 0138 and the
+corresponding API/UI now let the user declare a field document at upload and
+have a qualified `support.material.apply` person confirm one admitted source
+locator for an exact current admission/work. Only that confirmation creates a
+work-version-bound, workspace-scoped material-use evidence link. A project
+document or delivery record cannot be promoted by merely selecting it. The
+actual quantity remains a separate command and stays capped by documented
+delivery. The confirmation is idempotent, immutable, lifecycle-fenced, and in
+the workspace destruction scope.
+
+The isolated qualification exercises the upload role, rejection of a role
+conflict on re-upload, refusal of a project-document locator, successful
+qualified confirmation, replay/conflict, actual-use arithmetic, API reload,
+0135-to-head migration roundtrip and workspace lifecycle tests. A user still
+must provide a real field document and qualified confirmation; neither is
+created for the existing owner project. This bridge does not establish material
+balance, work acceptance, KS/payment readiness, complete Support-mode
+acceptance or whole-product readiness. Authenticated owner-browser acceptance
+and public deployment are separate checks, not inferred from source tests.

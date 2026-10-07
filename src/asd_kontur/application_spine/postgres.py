@@ -2119,7 +2119,10 @@ class SpinePostgresRepository:
         correlation_id: UUID,
         client_manifest_digest: str,
         archive_members: tuple[tuple[int, int, int], ...] = (),
+        source_kind: str = "project_evidence",
     ) -> BatchRegistration:
+        if source_kind not in {"project_evidence", "field_document"}:
+            raise SpinePersistenceError("upload_source_kind_invalid")
         if not staged_items and not rejected_items:
             raise SpinePersistenceError("empty_batch")
         organization_id = self.resolve_scope(owner_identity_id, workspace_id)
@@ -2243,6 +2246,7 @@ class SpinePostgresRepository:
                         manifest_id=manifest_id,
                         ordinal=ordinal,
                         staged=staged,
+                        source_kind=source_kind,
                     )
                     registrations[ordinal] = registered
                     (duplicate_ids if registered.duplicate else accepted_ids).append(
@@ -2358,6 +2362,7 @@ class SpinePostgresRepository:
         manifest_id: UUID,
         ordinal: int,
         staged: StagedObject,
+        source_kind: str,
     ) -> tuple[RegisteredDocument, tuple[UUID, ...]]:
         semantic_key = semantic_digest({"relative_path": staged.relative_path.casefold()})
         document_id = session.scalar(
@@ -2389,6 +2394,16 @@ class SpinePostgresRepository:
                     "correlation": correlation_id,
                 },
             )
+        existing_kind = session.scalar(
+            sa.text(
+                "SELECT source_kind FROM workspace.source_artifacts WHERE "
+                "organization_id=:organization AND workspace_id=:workspace "
+                "AND source_artifact_id=:document"
+            ),
+            {"organization": organization_id, "workspace": workspace_id, "document": document_id},
+        )
+        if existing_kind is not None and existing_kind != source_kind:
+            raise SpinePersistenceError("upload_source_kind_conflict")
         existing = session.execute(
             sa.text(
                 "SELECT version,source_artifact_id,source_version_id,object_id "
@@ -2468,7 +2483,7 @@ class SpinePostgresRepository:
                 "INSERT INTO workspace.source_artifacts "
                 "(organization_id,workspace_id,source_artifact_id,source_kind,title,status,revision,"
                 "retention_class,created_by_identity_id,correlation_id) VALUES "
-                "(:organization,:workspace,:source,'project_evidence',:title,'active',1,"
+                "(:organization,:workspace,:source,:source_kind,:title,'active',1,"
                 "'workspace.source',:owner,:correlation) ON CONFLICT DO NOTHING"
             ),
             {
@@ -2476,6 +2491,7 @@ class SpinePostgresRepository:
                 "workspace": workspace_id,
                 "source": source_artifact_id,
                 "title": staged.safe_display_name,
+                "source_kind": source_kind,
                 "owner": owner_identity_id,
                 "correlation": correlation_id,
             },
@@ -2839,7 +2855,8 @@ class SpinePostgresRepository:
             filters.append("(s.admission_status=:status OR s.extraction_status=:status)")
             parameters["status"] = status
         statement = f"""
-          SELECT v.*,s.admission_status,s.extraction_status,s.page_count,s.capability_gaps,
+          SELECT v.*,a_source.source_kind,s.admission_status,s.extraction_status,s.page_count,
+            s.capability_gaps,
             COALESCE(history.prior_versions,ARRAY[]::bigint[]) AS prior_versions,
             COALESCE(jobs.job_ids,ARRAY[]::uuid[]) AS job_ids
           FROM workspace.document_records d
@@ -2853,6 +2870,10 @@ class SpinePostgresRepository:
           JOIN workspace.document_versions v ON v.organization_id=d.organization_id
             AND v.workspace_id=d.workspace_id AND v.document_id=d.document_id
             AND v.version=a.selected_document_version
+          JOIN workspace.source_artifacts a_source ON
+            a_source.organization_id=v.organization_id AND
+            a_source.workspace_id=v.workspace_id AND
+            a_source.source_artifact_id=v.source_artifact_id
           JOIN LATERAL (
             SELECT state.admission_status,state.extraction_status,state.page_count,
               state.capability_gaps
@@ -10836,6 +10857,7 @@ def _document_summary(row: Any) -> DocumentSummary:
         tuple(UUID(str(value)) for value in getattr(row, "job_ids", ()) or ()),
         UUID(str(row.source_artifact_id)) if row.source_artifact_id else None,
         UUID(str(row.source_version_id)) if row.source_version_id else None,
+        str(row.source_kind),
         str(row.safe_display_name),
         str(row.sanitized_relative_path),
         str(row.media_type),

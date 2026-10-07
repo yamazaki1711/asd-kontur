@@ -248,7 +248,10 @@ class ProductSpineService:
         workspace_id: UUID,
         parts: tuple[UploadPart, ...],
         correlation_id: UUID,
+        source_kind: str = "project_evidence",
     ) -> BatchRegistration:
+        if source_kind not in {"project_evidence", "field_document"}:
+            raise ValueError("upload_source_kind_invalid")
         if not parts or len(parts) > self._settings.max_batch_files:
             raise ValueError("batch_file_count_limit_exceeded")
         ordinals = [part.ordinal for part in parts]
@@ -336,6 +339,7 @@ class ProductSpineService:
             manifest_digest = semantic_digest(
                 {
                     "workspace_id": workspace_id,
+                    "source_kind": source_kind,
                     "items": sorted(manifest_items, key=_manifest_ordinal),
                 }
             )
@@ -348,6 +352,7 @@ class ProductSpineService:
                 correlation_id=correlation_id,
                 client_manifest_digest=manifest_digest,
                 archive_members=tuple(archive_members),
+                source_kind=source_kind,
             )
         except BaseException:
             for _, item in staged:

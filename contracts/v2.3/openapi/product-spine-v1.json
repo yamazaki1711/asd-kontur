@@ -457,6 +457,11 @@
               }
             ],
             "title": "Relative Paths"
+          },
+          "source_kind": {
+            "default": "project_evidence",
+            "title": "Source Kind",
+            "type": "string"
           }
         },
         "required": [
@@ -1045,6 +1050,10 @@
             ],
             "title": "Source Artifact Id"
           },
+          "source_kind": {
+            "title": "Source Kind",
+            "type": "string"
+          },
           "source_version_id": {
             "anyOf": [
               {
@@ -1076,6 +1085,7 @@
           "job_ids",
           "source_artifact_id",
           "source_version_id",
+          "source_kind",
           "safe_display_name",
           "relative_path",
           "media_type",
@@ -1920,6 +1930,14 @@
             "title": "Evidence",
             "type": "array"
           },
+          "field_locators": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Field Locators",
+            "type": "array"
+          },
           "grants": {
             "items": {
               "additionalProperties": true,
@@ -1959,6 +1977,14 @@
             "title": "Truncated Sections",
             "type": "array"
           },
+          "use_confirmations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Use Confirmations",
+            "type": "array"
+          },
           "works": {
             "items": {
               "additionalProperties": true,
@@ -1978,6 +2004,8 @@
           "grants",
           "application_grants",
           "application_evidence",
+          "field_locators",
+          "use_confirmations",
           "applications",
           "decisions",
           "truncated_sections"
@@ -2271,6 +2299,85 @@
           "recorded_at"
         ],
         "title": "MaterialApplicationView",
+        "type": "object"
+      },
+      "MaterialUseEvidenceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "admission_id": {
+            "format": "uuid",
+            "title": "Admission Id",
+            "type": "string"
+          },
+          "confirmation_statement": {
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Confirmation Statement",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "professional_grant_id": {
+            "format": "uuid",
+            "title": "Professional Grant Id",
+            "type": "string"
+          },
+          "professional_grant_version": {
+            "minimum": 1.0,
+            "title": "Professional Grant Version",
+            "type": "integer"
+          },
+          "source_locator_id": {
+            "format": "uuid",
+            "title": "Source Locator Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "admission_id",
+          "source_locator_id",
+          "confirmation_statement",
+          "professional_grant_id",
+          "professional_grant_version",
+          "idempotency_key"
+        ],
+        "title": "MaterialUseEvidenceRequest",
+        "type": "object"
+      },
+      "MaterialUseEvidenceView": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmation_fingerprint": {
+            "title": "Confirmation Fingerprint",
+            "type": "string"
+          },
+          "confirmation_id": {
+            "format": "uuid",
+            "title": "Confirmation Id",
+            "type": "string"
+          },
+          "evidence_link_id": {
+            "format": "uuid",
+            "title": "Evidence Link Id",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation_id",
+          "evidence_link_id",
+          "confirmation_fingerprint",
+          "recorded_at"
+        ],
+        "title": "MaterialUseEvidenceView",
         "type": "object"
       },
       "ModeName": {
@@ -9859,6 +9966,75 @@
           }
         },
         "summary": "Record Material Application",
+        "tags": [
+          "support-production"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/support/material-use-evidence": {
+      "post": {
+        "operationId": "confirm_material_use_evidence_api_v1_workspaces__workspace_id__support_material_use_evidence_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterialUseEvidenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialUseEvidenceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Material Use Evidence",
         "tags": [
           "support-production"
         ]

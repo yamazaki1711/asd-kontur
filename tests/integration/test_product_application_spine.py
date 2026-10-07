@@ -47,6 +47,66 @@ from .conftest import PostgreSQLEnvironment
 pytestmark = pytest.mark.postgres
 
 
+def test_field_document_upload_keeps_declared_role_and_rejects_path_role_conflict(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="field-document-owner",
+        password="Synthetic-Field-Document-42!",
+        display_name="Field document owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "field-document-owner", "Synthetic-Field-Document-42!")
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Field document intake qualification"},
+            headers=_csrf(client),
+        ).json()
+        endpoint = f"/api/v1/workspaces/{workspace['workspace_id']}/documents"
+        field = client.post(
+            endpoint,
+            files=[("files", ("actual-work.pdf", _pdf(), "application/pdf"))],
+            data={"source_kind": "field_document"},
+            headers=_csrf(client),
+        )
+        assert field.status_code == 202, field.text
+        document_id = field.json()["accepted_document_ids"][0]
+        with postgres_environment.owner_engine.connect() as connection:
+            kind = connection.scalar(
+                sa.text(
+                    "SELECT source_kind FROM workspace.source_artifacts WHERE "
+                    "organization_id=:o AND workspace_id=:w AND source_artifact_id=:document"
+                ),
+                {
+                    "o": workspace["organization_id"],
+                    "w": workspace["workspace_id"],
+                    "document": document_id,
+                },
+            )
+        assert kind == "field_document"
+        listed = client.get(endpoint)
+        assert listed.status_code == 200
+        assert listed.json()["items"][0]["source_kind"] == "field_document"
+        conflicting = client.post(
+            endpoint,
+            files=[("files", ("actual-work.pdf", _pdf(), "application/pdf"))],
+            data={"source_kind": "project_evidence"},
+            headers=_csrf(client),
+        )
+        assert conflicting.status_code == 409
+        assert conflicting.json()["error"]["code"] == "upload_source_kind_conflict"
+        invalid = client.post(
+            endpoint,
+            files=[("files", ("wrong-kind.pdf", _pdf(), "application/pdf"))],
+            data={"source_kind": "normative_document"},
+            headers=_csrf(client),
+        )
+        assert invalid.status_code == 422
+
+
 def test_processing_status_ignores_obsolete_contract_profile_failures(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,

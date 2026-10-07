@@ -56,7 +56,7 @@ def test_material_admission_migration_roundtrip_on_disposable_database(
     run_migration(str(repository_root), url, "head")
     with postgres_environment.owner_engine.connect() as connection:
         assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
-            "0137_support_material_application_basis"
+            "0138_support_material_use_evidence"
         )
     run_migration(str(repository_root), url, "0135_support_incoming_inspection_preflights")
     with postgres_environment.owner_engine.connect() as connection:
@@ -501,7 +501,21 @@ def test_material_application_requires_actual_use_and_caps_batch_total(
         professional_grant_version=admit_grant.grant_version,
         idempotency_key="application-admission-42",
     )
-    use_evidence = uuid7()
+    service = MaterialApplicationService(
+        postgres_environment.application_engine, postgres_environment.support_engine
+    )
+    confirmation = {
+        "owner_identity_id": owner,
+        "workspace_id": tenant.workspace_id,
+        "admission_id": admission["admission_id"],
+        "source_locator_id": locator,
+        "confirmation_statement": "Field record confirms application to the selected work",
+        "professional_grant_id": apply_grant.grant_id,
+        "professional_grant_version": apply_grant.grant_version,
+        "idempotency_key": "material-use-confirmation-first",
+    }
+    with pytest.raises(MaterialApplicationError, match="field_source_unavailable"):
+        service.confirm_evidence(**confirmation)
     with postgres_environment.owner_engine.begin() as connection:
         connection.execute(
             sa.text(
@@ -512,27 +526,13 @@ def test_material_application_requires_actual_use_and_caps_batch_total(
             ),
             {"o": tenant.organization_id, "w": tenant.workspace_id, "source": source},
         )
-        connection.execute(
-            sa.text(
-                "INSERT INTO workspace.evidence_links "
-                "(organization_id,workspace_id,evidence_link_id,subject_type,subject_id,"
-                "subject_version,source_version_id,source_locator_id,evidence_role,"
-                "validity_status,decision_ref) VALUES "
-                "(:o,:w,:evidence,'work_instance',:work,'1',:source,:locator,"
-                "'material_application','verified','decision:synthetic-field-confirmation')"
-            ),
-            {
-                "o": tenant.organization_id,
-                "w": tenant.workspace_id,
-                "evidence": use_evidence,
-                "work": work_id,
-                "source": source,
-                "locator": locator,
-            },
+    confirmed = service.confirm_evidence(**confirmation)
+    assert service.confirm_evidence(**confirmation) == confirmed
+    with pytest.raises(MaterialApplicationError, match="idempotency_conflict"):
+        service.confirm_evidence(
+            **{**confirmation, "confirmation_statement": "A different statement"}
         )
-    service = MaterialApplicationService(
-        postgres_environment.application_engine, postgres_environment.support_engine
-    )
+    use_evidence = confirmed["evidence_link_id"]
     command = {
         "owner_identity_id": owner,
         "workspace_id": tenant.workspace_id,
@@ -584,6 +584,8 @@ def test_material_application_requires_actual_use_and_caps_batch_total(
     assert len(context["applications"]) == 2
     assert context["application_grants"][0]["grant_id"] == apply_grant.grant_id
     assert context["application_evidence"][0]["evidence_link_id"] == use_evidence
+    assert context["use_confirmations"][0]["evidence_link_id"] == use_evidence
+    assert context["field_locators"][0]["source_locator_id"] == locator
 
     app = create_app(engine=postgres_environment.application_engine, settings=settings)
     with TestClient(app) as client:
@@ -607,6 +609,17 @@ def test_material_application_requires_actual_use_and_caps_batch_total(
         )
         assert response.status_code == 201, response.text
         assert response.json()["material_application_id"] == str(first["material_application_id"])
+        evidence_response = client.post(
+            f"/api/v1/workspaces/{tenant.workspace_id}/support/material-use-evidence",
+            json={
+                key: str(value) if isinstance(value, type(batch_id)) else value
+                for key, value in confirmation.items()
+                if key not in {"owner_identity_id", "workspace_id"}
+            },
+            headers={"X-CSRF-Token": csrf or ""},
+        )
+        assert evidence_response.status_code == 201, evidence_response.text
+        assert evidence_response.json()["evidence_link_id"] == str(use_evidence)
 
     inspection.submit(
         owner_identity_id=owner,

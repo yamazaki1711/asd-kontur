@@ -123,6 +123,7 @@ class DocumentSummary:
     job_ids: tuple[UUID, ...]
     source_artifact_id: UUID | None
     source_version_id: UUID | None
+    source_kind: str
     safe_display_name: str
     relative_path: str
     media_type: str

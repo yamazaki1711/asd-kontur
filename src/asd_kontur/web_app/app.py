@@ -133,6 +133,8 @@ from .schemas import (
     MaterialAdmissionView,
     MaterialApplicationRequest,
     MaterialApplicationView,
+    MaterialUseEvidenceRequest,
+    MaterialUseEvidenceView,
     ModeView,
     NtdSeedStatusView,
     PackageBackupManifestView,
@@ -699,7 +701,10 @@ def _api_router() -> APIRouter:
         principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
         files: Annotated[list[UploadFile], File()],
         relative_paths: Annotated[str | None, Form()] = None,
+        source_kind: Annotated[str, Form()] = "project_evidence",
     ) -> UploadBatchView:
+        if source_kind not in {"project_evidence", "field_document"}:
+            raise ValueError("upload_source_kind_invalid")
         relative = json.loads(relative_paths) if relative_paths else []
         if not isinstance(relative, list) or any(not isinstance(item, str) for item in relative):
             raise ValueError("relative_paths_manifest_invalid")
@@ -722,6 +727,7 @@ def _api_router() -> APIRouter:
             workspace_id=workspace_id,
             parts=parts,
             correlation_id=request.state.correlation_id,
+            source_kind=source_kind,
         )
         return UploadBatchView(**jsonable_encoder(asdict(value)))
 
@@ -1799,6 +1805,28 @@ def _api_router() -> APIRouter:
             **payload.model_dump(),
         )
         return MaterialApplicationView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/material-use-evidence",
+        response_model=MaterialUseEvidenceView,
+        status_code=201,
+        tags=["support-production"],
+    )
+    def confirm_material_use_evidence(
+        request: Request,
+        workspace_id: UUID,
+        payload: MaterialUseEvidenceRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> MaterialUseEvidenceView:
+        service = _container(request).material_applications
+        if service is None:
+            raise HTTPException(status_code=503, detail="support_material_writer_unavailable")
+        value = service.confirm_evidence(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            **payload.model_dump(),
+        )
+        return MaterialUseEvidenceView(**jsonable_encoder(value))
 
     @router.get(
         "/workspaces/{workspace_id}/support/contract-execution-conditions.csv",

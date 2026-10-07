@@ -167,6 +167,28 @@ class MaterialAdmissionService:
                     "e.validity_status='verified' AND a.source_kind='field_document' "
                     "AND a.status='active' ORDER BY e.created_at DESC LIMIT 201"
                 ),
+                "field_locators": (
+                    "SELECT l.source_locator_id,l.locator_kind,l.locator_key,"
+                    "a.title AS source_title FROM workspace.source_locators l JOIN "
+                    "workspace.source_versions s ON s.organization_id=l.organization_id "
+                    "AND s.workspace_id=l.workspace_id AND "
+                    "s.source_version_id=l.source_version_id JOIN "
+                    "workspace.source_artifacts a ON a.organization_id=s.organization_id "
+                    "AND a.workspace_id=s.workspace_id AND "
+                    "a.source_artifact_id=s.source_artifact_id WHERE "
+                    "l.organization_id=:o AND l.workspace_id=:w AND "
+                    "s.admission_status='accepted' AND a.source_kind='field_document' "
+                    "AND a.status='active' ORDER BY a.title,l.locator_key "
+                    "LIMIT 201"
+                ),
+                "use_confirmations": (
+                    "SELECT confirmation_id,admission_id,work_instance_id,"
+                    "work_instance_version,source_locator_id,evidence_link_id,"
+                    "confirmation_statement,submitted_by,recorded_at FROM "
+                    "workspace.support_material_use_confirmations WHERE "
+                    "organization_id=:o AND workspace_id=:w ORDER BY "
+                    "recorded_at DESC,confirmation_id DESC LIMIT 201"
+                ),
                 "applications": (
                     "SELECT material_application_id,admission_id,material_batch_id,"
                     "material_batch_version,work_instance_id,work_instance_version,"

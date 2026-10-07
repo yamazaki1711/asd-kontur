@@ -1337,6 +1337,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/support/material-use-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Material Use Evidence */
+        post: operations["confirm_material_use_evidence_api_v1_workspaces__workspace_id__support_material_use_evidence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/processes": {
         parameters: {
             query?: never;
@@ -1731,6 +1748,11 @@ export interface components {
             files: string[];
             /** Relative Paths */
             relative_paths?: string | null;
+            /**
+             * Source Kind
+             * @default project_evidence
+             */
+            source_kind: string;
         };
         /** CapabilityStatusView */
         CapabilityStatusView: {
@@ -1961,6 +1983,8 @@ export interface components {
             size_bytes: number;
             /** Source Artifact Id */
             source_artifact_id: string | null;
+            /** Source Kind */
+            source_kind: string;
             /** Source Version Id */
             source_version_id: string | null;
             /** Version */
@@ -2276,6 +2300,10 @@ export interface components {
             evidence: {
                 [key: string]: unknown;
             }[];
+            /** Field Locators */
+            field_locators: {
+                [key: string]: unknown;
+            }[];
             /** Grants */
             grants: {
                 [key: string]: unknown;
@@ -2294,6 +2322,10 @@ export interface components {
             }[];
             /** Truncated Sections */
             truncated_sections: string[];
+            /** Use Confirmations */
+            use_confirmations: {
+                [key: string]: unknown;
+            }[];
             /** Works */
             works: {
                 [key: string]: unknown;
@@ -2426,6 +2458,50 @@ export interface components {
             recorded_at: string;
             /** Unit Code */
             unit_code: string;
+        };
+        /** MaterialUseEvidenceRequest */
+        MaterialUseEvidenceRequest: {
+            /**
+             * Admission Id
+             * Format: uuid
+             */
+            admission_id: string;
+            /** Confirmation Statement */
+            confirmation_statement: string;
+            /** Idempotency Key */
+            idempotency_key: string;
+            /**
+             * Professional Grant Id
+             * Format: uuid
+             */
+            professional_grant_id: string;
+            /** Professional Grant Version */
+            professional_grant_version: number;
+            /**
+             * Source Locator Id
+             * Format: uuid
+             */
+            source_locator_id: string;
+        };
+        /** MaterialUseEvidenceView */
+        MaterialUseEvidenceView: {
+            /** Confirmation Fingerprint */
+            confirmation_fingerprint: string;
+            /**
+             * Confirmation Id
+             * Format: uuid
+             */
+            confirmation_id: string;
+            /**
+             * Evidence Link Id
+             * Format: uuid
+             */
+            evidence_link_id: string;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
         };
         /**
          * ModeName
@@ -6416,6 +6492,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MaterialApplicationView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_material_use_evidence_api_v1_workspaces__workspace_id__support_material_use_evidence_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialUseEvidenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialUseEvidenceView"];
                 };
             };
             /** @description Validation Error */
