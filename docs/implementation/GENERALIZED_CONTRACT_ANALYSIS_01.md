@@ -1228,3 +1228,17 @@ disposable-PostgreSQL API test covered one replacement, repeated sweeps,
 recovery status and supersession after source-inventory change. This fix is
 source-only until a controlled release; the public worker is still running the
 earlier pinned code and no live repair result is claimed here.
+
+The repair code was subsequently pinned as
+`5f295291d4e3fd703daafc8adfeaf7e01246beef` in
+`~/.asd-kontur/public-demo/releases/20261007-5f29529-contract-reference-recovery-v1`.
+No database migration was needed. A first launchd cutover used an incorrectly
+edited argument array: the four application roles exited before startup with
+a Python binary interpreted as a script. The staged and installed plists were
+corrected and reloaded; the API, document worker, orchestrator and assistant
+worker then ran from the pinned Python path. The API returned HTTP 200 `ready`
+at migration `0129`; Qwen and the NTD worker were not restarted. After the
+supervised orchestrator's next sweep, exactly two versioned replacement jobs
+appeared for the two previously failed owner batches, without a manual queue
+operation; the first was claimed and Qwen began generation. This demonstrates
+autonomous repair scheduling, not yet successful completion of both batches.

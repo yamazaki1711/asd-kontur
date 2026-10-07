@@ -1967,6 +1967,7 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
             pending_review = repairs[0]["job_id"]
             recovering = client.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
             assert recovering.json()["reference_review"]["status"] == "in_progress"
+            assert recovering.json()["reference_review"]["scheduled_batches"] == 1
             third_upload = client.post(
                 f"/api/v1/workspaces/{workspace_id}/documents",
                 files=[("files", ("drawing.txt", b"General arrangement", "text/plain"))],

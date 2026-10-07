@@ -790,7 +790,9 @@ class TenderContractAnalysisRepository:
                     else "not_routed"
                 ),
                 "reviewed_batches": len(reference_results),
-                "scheduled_batches": len(reference_jobs),
+                "scheduled_batches": len(
+                    {str(job["batch_digest"]) for job in reference_jobs}
+                ),
                 "unresolved_references": sum(
                     item["match_decision"] == "unresolved" for item in attachment_references
                 ),
