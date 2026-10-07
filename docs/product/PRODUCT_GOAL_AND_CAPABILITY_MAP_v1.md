@@ -246,7 +246,9 @@ is identified as candidate wording; an original-only quote is rejected by
 the Qwen-result validator. Isolated changed-corpus tests and a visually
 rendered editable report passed. The application release is healthy and the
 supervised runtime continued to enqueue work and call Qwen without manual
-queue commands. It has not yet passed authenticated owner-output or complete
+queue commands. Two new bounded coherence jobs succeeded with persisted Qwen
+results; neither established a candidate conflict in its exact context. It
+has not yet passed authenticated owner-output or complete
 contract-journey acceptance. FFC-01 stays `PARTIAL`.
 
 FFC-01 remains `PARTIAL` after the 7 October contract output checkpoint. The

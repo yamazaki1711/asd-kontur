@@ -108,9 +108,10 @@ superseded original. UI and editable report label proposed counterpart text
 explicitly. A changed-corpus one-page DOCX reopened and passed visual review.
 After controlled cutover, API readiness passed; autonomous orchestration
 queued two items and persistent Qwen completed three requests without Codex
-queue action. The result-to-project binding is not established by the
-content-minimal logs, and authenticated owner-browser acceptance remains
-unavailable. FFC-01 and ProductReady remain `PARTIAL` and false.
+queue action. A scoped read-only check confirmed the two new coherence jobs
+succeeded and stored two Qwen result manifests with zero candidate conflicts
+in those exact contexts. Authenticated owner-browser acceptance remains
+unavailable; FFC-01 and ProductReady remain `PARTIAL` and false.
 
 Checkpoint 2026-10-07 (Asia/Kamchatka): public application release
 `039ce694a10200a2f24e7cadda61b9c8cd6a58ac` runs migration

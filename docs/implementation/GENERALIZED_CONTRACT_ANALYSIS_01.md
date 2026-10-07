@@ -2181,9 +2181,12 @@ application roles; API readiness returned healthy on unchanged migration
 During one bounded, command-free observation, the supervised orchestrator
 reported two newly queued items for one active scope and the persistent Qwen
 service's completed-request counter rose from 974 to 977, then returned to
-idle. The content-minimal logs do not bind these requests to accepted
-contract-review results, so real-project professional-output acceptance
-remains unverified. The browser surface was unavailable in this session;
+idle. A single scoped read-only ledger check subsequently confirmed two new
+`CONTRACT_COHERENCE_REVIEW` jobs in `succeeded` state and two matching
+persisted Qwen result manifests. Those contexts contained zero candidate
+conflicts. This is autonomous bounded-review progress, not a finding of
+whole-contract coherence or acceptance of the proposed wording. The browser
+surface was unavailable in this session;
 no authenticated owner UI/download acceptance is claimed. This release does
 not certify legal coherence of unreviewed clauses or authority to adopt any
 proposal.
