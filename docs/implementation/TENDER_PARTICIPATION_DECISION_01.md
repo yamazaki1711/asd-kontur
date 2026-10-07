@@ -91,3 +91,31 @@ the exact SHA. The API is ready, Qwen and NTD remained running, and the
 platform-memory fingerprint is unchanged. No project job was running at either
 cutover boundary. This incident shows the release procedure must wait for
 launchd label removal before attempting bootstrap.
+
+## Contractor cost build-up checkpoint (7 October 2026)
+
+Release `199a6b15c54697f087e407a2706299d3f5915852` adds optional,
+workspace-scoped contractor cost lines to the participation assessment. Each
+line records a category, described resource/work, quantity, unit, RUB unit
+rate, and human-supplied basis. Decimal code calculates each amount and the
+subtotal. A contractor-entered required-profit amount yields a minimum viable
+price only after the contractor explicitly confirms that the cost scope is
+complete. A partial schedule remains visible but cannot trigger the
+price-below-cost gate; conflicting manual and calculated minimum prices are
+rejected. The existing separate confirmation of comparable VAT/scope/price
+bases remains required. No market rates, quantities, company fit, or profit
+were inferred from the owner's project.
+
+The Tender screen now accepts and reopens these inputs, displays the
+calculation, and the editable primary report includes each cost basis and
+states when a partial total is not decision-grade. An isolated PostgreSQL API
+test exercised persistence, exact arithmetic and replay; changed-value unit
+cases exercised a complete and incomplete schedule. The local Python unit
+gate passed 1,386 tests, frontend typecheck/lint/build passed, and four-role
+launchd preflight passed. The exact-SHA release was installed and all four
+application roles relaunched. API readiness reports migration
+`0133_contract_coherence_review`; Qwen and NTD processes were not restarted.
+The owner's real workspace still has no contractor-supplied cost assessment,
+so its decision correctly remains `INSUFFICIENT_INPUT`. An authenticated
+browser submission has not been claimed. Full Tender and ProductReady remain
+unaccepted.

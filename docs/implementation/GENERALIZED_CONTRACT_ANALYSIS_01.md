@@ -2004,3 +2004,16 @@ the existing candidate package. Authenticated browser download remains
 unverified. The revised document is an editable negotiation candidate; the
 owner must still choose commercially acceptable terms and obtain qualified
 legal review before treating it as a complete agreed contract.
+
+Read-only output QA then opened the owner's generated analysis, protocol and
+revised-contract DOCX via LibreOffice and rendered all 66 resulting pages.
+An initial contact sheet appeared to clip tables, but its thumbnail tiles were
+narrower than the page images; representative full pages showed no document
+clipping. No report-width patch was made on that false diagnosis. A separate
+source-grounding defect was real: DOCX native locators were being displayed as
+printed `page 1` citations even though DOCX pagination is layout-dependent.
+SHA `c26198e` suppresses these pseudo-page numbers while retaining all 307
+clause source locators and clause references in the owner's read-only
+projection. PDF page references remain unchanged. That correction shipped in
+release `199a6b15c54697f087e407a2706299d3f5915852` without reprocessing
+the owner's contract or restarting Qwen/NTD.
