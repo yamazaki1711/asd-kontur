@@ -45,7 +45,8 @@ def validate_contractor_assessment(value: dict[str, Any]) -> dict[str, Any]:
             amount = Decimal(str(cost))
         except (InvalidOperation, ValueError) as exc:
             raise TenderParticipationInputError("tender_participation_cost_invalid") from exc
-        if not amount.is_finite() or amount <= 0 or amount.as_tuple().exponent < -2:
+        exponent = amount.as_tuple().exponent
+        if not amount.is_finite() or amount <= 0 or not isinstance(exponent, int) or exponent < -2:
             raise TenderParticipationInputError("tender_participation_cost_invalid")
         result["minimum_viable_price_rub"] = format(amount, "f")
     result["price_basis_confirmed"] = value.get("price_basis_confirmed") is True

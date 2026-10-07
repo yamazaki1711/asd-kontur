@@ -454,10 +454,10 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
     quantity_candidates.sort(key=lambda item: item[0])
     distinct_quantity_rows: list[tuple[str, str, str, str]] = []
     seen_quantity_rows: set[tuple[str, str, str, str]] = set()
-    for _, row in quantity_candidates:
-        if row not in seen_quantity_rows:
-            seen_quantity_rows.add(row)
-            distinct_quantity_rows.append(row)
+    for _, quantity_row in quantity_candidates:
+        if quantity_row not in seen_quantity_rows:
+            seen_quantity_rows.add(quantity_row)
+            distinct_quantity_rows.append(quantity_row)
     quantity_rows = distinct_quantity_rows[:80]
     unreviewed_quantity_rows = sum(
         len(quantities or ())

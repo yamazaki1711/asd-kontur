@@ -117,9 +117,9 @@ def test_reviewed_package_uses_server_decisions_not_client_ids() -> None:
         owner_identity_id="owner:synthetic", workspace_id=uuid4()
     )
     assert b"".join(output.chunks) == b"synthetic-reviewed-package"
-    assert [
-        item["revised_clause_id"] for item in selected_views[0]["revised_clauses"]
-    ] == [candidates[1]["candidate_id"]]
+    assert [item["revised_clause_id"] for item in selected_views[0]["revised_clauses"]] == [
+        candidates[1]["candidate_id"]
+    ]
     assert [item["item_id"] for item in selected_views[0]["disagreement_items"]] == [
         second["disagreement_item_id"]
     ]

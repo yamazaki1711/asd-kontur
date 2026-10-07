@@ -290,6 +290,10 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
             "disagreement_items": [],
             "revised_contracts": [],
             "revised_clauses": [],
+            "revision_review_candidates": [],
+            "revision_selection_fingerprint": (
+                "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            ),
             "deliverables": [],
             "project_context": {
                 "participants": [],
@@ -1056,6 +1060,7 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
                 "06_facility_work_observation_candidates.csv",
                 "07_facility_work_candidate_groups.csv",
                 "08_document_processing_coverage.csv",
+                "20_project_material_observations.csv",
                 "09_delivery_manifest.json",
                 "99_analysis_status.txt",
             ]

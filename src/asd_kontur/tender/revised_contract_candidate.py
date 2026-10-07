@@ -120,10 +120,7 @@ def render_revised_contract_source_package(
     if protocol_docx is not None:
         try:
             with zipfile.ZipFile(io.BytesIO(protocol_docx)) as protocol:
-                if (
-                    protocol.testzip() is not None
-                    or "word/document.xml" not in protocol.namelist()
-                ):
+                if protocol.testzip() is not None or "word/document.xml" not in protocol.namelist():
                     raise RevisedContractCandidateError("reviewed_contract_protocol_invalid")
         except zipfile.BadZipFile as exc:
             raise RevisedContractCandidateError("reviewed_contract_protocol_invalid") from exc
@@ -334,17 +331,12 @@ def _exact_fragment_span(paragraph_text: str, source_text: str) -> tuple[int, in
             match.start() == 0
             or not (
                 paragraph_text[match.start() - 1].isalnum()
-                or (
-                    source_text[0].isdigit()
-                    and paragraph_text[match.start() - 1] == "."
-                )
+                or (source_text[0].isdigit() and paragraph_text[match.start() - 1] == ".")
             )
         )
         and (
             match.end() == len(paragraph_text)
-            or not (
-                source_text[-1].isalnum() and paragraph_text[match.end()].isalnum()
-            )
+            or not (source_text[-1].isalnum() and paragraph_text[match.end()].isalnum())
         )
     ]
     if len(matches) != 1:

@@ -54,9 +54,7 @@ class TenderParticipationRepository:
         with Session(self._engine) as session, session.begin():
             self._set_scope(session, organization_id, workspace_id)
             workspace = session.execute(
-                sa.text(
-                    "SELECT workspace.workspace_accepts_durable_jobs(:o,:w)"
-                ),
+                sa.text("SELECT workspace.workspace_accepts_durable_jobs(:o,:w)"),
                 {"o": organization_id, "w": workspace_id},
             ).scalar_one()
             if not workspace:
