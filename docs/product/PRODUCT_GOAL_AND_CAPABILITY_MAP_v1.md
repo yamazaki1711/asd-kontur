@@ -341,6 +341,19 @@ four supervised application roles passed readiness, but authenticated
 owner-browser acceptance and complete professional Tender findings remain
 unverified. This is FFC-02 `PARTIAL`, not a Tender-mode or product PASS.
 
+Follow-up release `a2175552b3516d7d2b57bddafa3fee75c277bd06` adds a
+bounded, generic Qwen-review lane for a design/commercial pair where only
+one source identifies the facility. Previously that eligible pair could not
+enter the cross-document queue. It also requires candidate-complete
+one-to-one reviewed coverage before a grouped pair is called a full match.
+On the unchanged project model before new inference, this corrected the
+363 comparisons to 28 full, 33 partial and 302 unresolved, with three
+professional issues. After deployment, four local-Qwen jobs succeeded and
+autonomous successors appeared without developer scheduling; the live model
+then showed 28 full, 37 partial and 296 unresolved comparisons. The same
+release passed 334 focused tests and API readiness; no owner-browser or
+professional Tender-mode PASS is claimed. FFC-02 remains `PARTIAL`.
+
 For each row, the detailed acceptance record must additionally name the
 tested release, delivered release, actual observed result and remaining
 blocker. Until that evidence exists, implementation or a passing unit test is

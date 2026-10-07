@@ -45,3 +45,26 @@ complete coverage and incomplete grouped coverage. Focused tests passed
 acceptance must be verified after controlled deployment.
 
 FFC-02 and ProductReady remain incomplete.
+
+## Controlled application release and autonomous observation
+
+The exact application release is
+`a2175552b3516d7d2b57bddafa3fee75c277bd06` on unchanged migration
+`0142_audit_id_document_interpretation`. API, project worker, assistant worker
+and project orchestrator all reported that SHA after cutover; API readiness
+passed. The persistent Qwen and NTD services were not restarted. No durable
+job was active immediately before release.
+
+Without a manual queue command, the supervised runtime created four exact
+two-row `CROSS_DOCUMENT_SCOPE_MATCHING` jobs. Qwen received those tasks;
+four jobs succeeded with persisted results, and the orchestrator created
+another four while the first batch was finishing. The first four accepted
+results used seven model requests and included reciprocal `SAME_SCOPE` and
+`DIFFERENT_SCOPE` decisions, plus bounded repair receipts. The read-only
+deployed project model moved from 28/33/302 to 28/37/296 full/partial/
+unresolved work-scope comparisons while professional issues stayed at three.
+The total scope-row count also changed from 363 to 361 as accepted Qwen work
+reconsolidated rows; no quantity mismatch or omission is inferred from that
+count change. This demonstrates useful autonomous semantic progress, not a
+complete Tender analysis or terminal project result. Further queued work is
+owned by the supervised runtime, not by Codex.
