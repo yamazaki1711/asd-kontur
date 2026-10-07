@@ -1972,6 +1972,8 @@ export interface components {
              * Format: uuid
              */
             document_id: string;
+            /** Document Roles */
+            document_roles?: string[];
             /** Extraction Status */
             extraction_status: string;
             /** Job Ids */

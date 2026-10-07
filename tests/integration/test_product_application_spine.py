@@ -53,7 +53,7 @@ def test_field_document_upload_keeps_declared_role_and_rejects_path_role_conflic
 ) -> None:
     settings = _settings(postgres_environment, tmp_path)
     app = create_app(engine=postgres_environment.application_engine, settings=settings)
-    app.state.container.auth.bootstrap_owner(
+    owner_id = app.state.container.auth.bootstrap_owner(
         username="field-document-owner",
         password="Synthetic-Field-Document-42!",
         display_name="Field document owner",
@@ -105,9 +105,69 @@ def test_field_document_upload_keeps_declared_role_and_rejects_path_role_conflic
         assert "PROJECT_DEFINITION_EXTRACTION" not in field_jobs
         assert "PROJECT_UNDERSTANDING_RECONCILIATION" not in field_jobs
         assert "REQUIREMENT_MATRIX_ASSEMBLY" not in field_jobs
+        with postgres_environment.owner_engine.begin() as connection:
+            source_version_id = connection.scalar(
+                sa.text(
+                    "SELECT source_version_id FROM workspace.document_versions WHERE "
+                    "organization_id=:o AND workspace_id=:w AND document_id=:document"
+                ),
+                {
+                    "o": workspace["organization_id"],
+                    "w": workspace["workspace_id"],
+                    "document": document_id,
+                },
+            )
+            assert source_version_id is not None
+            locator_id = uuid4()
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.source_locators "
+                    "(organization_id,workspace_id,source_locator_id,source_version_id,"
+                    "locator_kind,locator_key,locator_value,fragment_digest) VALUES "
+                    "(:o,:w,:locator,:source,'document_page_region','field-page-1',"
+                    "CAST(:value AS jsonb),:digest)"
+                ),
+                {
+                    "o": workspace["organization_id"],
+                    "w": workspace["workspace_id"],
+                    "locator": locator_id,
+                    "source": source_version_id,
+                    "value": json.dumps({"page": 1, "region": [0, 0, 1, 1]}),
+                    "digest": semantic_digest({"document": document_id, "page": 1}),
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.document_role_decisions "
+                    "(organization_id,workspace_id,decision_id,decision_version,document_id,"
+                    "document_version,scope,selected_roles,candidate_ids,decision_code,"
+                    "validator_version,source_locator_ids,decision_digest) VALUES "
+                    "(:o,:w,:decision,1,:document,1,'page:1',ARRAY['executive_documentation']::text[],"
+                    "ARRAY[]::uuid[],'qualified_semantic_role',:profile,ARRAY[:locator]::uuid[],:digest)"
+                ),
+                {
+                    "o": workspace["organization_id"],
+                    "w": workspace["workspace_id"],
+                    "decision": uuid4(),
+                    "document": document_id,
+                    "profile": QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
+                    "locator": locator_id,
+                    "digest": semantic_digest({"document": document_id, "semantic_role": "id"}),
+                },
+            )
         listed = client.get(endpoint)
         assert listed.status_code == 200
         assert listed.json()["items"][0]["source_kind"] == "field_document"
+        assert listed.json()["items"][0]["document_roles"] == ["executive_documentation"]
+        direct_lookup = SpinePostgresRepository(postgres_environment.application_engine)
+        direct_lookup.list_documents = lambda **_kwargs: ((), None)
+        direct_document = direct_lookup.get_document(
+            owner_identity_id=owner_id,
+            workspace_id=UUID(workspace["workspace_id"]),
+            document_id=UUID(document_id),
+        )
+        assert direct_document.source_kind == "field_document"
+        assert direct_document.document_roles == ("executive_documentation",)
         conflicting = client.post(
             endpoint,
             files=[("files", ("actual-work.pdf", _pdf(), "application/pdf"))],
@@ -134,6 +194,14 @@ def test_field_document_upload_keeps_declared_role_and_rejects_path_role_conflic
         )
         assert project.status_code == 202, project.text
         project_document_id = project.json()["accepted_document_ids"][0]
+        current_documents = client.get(endpoint)
+        assert current_documents.status_code == 200
+        roles_by_document = {
+            item["document_id"]: item["document_roles"]
+            for item in current_documents.json()["items"]
+        }
+        assert roles_by_document[document_id] == ["executive_documentation"]
+        assert roles_by_document[project_document_id] == []
         assert client.post(project_run, headers=_csrf(client)).status_code == 202
         with postgres_environment.owner_engine.connect() as connection:
             sources = dict(

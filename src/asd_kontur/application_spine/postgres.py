@@ -2856,6 +2856,7 @@ class SpinePostgresRepository:
             "organization": organization_id,
             "workspace": workspace_id,
             "limit": limit + 1,
+            "semantic_role_profile": QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
         }
         if sort not in {"recorded_asc", "recorded_desc"}:
             raise SpinePersistenceError("document_sort_invalid")
@@ -2877,7 +2878,8 @@ class SpinePostgresRepository:
           SELECT v.*,a_source.source_kind,s.admission_status,s.extraction_status,s.page_count,
             s.capability_gaps,
             COALESCE(history.prior_versions,ARRAY[]::bigint[]) AS prior_versions,
-            COALESCE(jobs.job_ids,ARRAY[]::uuid[]) AS job_ids
+            COALESCE(jobs.job_ids,ARRAY[]::uuid[]) AS job_ids,
+            COALESCE(semantic_roles.document_roles,ARRAY[]::text[]) AS document_roles
           FROM workspace.document_records d
           JOIN LATERAL (
             SELECT a.selected_document_version
@@ -2914,6 +2916,20 @@ class SpinePostgresRepository:
             WHERE job.organization_id=v.organization_id AND job.workspace_id=v.workspace_id
               AND job.subject_document_id=v.document_id
           ) jobs ON true
+          LEFT JOIN LATERAL (
+            SELECT array_agg(DISTINCT role.value ORDER BY role.value) AS document_roles
+            FROM (
+              SELECT DISTINCT ON (decision.scope) decision.selected_roles
+              FROM workspace.document_role_decisions decision
+              WHERE decision.organization_id=v.organization_id
+                AND decision.workspace_id=v.workspace_id
+                AND decision.document_id=v.document_id
+                AND decision.document_version=v.version
+                AND decision.validator_version=:semantic_role_profile
+              ORDER BY decision.scope,decision.recorded_at DESC,decision.decision_id DESC
+            ) latest_decisions
+            CROSS JOIN LATERAL unnest(latest_decisions.selected_roles) AS role(value)
+          ) semantic_roles ON true
           WHERE {" AND ".join(filters)}
           ORDER BY v.recorded_at {direction},v.document_id {direction} LIMIT :limit
         """
@@ -2951,8 +2967,10 @@ class SpinePostgresRepository:
                     "AND workspace_id=:workspace AND document_id=:document ORDER BY decision_version DESC LIMIT 1),"
                     "latest_state AS (SELECT * FROM workspace.document_processing_states "
                     "WHERE organization_id=:organization AND workspace_id=:workspace AND document_id=:document "
-                    "ORDER BY document_version DESC,state_sequence DESC LIMIT 1) "
-                    "SELECT v.*,s.admission_status,s.extraction_status,s.page_count,s.capability_gaps,"
+                    "AND document_version=(SELECT selected_document_version FROM selected) "
+                    "ORDER BY state_sequence DESC LIMIT 1) "
+                    "SELECT v.*,a_source.source_kind,s.admission_status,s.extraction_status,"
+                    "s.page_count,s.capability_gaps,"
                     "ARRAY(SELECT history.version FROM workspace.document_versions history WHERE "
                     "history.organization_id=v.organization_id AND history.workspace_id=v.workspace_id "
                     "AND history.document_id=v.document_id AND history.version<>v.version "
@@ -2960,8 +2978,19 @@ class SpinePostgresRepository:
                     "ARRAY(SELECT job.job_id FROM workspace.durable_jobs job WHERE "
                     "job.organization_id=v.organization_id AND job.workspace_id=v.workspace_id "
                     "AND job.subject_document_id=v.document_id ORDER BY job.priority DESC,"
-                    "job.created_at,job.job_id) AS job_ids "
+                    "job.created_at,job.job_id) AS job_ids,"
+                    "ARRAY(SELECT DISTINCT role.value FROM (SELECT DISTINCT ON (decision.scope) "
+                    "decision.selected_roles FROM workspace.document_role_decisions decision WHERE "
+                    "decision.organization_id=v.organization_id AND decision.workspace_id=v.workspace_id "
+                    "AND decision.document_id=v.document_id AND decision.document_version=v.version "
+                    "AND decision.validator_version=:semantic_role_profile ORDER BY decision.scope,"
+                    "decision.recorded_at DESC,decision.decision_id DESC) latest_decisions "
+                    "CROSS JOIN LATERAL unnest(latest_decisions.selected_roles) AS role(value) "
+                    "ORDER BY role.value) AS document_roles "
                     "FROM workspace.document_versions v JOIN selected a ON a.selected_document_version=v.version "
+                    "JOIN workspace.source_artifacts a_source ON "
+                    "a_source.organization_id=v.organization_id AND a_source.workspace_id=v.workspace_id "
+                    "AND a_source.source_artifact_id=v.source_artifact_id "
                     "JOIN latest_state s ON s.document_version=v.version WHERE v.organization_id=:organization "
                     "AND v.workspace_id=:workspace AND v.document_id=:document"
                 ),
@@ -2969,6 +2998,7 @@ class SpinePostgresRepository:
                     "organization": organization_id,
                     "workspace": workspace_id,
                     "document": document_id,
+                    "semantic_role_profile": QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
                 },
             ).one_or_none()
         if row is None:
@@ -10903,6 +10933,7 @@ def _document_summary(row: Any) -> DocumentSummary:
         str(row.extraction_status),
         tuple(row.capability_gaps or ()),
         row.recorded_at,
+        tuple(getattr(row, "document_roles", ()) or ()),
     )
 
 

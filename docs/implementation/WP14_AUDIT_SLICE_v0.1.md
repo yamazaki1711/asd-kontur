@@ -42,6 +42,24 @@ owner workspace still has 21 document versions. Authenticated owner-browser
 inspection remains unverified because no connected browser session was
 available. This is an inventory bridge, not Audit-mode acceptance.
 
+Next bridge: the inventory now shows the existing Qwen-classified preliminary
+document roles from the *active document version* only. The role is read from
+the latest decision for each page under the current semantic classification
+profile; it is not inferred from the file name or upload-purpose dropdown.
+The Audit UI labels a broad `executive_documentation` decision as an
+unspecified ID type, never as a completed AOSR or accepted document. An
+isolated two-document API scenario proved the field document's role appears
+only on its own record, including direct lookup; 20/20 Product Spine
+integration cases passed in disposable PostgreSQL. The content-minimal
+100-document registry/worker profile passed in 142.50 seconds; that duration
+includes admission and two job claims and is **not** a per-page inference
+measure. A read-only call against the owner's already-admitted workspace
+returned 21 active documents, 20 with current Qwen roles, in 0.0611 seconds.
+No new Qwen job or owner data mutation was performed for this read model.
+Specific ID subtype extraction, work linkage, document checks and independent
+Audit findings remain the next required capability; FFC-04 remains
+`NOT VERIFIED`.
+
 ## 1. Scope and boundary
 
 WP-14 implements a universal workspace-scoped acquisition/corpus capability and

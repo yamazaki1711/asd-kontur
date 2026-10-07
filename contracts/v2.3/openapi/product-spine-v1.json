@@ -982,6 +982,13 @@
             "title": "Document Id",
             "type": "string"
           },
+          "document_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Document Roles",
+            "type": "array"
+          },
           "extraction_status": {
             "title": "Extraction Status",
             "type": "string"

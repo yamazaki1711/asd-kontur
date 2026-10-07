@@ -4180,6 +4180,7 @@ function AuditExpectedActualPreflightWorkspace({
                       <tr>
                         <th>Документ</th>
                         <th>Назначение при загрузке</th>
+                        <th>Предварительная роль по содержанию</th>
                         <th>Приём и извлечение</th>
                         <th>Состояние проверки</th>
                       </tr>
@@ -4205,6 +4206,13 @@ function AuditExpectedActualPreflightWorkspace({
                             {document.source_kind === "field_document"
                               ? "Документ фактического выполнения"
                               : "Проектное или договорное основание"}
+                          </td>
+                          <td>
+                            {document.document_roles?.length
+                              ? document.document_roles
+                                  .map(humanizeDocumentRole)
+                                  .join(", ")
+                              : "Не определена"}
                           </td>
                           <td>
                             {humanizeStatus(document.admission_status)} ·{" "}
@@ -12216,6 +12224,20 @@ function humanizeExportKind(value: string) {
 
 function humanizeDocumentRole(value: string) {
   const labels: Record<string, string> = {
+    executive_documentation: "Исполнительная документация (вид не уточнён)",
+    drawing_or_scheme: "Чертёж или схема",
+    project_documentation: "Проектная документация",
+    working_documentation: "Рабочая документация",
+    explanatory_note: "Пояснительная записка",
+    bill_of_quantities: "Ведомость объёмов работ",
+    local_estimate: "Локальная смета",
+    object_estimate: "Объектная смета",
+    consolidated_estimate: "Сводный сметный расчёт",
+    specification: "Спецификация",
+    contract: "Договор",
+    procurement_notice: "Документация закупки",
+    customer_regulation: "Регламент Заказчика",
+    unknown: "Роль не установлена",
     register: "Реестр документов комплекта",
     "support.aosr": "Акт освидетельствования скрытых работ",
     aosr: "Акт освидетельствования скрытых работ",

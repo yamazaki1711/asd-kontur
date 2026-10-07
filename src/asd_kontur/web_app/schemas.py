@@ -112,6 +112,7 @@ class DocumentView(ApiModel):
     extraction_status: str
     capability_gaps: list[str]
     recorded_at: datetime
+    document_roles: list[str] = Field(default_factory=list)
 
 
 class DocumentPage(ApiModel):

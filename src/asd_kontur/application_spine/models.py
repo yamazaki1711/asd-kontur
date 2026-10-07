@@ -134,6 +134,7 @@ class DocumentSummary:
     extraction_status: str
     capability_gaps: tuple[str, ...]
     recorded_at: datetime
+    document_roles: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
