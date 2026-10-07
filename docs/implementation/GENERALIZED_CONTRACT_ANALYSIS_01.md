@@ -1094,7 +1094,10 @@ validate the substantive legal findings or activate the staged code.
 All-page Word rendering remains unqualified. The installed ONLYOFFICE `x2t`
 converter returned its `open` error for both an existing generated report and
 a trivial synthetic DOCX, so that invocation is not evidence that the report
-is malformed. LibreOffice is unavailable. Existing ZIP/XML integrity and
-first-page Quick Look checks do not satisfy all-page visual acceptance. The
-owner-facing launchd services were not restarted or repointed during this
-qualification.
+is malformed. LibreOffice 26.8.0 was installed as a local QA tool, not an
+ASD-KONTUR runtime dependency. Its first headless conversion produced no PDF;
+the `soffice` wrapper remained at `_dyld_start` with no rendering child, and
+even `soffice --version` did not return. Both bounded attempts were stopped.
+Existing ZIP/XML integrity and first-page Quick Look checks do not satisfy
+all-page visual acceptance. The owner-facing launchd services were not
+restarted or repointed during this qualification.
