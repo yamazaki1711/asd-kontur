@@ -236,6 +236,95 @@ def test_revised_contract_package_carries_unchanged_pdf_appendix_without_editabi
     assert manifest["sources"][1]["original_sha256"] == manifest["sources"][1]["candidate_sha256"]
 
 
+def test_revised_contract_package_lists_unresolved_references_without_claiming_absence() -> None:
+    original_clause = "6.1. Follow the technical assignment."
+    view = {
+        "clauses": [
+            {
+                "clause_id": "scope-61",
+                "clause_version": 1,
+                "source_version_id": "contract-source",
+                "source_text": original_clause,
+            }
+        ],
+        "revised_clauses": [
+            {
+                "source_clause_id": "scope-61",
+                "source_clause_version": 1,
+                "revised_text": "6.1. Follow the approved technical assignment.",
+            }
+        ],
+        "attachment_references": [
+            {
+                "reference_id": "reference-b",
+                "source_name": "contract.docx",
+                "source_page": 8,
+                "source_locator_id": "locator-b",
+                "source_quote": "=Appendix B governs scope",
+                "target_description": "Appendix B",
+                "uncertainty": "No exact inventory match",
+                "match_decision": "unresolved",
+            },
+            {
+                "reference_id": "reference-a",
+                "source_name": "contract.docx",
+                "source_page": 2,
+                "source_locator_id": "locator-a",
+                "source_quote": "technical assignment",
+                "target_description": "Technical assignment",
+                "uncertainty": "Several candidate files",
+                "match_decision": "unresolved",
+            },
+            {
+                "reference_id": "reference-c",
+                "source_name": "contract.docx",
+                "source_page": 3,
+                "source_locator_id": "locator-c",
+                "source_quote": "accepted schedule",
+                "target_description": "Schedule",
+                "match_decision": "matched",
+            },
+        ],
+    }
+    package = render_revised_contract_source_package(
+        [
+            {
+                "source_version_id": "contract-source",
+                "safe_display_name": "contract.docx",
+                "content": _source_docx(original_clause),
+            }
+        ],
+        view,
+    )
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        register = archive.read("unresolved-references.csv")
+        manifest = json.loads(archive.read("manifest.json"))
+    rows = list(csv.DictReader(io.StringIO(register.decode("utf-8-sig"))))
+    assert [row["Идентификатор источника"] for row in rows] == ["locator-a", "locator-b"]
+    assert rows[1]["Дословная ссылка"] == "'=Appendix B governs scope"
+    assert rows[0]["Причина неопределённости"] == "Several candidate files"
+    assert manifest["unresolved_reference_count"] == 2
+    assert manifest["unresolved_references"] == {
+        "entry": "unresolved-references.csv",
+        "sha256": hashlib.sha256(register).hexdigest(),
+        "reference_count": 2,
+        "status": "inventory_match_unresolved_not_proven_missing",
+    }
+    assert (
+        render_revised_contract_source_package(
+            [
+                {
+                    "source_version_id": "contract-source",
+                    "safe_display_name": "contract.docx",
+                    "content": _source_docx(original_clause),
+                }
+            ],
+            view,
+        )
+        == package
+    )
+
+
 def test_product_service_exports_mixed_docx_contract_and_pdf_appendix() -> None:
     primary_id = str(UUID(int=3701))
     appendix_id = str(UUID(int=3702))

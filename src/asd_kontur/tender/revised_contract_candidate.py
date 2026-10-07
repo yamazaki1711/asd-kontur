@@ -178,6 +178,23 @@ def render_revised_contract_source_package(
             }
         )
     change_register = _render_change_register(change_rows)
+    unresolved_references = sorted(
+        (
+            item
+            for item in _records(view.get("attachment_references"))
+            if item.get("match_decision") == "unresolved"
+        ),
+        key=lambda item: (
+            str(item.get("source_name") or ""),
+            str(item.get("source_page") or ""),
+            str(item.get("reference_id") or ""),
+        ),
+    )
+    unresolved_register = (
+        _render_unresolved_reference_register(unresolved_references)
+        if unresolved_references
+        else None
+    )
     coherence = view.get("coherence_review")
     coherence = coherence if isinstance(coherence, Mapping) else {}
     conflicts = _records(coherence.get("conflicts"))
@@ -196,10 +213,7 @@ def render_revised_contract_source_package(
             "scheduled_contexts": int(coherence.get("scheduled_contexts") or 0),
             "potential_conflict_count": len(conflicts),
         },
-        "unresolved_reference_count": sum(
-            item.get("match_decision") == "unresolved"
-            for item in _records(view.get("attachment_references"))
-        ),
+        "unresolved_reference_count": len(unresolved_references),
         "unchanged_pdf_appendix_count": sum(
             item["media_type"] == "application/pdf" for item in manifest_sources
         ),
@@ -216,6 +230,13 @@ def render_revised_contract_source_package(
             "revision_count": len(change_rows),
         },
     }
+    if unresolved_register is not None:
+        manifest["unresolved_references"] = {
+            "entry": "unresolved-references.csv",
+            "sha256": hashlib.sha256(unresolved_register).hexdigest(),
+            "reference_count": len(unresolved_references),
+            "status": "inventory_match_unresolved_not_proven_missing",
+        }
     if protocol_docx is not None:
         try:
             with zipfile.ZipFile(io.BytesIO(protocol_docx)) as protocol:
@@ -238,6 +259,10 @@ def render_revised_contract_source_package(
         member = zipfile.ZipInfo("change-register.csv", (1980, 1, 1, 0, 0, 0))
         member.compress_type = zipfile.ZIP_DEFLATED
         package.writestr(member, change_register)
+        if unresolved_register is not None:
+            member = zipfile.ZipInfo("unresolved-references.csv", (1980, 1, 1, 0, 0, 0))
+            member.compress_type = zipfile.ZIP_DEFLATED
+            package.writestr(member, unresolved_register)
         if protocol_docx is not None:
             member = zipfile.ZipInfo("reviewed-disagreement-protocol.docx", (1980, 1, 1, 0, 0, 0))
             member.compress_type = zipfile.ZIP_DEFLATED
@@ -308,6 +333,43 @@ def _render_change_register(rows: Sequence[tuple[str, ...]]) -> bytes:
         )
     )
     for row in rows:
+        writer.writerow(
+            tuple(
+                "'" + value if value.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")) else value
+                for value in row
+            )
+        )
+    return ("\ufeff" + output.getvalue()).encode("utf-8")
+
+
+def _render_unresolved_reference_register(
+    references: Sequence[Mapping[str, Any]],
+) -> bytes:
+    """Make Qwen's unresolved contract references actionable without claiming absence."""
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(
+        (
+            "№",
+            "Документ договора",
+            "Страница/лист",
+            "Дословная ссылка",
+            "Какой документ требуется установить",
+            "Причина неопределённости",
+            "Идентификатор источника",
+        )
+    )
+    for ordinal, item in enumerate(references, start=1):
+        row = (
+            str(ordinal),
+            str(item.get("source_name") or ""),
+            str(item.get("source_page") or ""),
+            str(item.get("source_quote") or ""),
+            str(item.get("target_description") or ""),
+            str(item.get("uncertainty") or ""),
+            str(item.get("source_locator_id") or ""),
+        )
         writer.writerow(
             tuple(
                 "'" + value if value.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")) else value
