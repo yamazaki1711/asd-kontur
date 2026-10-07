@@ -14,6 +14,7 @@ from asd_kontur.tender.clause_reference import (
     display_clause_reference,
     display_protocol_clause_reference,
 )
+from asd_kontur.tender.revised_contract_candidate import full_proposed_clause_text
 
 _FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 _RISK_SUBJECT_LABELS = {
@@ -94,7 +95,11 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
                 display_protocol_clause_reference(clause),
                 str(clause.get("source_text") or "Текст исходного пункта не извлечён"),
                 _source_reference(clause),
-                str(revised.get("revised_text") or item.get("proposed_clause_text") or ""),
+                (
+                    full_proposed_clause_text(clause, revised)
+                    if revised
+                    else str(item.get("proposed_clause_text") or "")
+                ),
                 _disagreement_basis(issue, item),
                 _joined(item.get("uncertainty_issue_ids")) or "Нет зарегистрированных кодов",
             )
@@ -431,7 +436,11 @@ def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
                 str(ordinal),
                 display_protocol_clause_reference(clause),
                 str(clause.get("source_text") or "Текст исходного пункта не извлечён"),
-                str(revision.get("revised_text") or item.get("proposed_clause_text") or ""),
+                (
+                    full_proposed_clause_text(clause, revision)
+                    if revision
+                    else str(item.get("proposed_clause_text") or "")
+                ),
                 _disagreement_basis(issue, item) + "; Источник: " + _source_reference(clause),
             )
         )

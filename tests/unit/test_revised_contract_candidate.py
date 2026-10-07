@@ -28,11 +28,62 @@ from asd_kontur.tender.contract_revision_selection import (
 )
 from asd_kontur.tender.revised_contract_candidate import (
     RevisedContractCandidateError,
+    full_proposed_clause_text,
     render_revised_contract_candidate_docx,
     render_revised_contract_source_package,
 )
 
 _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+
+def test_protocol_assembles_complete_clause_from_exact_fragment_edit() -> None:
+    original = "7.4. The supplier provides access. Payment follows signed acceptance."
+    revision = {
+        "disagreement_item_id": "item-access",
+        "source_clause_id": "clause-access",
+        "source_clause_version": 1,
+        "replacement_source_text": "Payment follows signed acceptance.",
+        "revised_text": "Payment follows acceptance within ten days.",
+    }
+    clause = {
+        "clause_id": "clause-access",
+        "clause_version": 1,
+        "source_version_id": "source-access",
+        "source_text": original,
+    }
+    expected = "7.4. The supplier provides access. Payment follows acceptance within ten days."
+    view = {
+        "clauses": [clause],
+        "disagreement_items": [
+            {"item_id": "item-access", "clause_id": "clause-access", "clause_version": 1}
+        ],
+        "revised_clauses": [revision],
+    }
+
+    assert full_proposed_clause_text(clause, revision) == expected
+    protocol = render_tender_disagreement_protocol_docx(view)
+    with zipfile.ZipFile(io.BytesIO(protocol)) as document:
+        text = "".join(ET.fromstring(document.read("word/document.xml")).itertext())
+    assert expected in text
+    package = render_revised_contract_source_package(
+        [{"source_version_id": "source-access", "content": _source_docx(original)}],
+        view,
+        protocol_docx=protocol,
+    )
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        with zipfile.ZipFile(io.BytesIO(archive.read("contract-source-01.docx"))) as revised:
+            revised_text = "".join(ET.fromstring(revised.read("word/document.xml")).itertext())
+    assert expected in revised_text
+
+
+def test_complete_clause_assembly_rejects_ambiguous_fragment() -> None:
+    clause = {"source_text": "Access is provided. Access is provided."}
+    revision = {
+        "replacement_source_text": "Access is provided.",
+        "revised_text": "Access is documented.",
+    }
+    with pytest.raises(RevisedContractCandidateError, match="clause_match_not_unique"):
+        full_proposed_clause_text(clause, revision)
 
 
 def _write_minimal_docx_package(package: zipfile.ZipFile, document: bytes) -> None:
@@ -664,9 +715,7 @@ def test_reviewed_protocol_distinguishes_same_numbered_clause_in_two_sources() -
     wrong_source_protocol_view["clauses"][1]["source_name"] = "Contract A.docx"
     wrong_source_protocol = render_tender_disagreement_protocol_docx(wrong_source_protocol_view)
     with pytest.raises(RevisedContractCandidateError, match="protocol_mapping_invalid"):
-        render_revised_contract_source_package(
-            sources, view, protocol_docx=wrong_source_protocol
-        )
+        render_revised_contract_source_package(sources, view, protocol_docx=wrong_source_protocol)
 
 
 def test_reviewed_package_rejects_stale_or_unrelated_protocol() -> None:

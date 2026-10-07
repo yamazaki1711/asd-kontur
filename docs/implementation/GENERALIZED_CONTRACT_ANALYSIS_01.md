@@ -2418,3 +2418,25 @@ contract-analysis results and no queued/leased/running durable job. This
 release changes the report/UI explanation only; it does not add a new legal
 finding or alter public project data. The recurring launchd bootstrap race
 remains an Operations automation defect to address in a separate checkpoint.
+
+## Complete contractor clause wording in protocol — 2026-10-08
+
+A read-only export from the existing public contract process exposed a
+professional-output defect: some accepted revisions replace only a span of a
+clause, but the disagreement protocol displayed that span's proposed wording
+as if it were the complete contractor clause. The revised source DOCX already
+applied the exact span in context. The assessment report and protocol/package
+assembly now use one deterministic full-clause reconstruction, with the same
+exact-match and punctuation/numbering controls as the source edit. Ambiguous
+source spans fail closed. No Qwen interpretation, public project row, prompt,
+or source document was changed.
+
+Five existing revisions were reconstructed against persisted source wording
+without ambiguity. The re-rendered public-workspace protocol has two nonempty
+A4 pages, no out-of-page text and no words within six points of a page edge;
+both pages were visually inspected. The revised contract source has one
+right-edge overflow on page 14 of 30, also present on page 14 of the uploaded
+original DOCX. That source-inherited layout defect remains a manual document
+review item, not a change introduced by this reconstruction. The protocol is
+an editable candidate, not an agreed legal instrument. Unresolved referenced
+attachments and bounded-context coherence review remain substantive limits.

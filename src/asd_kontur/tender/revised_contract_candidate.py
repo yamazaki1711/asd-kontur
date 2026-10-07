@@ -48,6 +48,42 @@ class RevisedContractCandidateError(ValueError):
     """A full revised contract cannot be produced without changing unsupported content."""
 
 
+def full_proposed_clause_text(clause: Mapping[str, Any], revision: Mapping[str, Any]) -> str:
+    """Assemble the whole proposed clause when the approved edit covers a fragment.
+
+    A protocol must not present a replacement fragment as a complete clause. The
+    edit is applied only to one exact span in the persisted source wording; if
+    that span cannot be located uniquely, the contractor wording is unavailable.
+    """
+
+    original = str(clause.get("source_text") or "")
+    replacement_source = str(revision.get("replacement_source_text") or original)
+    proposed = str(revision.get("revised_text") or "").strip()
+    if not proposed:
+        raise RevisedContractCandidateError("revised_contract_exact_clause_text_unavailable")
+    if contract_proposed_wording_has_placeholder(proposed):
+        raise RevisedContractCandidateError("revised_contract_unresolved_placeholder")
+    if not original.strip() and not str(revision.get("replacement_source_text") or "").strip():
+        return proposed
+    if not original.strip() or not replacement_source.strip():
+        raise RevisedContractCandidateError("revised_contract_exact_clause_text_unavailable")
+    span = _exact_fragment_span(original, replacement_source)
+    if span is None:
+        raise RevisedContractCandidateError("revised_contract_clause_match_not_unique")
+    source_number = _CLAUSE_NUMBER.match(replacement_source)
+    if source_number is not None:
+        proposed_number = _CLAUSE_NUMBER.match(proposed)
+        if proposed_number is None:
+            proposed = source_number.group("prefix") + proposed
+        elif proposed_number.group("number") != source_number.group("number"):
+            raise RevisedContractCandidateError("revised_contract_clause_number_changed")
+    start, end = span
+    suffix = original[end:]
+    if proposed and suffix and proposed[-1] == suffix[0] and suffix[0] in ".;:!?":
+        suffix = suffix[1:]
+    return original[:start] + proposed + suffix
+
+
 def _validate_unchanged_pdf(content: bytes) -> None:
     """Check readability without changing a source appendix or implying editability."""
 
@@ -168,7 +204,7 @@ def render_revised_contract_source_package(
                 (
                     display_protocol_clause_reference(clause),
                     str(clause.get("source_text") or ""),
-                    str(revision.get("revised_text") or ""),
+                    full_proposed_clause_text(clause, revision),
                 )
             )
         manifest_sources.append(
