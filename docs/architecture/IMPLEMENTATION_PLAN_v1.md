@@ -100,6 +100,18 @@ Qwen and NTD were not restarted. No authenticated owner-browser or new
 real-project overflow result is claimed. FFC-01 remains `PARTIAL`; continue
 the full four-mode sequence.
 
+Follow-up application release `f9e6d57a50fb215900000ddba5c2501c077e96e3`
+corrects the effective-wording boundary: if two related clauses both have
+proposed revisions, local Qwen receives the proposed counterpart, and
+deterministic quote validation rejects a conflict grounded only in the
+superseded original. UI and editable report label proposed counterpart text
+explicitly. A changed-corpus one-page DOCX reopened and passed visual review.
+After controlled cutover, API readiness passed; autonomous orchestration
+queued two items and persistent Qwen completed three requests without Codex
+queue action. The result-to-project binding is not established by the
+content-minimal logs, and authenticated owner-browser acceptance remains
+unavailable. FFC-01 and ProductReady remain `PARTIAL` and false.
+
 Checkpoint 2026-10-07 (Asia/Kamchatka): public application release
 `039ce694a10200a2f24e7cadda61b9c8cd6a58ac` runs migration
 `0134_contract_coherence_profile_v2`. Five owner-workspace contract coherence

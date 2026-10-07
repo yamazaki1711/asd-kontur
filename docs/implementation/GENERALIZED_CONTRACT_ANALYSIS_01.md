@@ -2171,5 +2171,19 @@ one silently. The task digest changes only where the effective context
 changes, so unrelated accepted reviews remain reusable. Changed-corpus tests
 cover the proposed-versus-proposed conflict and rejected original-only quote;
 the synthetic one-page DOCX was reopened, rendered and visually inspected.
-This source slice has not yet been deployed, and it does not certify legal
-coherence of unreviewed clauses or authority to adopt any proposal.
+The exact code SHA `f9e6d57a50fb215900000ddba5c2501c077e96e3`
+was staged at
+`~/.asd-kontur/public-demo/releases/20261007-f9e6d57-effective-contract-review`.
+It passed 97 focused contract tests, frontend typecheck/build and 4/4
+launchd topology preflight. A controlled cutover restarted only the four
+application roles; API readiness returned healthy on unchanged migration
+`0134_contract_coherence_profile_v2`. Qwen and NTD retained their PIDs.
+During one bounded, command-free observation, the supervised orchestrator
+reported two newly queued items for one active scope and the persistent Qwen
+service's completed-request counter rose from 974 to 977, then returned to
+idle. The content-minimal logs do not bind these requests to accepted
+contract-review results, so real-project professional-output acceptance
+remains unverified. The browser surface was unavailable in this session;
+no authenticated owner UI/download acceptance is claimed. This release does
+not certify legal coherence of unreviewed clauses or authority to adopt any
+proposal.

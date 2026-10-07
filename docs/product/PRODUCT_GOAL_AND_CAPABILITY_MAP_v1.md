@@ -239,6 +239,16 @@ coverage, but it does not certify the entire revised contract, authorize
 negotiated wording, or pass an authenticated owner-browser deliverable check.
 The FFC-01 whole-journey state remains `PARTIAL`.
 
+Release `f9e6d57a50fb215900000ddba5c2501c077e96e3` additionally compares
+a proposed clause against the effective proposed wording of a singly revised
+related clause. The original remains source-linked, but the displayed quote
+is identified as candidate wording; an original-only quote is rejected by
+the Qwen-result validator. Isolated changed-corpus tests and a visually
+rendered editable report passed. The application release is healthy and the
+supervised runtime continued to enqueue work and call Qwen without manual
+queue commands. It has not yet passed authenticated owner-output or complete
+contract-journey acceptance. FFC-01 stays `PARTIAL`.
+
 FFC-01 remains `PARTIAL` after the 7 October contract output checkpoint. The
 delivered application release is
 `1be4a7f0d5aad9368c904e17034acfa3f0ce6d31` on migration
