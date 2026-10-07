@@ -33,3 +33,16 @@ candidates, one-to-many commercial ambiguity and same-role false positives.
 
 FFC-02 remains `PARTIAL`, and ProductReady remains false. Authenticated owner
 UI and full professional Tender acceptance are still required.
+
+## Controlled release
+
+The source change is deployed as exact application SHA
+`962ae7f7ec6a40643c9d135ad0bc6bf27de757a2` on unchanged migration
+`0142_audit_id_document_interpretation`. The API, worker, assistant worker and
+project orchestrator all reported that SHA after controlled cutover; API
+readiness passed and the frontend returned HTTP 200. The existing frontend
+build was carried forward unchanged. Qwen and NTD worker process identities
+were unchanged. The live durable queue was empty before cutover. Focused
+Tender tests passed 216/216; ruff and diff checks passed. Authenticated
+browser acceptance was not performed, and this release is not a Tender-mode
+PASS.
