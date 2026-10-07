@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 import urllib.request
 import zipfile
@@ -31,6 +32,7 @@ from asd_kontur.application_spine.orchestrator import ProjectOrchestrator
 from asd_kontur.application_spine.postgres import SpinePostgresRepository
 from asd_kontur.application_spine.worker import DocumentWorker
 from asd_kontur.tender.qwen_contract_analysis import contract_proposed_wording_has_placeholder
+from asd_kontur.tender.revised_contract_candidate import full_proposed_clause_text
 from asd_kontur.web_app import create_app
 
 from .conftest import PostgreSQLEnvironment
@@ -114,7 +116,7 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,
 ) -> None:
-    if any(shutil.which(tool) is None for tool in ("soffice", "pdfinfo", "pdftoppm")):
+    if any(shutil.which(tool) is None for tool in ("soffice", "pdfinfo", "pdftoppm", "pdftotext")):
         pytest.skip("DOCX page-rendering tools are unavailable")
     if not _qwen_idle():
         pytest.skip("Persistent Qwen is occupied; do not compete with owner processing")
@@ -292,6 +294,15 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
             assert artifact.status_code == 200, (suffix, artifact.text[:300])
             assert artifact.content
             (tmp_path / suffix).write_bytes(artifact.content)
+        protocol_text = _docx_text((tmp_path / "disagreement-protocol.docx").read_bytes())
+        clauses_by_identity = {
+            (str(item["clause_id"]), str(item["clause_version"])): item for item in clauses
+        }
+        for revision in view.get("revised_clauses") or []:
+            clause = clauses_by_identity[
+                (str(revision["source_clause_id"]), str(revision["source_clause_version"]))
+            ]
+            assert full_proposed_clause_text(clause, revision) in protocol_text
         for name in ("disagreement-protocol", "revised-contract"):
             source = tmp_path / f"{name}.docx"
             converted = subprocess.run(
@@ -326,6 +337,20 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
                 check=True,
             )
             assert len(list(tmp_path.glob(f"{name}-page-*.png"))) == page_count
+            layout_result = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve().parents[2] / "tools/qualify_contract_pages.py"),
+                    str(pdf),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=True,
+            )
+            layout = json.loads(layout_result.stdout)[0]
+            assert layout["empty_pages"] == []
+            assert layout["out_of_page_text_pages"] == []
         revised = client.get(f"/api/v1/workspaces/{workspace_id}/tender/revised-contract.docx")
         revised_text = _docx_text(revised.content)
         assert not contract_proposed_wording_has_placeholder(revised_text)

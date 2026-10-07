@@ -2453,3 +2453,15 @@ after inspection; they remain reproducible from the workspace. A first
 launchd bootstrap sometimes returned I/O error 5 while the old process was
 still in `SIGTERMed`; the orchestrator was resumed after its old process exited.
 This is a release-operations race to eliminate, not a semantic processing job.
+
+An isolated contract-only journey was rerun with the persistent local Qwen
+runtime and a disposable PostgreSQL database. The first strengthened run
+failed because its newly added layout assertion invoked a checker that had
+mistakenly been removed from the source tree; it was restored, and no public
+project or production queue was changed. The repeated run passed 1/1 in
+189.74 seconds. It checked source-bound complete contractor wording in the
+editable protocol, rendered both editable DOCX artifacts, and verified that
+every rendered page was nonempty and had no out-of-page text. The test database
+was dropped by the fixture. Qwen's persistent process remained healthy and
+returned to idle. This is a controlled contract-only acceptance, not an
+authenticated owner-browser pass or whole-contract legal approval.
