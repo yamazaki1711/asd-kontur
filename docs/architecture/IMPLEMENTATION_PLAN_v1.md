@@ -51,9 +51,14 @@ Audit cases, including a forged clean report rejection; frontend
 typecheck/build passed. All four application launchd roles run the exact SHA;
 API readiness and frontend HTTP 200 passed, Qwen/NTD were not restarted and
 the live application job queue was empty at cutover. This is a safety slice,
-not FFC-04 or Audit-mode acceptance. The next source checkpoint adds a
-paginated admitted-document inventory to the Audit screen, still explicitly
-unexamined until semantic ID classification and independent checks exist.
+not FFC-04 or Audit-mode acceptance. Follow-up application release
+`f57090088b6a9ce5d90055ea9632fdd7a1bb0426` adds a paginated admitted-
+document inventory to the Audit screen, still explicitly unexamined until
+semantic ID classification and independent checks exist. All four roles run
+that exact release with API readiness/frontend HTTP 200; Qwen/NTD remain
+unchanged. The next dependency is a genuine Qwen-grounded ID document type
+and work-scope interpretation feeding independent document/content checks,
+not another package-only projection. FFC-04 remains `NOT VERIFIED`.
 
 Checkpoint 2026-10-07 (later): the owner-supplied mandate in
 `/Users/oleg/Downloads/ASD_KONTUR_FULL_FUNCTIONAL_COMPLETION_EN.md` was read

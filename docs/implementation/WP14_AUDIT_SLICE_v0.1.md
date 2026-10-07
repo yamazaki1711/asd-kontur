@@ -33,6 +33,14 @@ admission/extraction state. It explicitly says that document type, content,
 signatures and ID completeness remain unexamined. This prevents an empty
 Support package from being mistaken for an inventory of user-uploaded ID; it
 does not yet classify individual ID forms or generate independent findings.
+This UI is deployed in application release
+`f57090088b6a9ce5d90055ea9632fdd7a1bb0426` on unchanged migration
+`0141_contract_reference_partial_package`. Frontend typecheck, lint, build
+and exact-release Audit focused tests passed; private launchd preflight passed
+4/4 and API readiness/frontend HTTP 200 passed after cutover. The current
+owner workspace still has 21 document versions. Authenticated owner-browser
+inspection remains unverified because no connected browser session was
+available. This is an inventory bridge, not Audit-mode acceptance.
 
 ## 1. Scope and boundary
 
