@@ -37,3 +37,17 @@ The corrected protocol was regenerated through the application service from
 the same owner-scoped structured view, reopened and visually checked on both
 pages. The revised-source package also regenerated without a mapping error.
 The contractor proposals remain review candidates, not accepted amendments.
+
+## Release state
+
+Exact source `28d56fc16f371306277fe4f8d52e57ae31a2ccb9` is deployed to the
+four supervised application roles from
+`~/.asd-kontur/public-demo/releases/20261008-28d56fc-contract-protocol-source`.
+The exact release passed 70/70 focused contract/report tests and Ruff. It
+reused the unchanged frontend build, which was verified source-identical to
+the prior release; migration remains `0141_contract_reference_partial_package`.
+The deployment was cut over with no queued, leased or running durable jobs.
+API readiness passed. Qwen and NTD processes retained their PIDs, and the
+platform-only data fingerprint stayed
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+The owner-authenticated browser download was not available for verification.
