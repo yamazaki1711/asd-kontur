@@ -17,7 +17,7 @@ from typing import cast
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-CONTRACT_REFERENCE_PROFILE = "qwen-contract-references-v1"
+CONTRACT_REFERENCE_PROFILE = "qwen-contract-references-v2"
 CONTRACT_REFERENCE_CONTRACT = "contract-references-candidate@1.0.0"
 _REFERENCE_KINDS = frozenset(
     {"attachment", "technical_assignment", "schedule", "estimate", "drawing", "other"}
@@ -69,13 +69,27 @@ class QwenContractReferenceReviewer:
             prompt_rows.append(
                 {"source_locator_id": locator, "page": row.get("page"), "text": value}
             )
-        inventory: dict[str, str] = {}
+        inventory: dict[str, dict[str, object]] = {}
         for source in sources:
             source_id = str(source.get("source_version_id") or "")
             title = " ".join(str(source.get("safe_display_name") or "").split())
-            if not source_id or not title or source_id in inventory:
+            excerpt = " ".join(str(source.get("first_page_excerpt") or "").split())
+            locators = source.get("excerpt_source_locator_ids", [])
+            if (
+                not source_id
+                or not title
+                or source_id in inventory
+                or len(excerpt) > 160
+                or not isinstance(locators, list)
+                or len(locators) > 3
+                or any(not isinstance(locator, str) or not locator for locator in locators)
+            ):
                 raise QwenSemanticFailure("qwen_contract_reference_inventory_invalid")
-            inventory[source_id] = title
+            inventory[source_id] = {
+                "safe_display_name": title,
+                "first_page_excerpt": excerpt,
+                "excerpt_source_locator_ids": locators,
+            }
         if sum(map(len, allowed_text.values())) > _MAX_CONTEXT_CHARS:
             raise QwenSemanticFailure("qwen_contract_reference_context_too_large")
         prompt = _prompt(prompt_rows, inventory)
@@ -86,7 +100,14 @@ class QwenContractReferenceReviewer:
                 raise
             return self._split_review(rows, sources)
         try:
-            parsed = parse_contract_references(raw, allowed_text=allowed_text, inventory=inventory)
+            parsed = parse_contract_references(
+                raw,
+                allowed_text=allowed_text,
+                inventory={
+                    source_id: str(item["safe_display_name"])
+                    for source_id, item in inventory.items()
+                },
+            )
         except QwenSemanticFailure as exc:
             if exc.code not in {
                 "qwen_contract_reference_invalid_json",
@@ -112,7 +133,12 @@ class QwenContractReferenceReviewer:
                     max_tokens=3000,
                 )
                 parsed = parse_contract_references(
-                    repair, allowed_text=allowed_text, inventory=inventory
+                    repair,
+                    allowed_text=allowed_text,
+                    inventory={
+                        source_id: str(item["safe_display_name"])
+                        for source_id, item in inventory.items()
+                    },
                 )
             except QwenSemanticFailure as repair_error:
                 if (
@@ -214,11 +240,14 @@ def parse_contract_references(
     return output
 
 
-def _prompt(rows: list[dict[str, object]], inventory: Mapping[str, str]) -> str:
+def _prompt(rows: list[dict[str, object]], inventory: Mapping[str, Mapping[str, object]]) -> str:
     return (
         "Ты проверяешь только ссылки строительного договора на другие документы. "
-        "CONTEXT — ограниченный точный текст договора. INVENTORY — все принятые документы "
-        "проекта, перечисленные для этой задачи. Не считай отсутствие документа доказанным, "
+        "CONTEXT — ограниченный точный текст договора. INVENTORY — принятые документы "
+        "проекта с именем файла и короткой дословной выдержкой с начальной страницы. "
+        "Выдержка может быть заголовком или обычным упоминанием: не принимай её за "
+        "подтверждённое название документа без явной связи. Не считай отсутствие "
+        "документа доказанным, "
         "если ссылка неоднозначна. Не анализируй риски или право. Найди прямые ссылки на "
         "приложения, техническое задание, графики, сметы, чертежи и другие документы, "
         "от которых зависит исполнение условия. source_quote — непрерывная дословная цитата "
@@ -234,10 +263,7 @@ def _prompt(rows: list[dict[str, object]], inventory: Mapping[str, str]) -> str:
         + json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
         + "\nINVENTORY:\n"
         + json.dumps(
-            [
-                {"source_version_id": source_id, "safe_display_name": title}
-                for source_id, title in inventory.items()
-            ],
+            [{"source_version_id": source_id, **item} for source_id, item in inventory.items()],
             ensure_ascii=False,
             separators=(",", ":"),
         )

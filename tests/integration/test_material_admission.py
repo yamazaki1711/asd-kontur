@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 import sqlalchemy as sa
@@ -27,7 +28,7 @@ from asd_kontur.support.material_application_postgres import (
 )
 from asd_kontur.web_app import create_app
 
-from .conftest import PostgreSQLEnvironment, run_migration
+from .conftest import PostgreSQLEnvironment, create_database, drop_database, run_migration
 from .test_common_domain_kernel import (
     DIGEST,
     _command,
@@ -47,23 +48,29 @@ def test_material_admission_migration_roundtrip_on_disposable_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", "1")
-    url = postgres_environment.owner_engine.url
-    run_migration(str(repository_root), url, "0135_support_incoming_inspection_preflights")
-    with postgres_environment.owner_engine.connect() as connection:
-        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
-            "0135_support_incoming_inspection_preflights"
-        )
-    run_migration(str(repository_root), url, "head")
-    with postgres_environment.owner_engine.connect() as connection:
-        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
-            "0139_field_document_project_role_boundary"
-        )
-    run_migration(str(repository_root), url, "0135_support_incoming_inspection_preflights")
-    with postgres_environment.owner_engine.connect() as connection:
-        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
-            "0135_support_incoming_inspection_preflights"
-        )
-    run_migration(str(repository_root), url, "head")
+    database_name = f"asd_g04_test_material_{uuid4().hex[:8]}"
+    admin = sa.create_engine(postgres_environment.cluster_admin_url, isolation_level="AUTOCOMMIT")
+    create_database(admin, database_name)
+    url = postgres_environment.cluster_admin_url.set(database=database_name)
+    isolated = sa.create_engine(url)
+    try:
+        run_migration(str(repository_root), url, "head")
+        run_migration(str(repository_root), url, "0135_support_incoming_inspection_preflights")
+        with isolated.connect() as connection:
+            assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
+                "0135_support_incoming_inspection_preflights"
+            )
+        run_migration(str(repository_root), url, "head")
+        with isolated.connect() as connection:
+            assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
+                "0140_contract_reference_inventory_context"
+            )
+        run_migration(str(repository_root), url, "0135_support_incoming_inspection_preflights")
+        run_migration(str(repository_root), url, "head")
+    finally:
+        isolated.dispose()
+        drop_database(admin, database_name)
+        admin.dispose()
 
 
 def _seed_batch_and_work(

@@ -34,6 +34,7 @@ from asd_kontur.tender.contract_coherence import (
     contract_coherence_job_key,
     contract_coherence_tasks,
 )
+from asd_kontur.tender.contract_reference_inventory import contract_reference_inventory
 from asd_kontur.tender.excavation_pit_inventory import build_excavation_pit_inventory
 from asd_kontur.tender.facility_work_projection import (
     build_facility_work_candidate_projection,
@@ -6798,14 +6799,12 @@ class SpinePostgresRepository:
         new review rather than silently retaining an outdated absence claim.
         """
 
-        inventory = [
-            {
-                "source_version_id": str(source["source_version_id"]),
-                "safe_display_name": str(source["safe_display_name"]),
-            }
-            for source in sources
-        ]
-        inventory.sort(key=lambda source: source["source_version_id"])
+        inventory = contract_reference_inventory(
+            session,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            sources=sources,
+        )
         inventory_digest = semantic_digest(inventory)
         current_contract_source_ids = [
             str(source["source_version_id"])

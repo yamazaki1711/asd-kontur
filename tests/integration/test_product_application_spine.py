@@ -2009,6 +2009,8 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
                 {
                     "source_version_id": str(source["source_version_id"]),
                     "safe_display_name": "terms.txt",
+                    "first_page_excerpt": source_text,
+                    "excerpt_source_locator_ids": [str(locator_id)],
                 }
             ]
             monkeypatch.setattr(

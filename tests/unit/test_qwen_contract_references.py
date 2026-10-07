@@ -70,6 +70,33 @@ def test_reviewer_persists_only_exact_citation_and_admitted_match(
     assert result["result_digest"].startswith("sha256:")
 
 
+def test_reviewer_receives_bounded_source_excerpt_when_filename_is_opaque(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        prompts.append(prompt)
+        return '{"references":[]}'
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_contract_references._complete", complete)
+    QwenContractReferenceReviewer("http://127.0.0.1:8765/v1").review(
+        [{"source_locator_id": "contract-line", "text": "See Appendix B for bridge sections."}],
+        admitted_sources=[
+            {
+                "source_version_id": "source-b",
+                "safe_display_name": "scan-018.pdf",
+                "first_page_excerpt": "Appendix B. Bridge section schedule",
+                "excerpt_source_locator_ids": ["source-title-line"],
+            }
+        ],
+    )
+    assert len(prompts) == 1
+    assert "Appendix B. Bridge section schedule" in prompts[0]
+    assert "source-title-line" in prompts[0]
+    assert "обычным упоминанием" in prompts[0]
+
+
 @pytest.mark.parametrize(
     "mutation",
     [

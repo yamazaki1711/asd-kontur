@@ -21,6 +21,7 @@ from asd_kontur.tender.contract_coherence import (
     contract_coherence_tasks,
     unreviewed_explicit_reference_count,
 )
+from asd_kontur.tender.contract_reference_inventory import contract_reference_inventory
 from asd_kontur.tender.qwen_contract_analysis import (
     CONTRACT_ANALYSIS_PROFILE,
     contract_commercial_narrative_without_unverified_authority,
@@ -266,10 +267,14 @@ class TenderContractAnalysisRepository:
             session.execute(
                 sa.text(
                     "SELECT DISTINCT v.source_version_id,v.safe_display_name,v.media_type FROM "
-                    "workspace.document_versions v JOIN workspace.document_role_decisions role ON "
+                    "workspace.document_versions v JOIN workspace.source_artifacts source ON "
+                    "source.organization_id=v.organization_id AND source.workspace_id=v.workspace_id "
+                    "AND source.source_artifact_id=v.source_artifact_id "
+                    "JOIN workspace.document_role_decisions role ON "
                     "role.organization_id=v.organization_id AND role.workspace_id=v.workspace_id AND "
                     "role.document_id=v.document_id AND role.document_version=v.version WHERE "
                     "v.organization_id=:o AND v.workspace_id=:w AND "
+                    "source.source_kind<>'field_document' AND source.status='active' AND "
                     "role.validator_version=:role_profile AND 'contract'=ANY(role.selected_roles) "
                     "AND EXISTS (SELECT 1 FROM workspace.document_version_activation_decisions active "
                     "WHERE active.organization_id=v.organization_id AND active.workspace_id=v.workspace_id "
@@ -291,12 +296,17 @@ class TenderContractAnalysisRepository:
                 session.scalar(
                     sa.text(
                         "SELECT EXISTS (SELECT 1 FROM workspace.document_versions v JOIN "
+                        "workspace.source_artifacts source ON "
+                        "source.organization_id=v.organization_id AND "
+                        "source.workspace_id=v.workspace_id AND "
+                        "source.source_artifact_id=v.source_artifact_id JOIN "
                         "workspace.document_role_decisions historical ON "
                         "historical.organization_id=v.organization_id AND "
                         "historical.workspace_id=v.workspace_id AND "
                         "historical.document_id=v.document_id AND "
                         "historical.document_version=v.version WHERE v.organization_id=:o AND "
-                        "v.workspace_id=:w AND historical.validator_version<>:role_profile AND "
+                        "v.workspace_id=:w AND source.source_kind<>'field_document' AND "
+                        "source.status='active' AND historical.validator_version<>:role_profile AND "
                         "'contract'=ANY(historical.selected_roles) AND EXISTS (SELECT 1 FROM "
                         "workspace.document_version_activation_decisions active WHERE "
                         "active.organization_id=v.organization_id AND "
@@ -402,8 +412,7 @@ class TenderContractAnalysisRepository:
             for source in contract_sources
         }
         source_is_docx_by_id = {
-            str(source["source_version_id"]): _is_docx_source(source)
-            for source in contract_sources
+            str(source["source_version_id"]): _is_docx_source(source) for source in contract_sources
         }
         source_ids = [UUID(value) for value in source_name_by_id]
         readable_elements = list(
@@ -424,7 +433,7 @@ class TenderContractAnalysisRepository:
             readable_elements=readable_elements,
             results=results,
         )
-        active_inventory = [
+        active_inventory_sources = [
             {
                 "source_version_id": str(row["source_version_id"]),
                 "safe_display_name": str(row["safe_display_name"]),
@@ -432,8 +441,13 @@ class TenderContractAnalysisRepository:
             for row in session.execute(
                 sa.text(
                     "SELECT v.source_version_id,v.safe_display_name FROM "
-                    "workspace.document_versions v WHERE v.organization_id=:o AND "
+                    "workspace.document_versions v JOIN workspace.source_artifacts source "
+                    "ON source.organization_id=v.organization_id AND "
+                    "source.workspace_id=v.workspace_id AND "
+                    "source.source_artifact_id=v.source_artifact_id "
+                    "WHERE v.organization_id=:o AND "
                     "v.workspace_id=:w AND v.media_type<>'application/zip' AND "
+                    "source.source_kind<>'field_document' AND source.status='active' AND "
                     "v.version=(SELECT a.selected_document_version FROM "
                     "workspace.document_version_activation_decisions a WHERE "
                     "a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id "
@@ -443,6 +457,12 @@ class TenderContractAnalysisRepository:
                 {"o": organization_id, "w": workspace_id},
             ).mappings()
         ]
+        active_inventory = contract_reference_inventory(
+            session,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            sources=active_inventory_sources,
+        )
         inventory_digest = semantic_digest(active_inventory)
         reference_jobs = list(
             session.execute(

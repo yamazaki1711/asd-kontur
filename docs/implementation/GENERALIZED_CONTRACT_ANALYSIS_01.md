@@ -1,5 +1,35 @@
 # Generalized Contract Analysis 01
 
+## Source-located contract-reference inventory — 2026-10-08 source checkpoint
+
+The v1 autonomous reference reviewer received a roster of admitted filenames
+only. The current real workspace's accepted v1 review contains 31 unresolved
+matches: 11 attachment, seven drawing, five schedule, five technical-assignment
+and three other references. This does not prove that those documents are
+missing. Filename-only context is an observed generic harness limit.
+
+Profile `qwen-contract-references-v2` gives the same local Qwen task a bounded
+first-page excerpt and source locator IDs for each eligible admitted document.
+The prompt explicitly warns that an excerpt can be a mere mention, not a
+document title; matching remains Qwen's semantic decision, and the existing
+validator requires an admitted source identity and an exact contract quote.
+One shared deterministic context assembler supplies both scheduling and the
+read model, so accepted results are bound to the current inventory digest.
+Field records are excluded from both the contract source set and reference
+inventory. Migration `0140_contract_reference_inventory_context` permits the
+new result profile while preserving v1 history and forbidding downgrade after
+v2 results have been accepted. The test migration roundtrip now uses its own
+disposable database rather than downgrading a shared fixture containing
+accepted results.
+
+The source checkpoint passed 38/38 focused unit and isolated PostgreSQL/API
+checks. A read-only real-workspace context assembly found 21 eligible sources,
+20 with first-page excerpts and a maximum excerpt length of 160 characters.
+No owner project result was manually inserted or Qwen job manually queued.
+Whether the new context resolves any of the 31 references remains unverified
+until supervised v2 processing finishes; unmatched references must stay
+explicitly unresolved. This checkpoint is not yet a public deployment.
+
 ## Visible Word-part revision guard — 2026-10-08 source checkpoint
 
 The format-preserving revised-contract renderer previously rejected unresolved
