@@ -396,3 +396,22 @@ basis across works, and exercise the refusal states. The isolated PostgreSQL
 test records two applications, checks zero remaining without duplicate
 delivery, reloads the API and rejects an unknown batch. No real owner stock
 or field quantity is inferred. Support-mode and ProductReady remain incomplete.
+
+The balance is deployed as exact source SHA
+`b939ec892a46ee0d6d6e3ceb42fa33a7c7e4a625` on unchanged migration
+`0138_support_material_use_evidence`. The exact release passed 38/38 focused
+unit, isolated PostgreSQL/API and lifecycle cases; frontend typecheck, lint
+and build passed. Private 4/4 launchd staging passed. The first bootstrap
+immediately after bootout hit the known I/O race; one bounded retry started
+all four application roles. API readiness, frontend HTTP 200, and the
+unauthenticated balance-route 401 passed. The served OpenAPI and staged
+artifact had the same normalized SHA-256
+`25d26fbf24927ec7f347784ff745565f1941609537022eee2a4121a80fc02b25`.
+The retained project still had 21 source versions and zero material
+applications, and the platform-only data fingerprint remained
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+Qwen and NTD were not restarted. Previous plists remain under
+`~/.asd-kontur/public-demo/launchd-backups/20261008-pre-b939ec8-material-balance/`.
+No owner-provided delivery/use facts or authenticated browser result are
+claimed. This is a usable calculation path for supplied facts, not a full
+Support acceptance.
