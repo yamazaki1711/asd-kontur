@@ -2850,14 +2850,14 @@ export interface components {
         };
         /** TenderContractAnalysisView */
         TenderContractAnalysisView: {
-            /** Attachment References */
-            attachment_references?: {
-                [key: string]: unknown;
-            }[];
             /** Assessment */
             assessment: {
                 [key: string]: unknown;
             } | null;
+            /** Attachment References */
+            attachment_references?: {
+                [key: string]: unknown;
+            }[];
             /** Authority Boundary */
             authority_boundary: string;
             /** Clauses */
@@ -2882,10 +2882,6 @@ export interface components {
             process: {
                 [key: string]: unknown;
             } | null;
-            /** Reference Review */
-            reference_review?: {
-                [key: string]: unknown;
-            };
             /** Project Context */
             project_context?: {
                 [key: string]: unknown;
@@ -2894,6 +2890,10 @@ export interface components {
             protocols: {
                 [key: string]: unknown;
             }[];
+            /** Reference Review */
+            reference_review?: {
+                [key: string]: unknown;
+            };
             /** Revised Clauses */
             revised_clauses: {
                 [key: string]: unknown;

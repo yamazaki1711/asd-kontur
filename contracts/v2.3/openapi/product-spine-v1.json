@@ -3760,6 +3760,14 @@
             ],
             "title": "Assessment"
           },
+          "attachment_references": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Attachment References",
+            "type": "array"
+          },
           "authority_boundary": {
             "title": "Authority Boundary",
             "type": "string"
@@ -3827,6 +3835,11 @@
             },
             "title": "Protocols",
             "type": "array"
+          },
+          "reference_review": {
+            "additionalProperties": true,
+            "title": "Reference Review",
+            "type": "object"
           },
           "revised_clauses": {
             "items": {

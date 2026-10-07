@@ -966,7 +966,9 @@ function WorkspacesPage() {
     }
     for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
       const key = window.localStorage.key(index);
-      const workspaceId = key?.match(/^asd-assistant-(?:open|conversation)-(.+)$/)?.[1];
+      const workspaceId = key?.match(
+        /^asd-assistant-(?:open|conversation)-(.+)$/,
+      )?.[1];
       if (key && workspaceId && !active.has(workspaceId)) {
         window.localStorage.removeItem(key);
       }
@@ -2722,7 +2724,10 @@ function TenderContractAnalysisBody({
   const attachmentReferences = (value.attachment_references ?? []) as Array<
     Record<string, unknown>
   >;
-  const referenceReview = (value.reference_review ?? {}) as Record<string, unknown>;
+  const referenceReview = (value.reference_review ?? {}) as Record<
+    string,
+    unknown
+  >;
   const issues = value.issues as Array<Record<string, unknown>>;
   const disagreementItems = value.disagreement_items as Array<
     Record<string, unknown>
@@ -2801,8 +2806,9 @@ function TenderContractAnalysisBody({
       </InfoNotice>
       {incompleteContractSources.length ? (
         <InfoNotice>
-          Анализ договорных документов ещё не завершён: {incompleteContractSources.join(", ")}.
-          Выводы и предложения относятся только к уже обработанному тексту.
+          Анализ договорных документов ещё не завершён:{" "}
+          {incompleteContractSources.join(", ")}. Выводы и предложения относятся
+          только к уже обработанному тексту.
         </InfoNotice>
       ) : null}
       {attachmentReferences.length ||
@@ -2814,7 +2820,10 @@ function TenderContractAnalysisBody({
             <p>Проверка ссылок на договорные документы продолжается.</p>
           ) : null}
           {referenceReview.status === "failed" ? (
-            <p>Часть ссылок не удалось проверить; состав приложений требует уточнения.</p>
+            <p>
+              Часть ссылок не удалось проверить; состав приложений требует
+              уточнения.
+            </p>
           ) : null}
           {attachmentReferences.length ? (
             <div className="table-wrap">
@@ -2834,7 +2843,10 @@ function TenderContractAnalysisBody({
                       <td>{displayValue(item.target_description, "—")}</td>
                       <td>
                         {item.match_decision === "matched"
-                          ? displayValue(item.matched_source_name, "Сопоставлен")
+                          ? displayValue(
+                              item.matched_source_name,
+                              "Сопоставлен",
+                            )
                           : "Соответствующий документ не установлен"}
                       </td>
                       <td>
@@ -2850,8 +2862,8 @@ function TenderContractAnalysisBody({
             </div>
           ) : null}
           <p>
-            Несопоставленная ссылка требует проверки состава. Она сама по себе не
-            доказывает, что приложение отсутствует.
+            Несопоставленная ссылка требует проверки состава. Она сама по себе
+            не доказывает, что приложение отсутствует.
           </p>
         </section>
       ) : null}
