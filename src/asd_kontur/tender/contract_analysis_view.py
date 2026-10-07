@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import (
     QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
 )
@@ -19,6 +20,7 @@ from asd_kontur.tender.qwen_contract_analysis import (
     contract_proposed_wording_is_grounded,
     contract_risk_controller_is_grounded,
 )
+from asd_kontur.tender.qwen_contract_references import CONTRACT_REFERENCE_PROFILE
 
 _CONTRACT_ANALYSIS_READ_PROFILES = (
     CONTRACT_ANALYSIS_PROFILE,
@@ -389,8 +391,86 @@ class TenderContractAnalysisRepository:
             readable_elements=readable_elements,
             results=results,
         )
+        active_inventory = [
+            {
+                "source_version_id": str(row["source_version_id"]),
+                "safe_display_name": str(row["safe_display_name"]),
+            }
+            for row in session.execute(
+                sa.text(
+                    "SELECT v.source_version_id,v.safe_display_name FROM "
+                    "workspace.document_versions v WHERE v.organization_id=:o AND "
+                    "v.workspace_id=:w AND v.media_type<>'application/zip' AND "
+                    "v.version=(SELECT a.selected_document_version FROM "
+                    "workspace.document_version_activation_decisions a WHERE "
+                    "a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id "
+                    "AND a.document_id=v.document_id ORDER BY a.decision_version DESC LIMIT 1) "
+                    "ORDER BY v.source_version_id"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            ).mappings()
+        ]
+        inventory_digest = semantic_digest(active_inventory)
+        reference_jobs = list(
+            session.execute(
+                sa.text(
+                    "SELECT job_id,state,input_digest FROM workspace.durable_jobs WHERE organization_id=:o "
+                    "AND workspace_id=:w AND job_kind='CONTRACT_REFERENCE_REVIEW' AND "
+                    "input_manifest->>'contract_reference_profile'=:profile AND "
+                    "input_manifest->>'source_inventory_digest'=:inventory AND "
+                    "input_manifest->>'source_version_id'=ANY(:sources)"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "profile": CONTRACT_REFERENCE_PROFILE,
+                    "inventory": inventory_digest,
+                    "sources": list(source_name_by_id),
+                },
+            ).mappings()
+        )
+        reference_active = any(
+            str(job["state"]) in {"queued", "leased", "running"} for job in reference_jobs
+        )
+        accepted_reference_digests = {
+            str(job["input_digest"])
+            for job in reference_jobs
+            if str(job["state"]) == "succeeded"
+        }
+        reference_failed = any(
+            str(job["state"]) in {"failed", "reconciliation_required"}
+            and str(job["input_digest"]) not in accepted_reference_digests
+            for job in reference_jobs
+        )
+        reference_results = list(
+            session.execute(
+                sa.text(
+                    "SELECT result.source_version_id,result.result_manifest FROM "
+                    "workspace.contract_analysis_results result JOIN workspace.durable_jobs job "
+                    "ON job.organization_id=result.organization_id AND "
+                    "job.workspace_id=result.workspace_id AND job.job_id=result.job_id WHERE "
+                    "result.organization_id=:o AND result.workspace_id=:w AND "
+                    "result.profile_version=:profile AND job.state='succeeded' AND "
+                    "job.input_manifest->>'source_inventory_digest'=:inventory AND "
+                    "result.source_version_id=ANY(:sources)"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "profile": CONTRACT_REFERENCE_PROFILE,
+                    "inventory": inventory_digest,
+                    "sources": source_ids,
+                },
+            ).mappings()
+        )
         analysis_complete = (
-            bool(results) and effective_run_terminal and not failed and not uncovered_sources
+            bool(results)
+            and effective_run_terminal
+            and not failed
+            and not uncovered_sources
+            and not reference_active
+            and not reference_failed
+            and len(active_inventory) <= 64
         )
         locator_page_by_id = {
             str(row["source_locator_id"]): int(row["page_number"])
@@ -404,6 +484,33 @@ class TenderContractAnalysisRepository:
                 {"o": organization_id, "w": workspace_id, "sources": source_ids},
             ).mappings()
         }
+        attachment_references: list[dict[str, Any]] = []
+        seen_references: set[str] = set()
+        for result in reference_results:
+            source_id = str(result["source_version_id"])
+            manifest = result["result_manifest"]
+            if not isinstance(manifest, dict):
+                continue
+            for raw in manifest.get("references") or ():
+                if not isinstance(raw, dict):
+                    continue
+                locator_id = str(raw.get("source_locator_id") or "")
+                quote = str(raw.get("source_quote") or "")
+                if not locator_id or not quote:
+                    continue
+                reference_id = str(uuid5(workspace_id, f"contract-reference:{source_id}:{locator_id}:{quote}"))
+                if reference_id in seen_references:
+                    continue
+                seen_references.add(reference_id)
+                attachment_references.append(
+                    {
+                        **raw,
+                        "reference_id": reference_id,
+                        "source_version_id": source_id,
+                        "source_name": source_name_by_id.get(source_id),
+                        "source_page": locator_page_by_id.get(locator_id),
+                    }
+                )
         clauses: list[dict[str, Any]] = []
         issues: list[dict[str, Any]] = []
         disagreement_items: list[dict[str, Any]] = []
@@ -561,6 +668,14 @@ class TenderContractAnalysisRepository:
             gaps.append("CONTRACT_ANALYSIS_BATCH_FAILURES")
         if uncovered_sources:
             gaps.append("CONTRACT_ANALYSIS_SOURCE_COVERAGE_INCOMPLETE")
+        if reference_active:
+            gaps.append("CONTRACT_REFERENCE_REVIEW_IN_PROGRESS")
+        if reference_failed:
+            gaps.append("CONTRACT_REFERENCE_REVIEW_FAILED")
+        if len(active_inventory) > 64:
+            gaps.append("CONTRACT_REFERENCE_INVENTORY_LIMIT")
+        if any(item["match_decision"] == "unresolved" for item in attachment_references):
+            gaps.append("CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED")
         if results and not issues:
             gaps.append("CONTRACT_RISKS_NOT_IDENTIFIED_IN_COMPLETED_BATCHES")
         revised_source_ids = {
@@ -617,7 +732,16 @@ class TenderContractAnalysisRepository:
                 "updated_at": max((result["recorded_at"] for result in results), default=None),
             },
             "assessment": {
-                "status": "partial" if active or failed or uncovered_sources else "complete",
+                "status": (
+                    "partial"
+                    if active
+                    or failed
+                    or uncovered_sources
+                    or reference_active
+                    or reference_failed
+                    or len(active_inventory) > 64
+                    else "complete"
+                ),
                 "required_source_classes": ["draft_contract"],
                 "available_source_classes": ["draft_contract"],
                 "missing_source_classes": [],
@@ -639,6 +763,23 @@ class TenderContractAnalysisRepository:
                 },
             },
             "clauses": clauses,
+            "attachment_references": attachment_references,
+            "reference_review": {
+                "status": (
+                    "failed"
+                    if reference_failed
+                    else "in_progress"
+                    if reference_active
+                    else "complete"
+                    if reference_jobs and not reference_active and not reference_failed
+                    else "not_routed"
+                ),
+                "reviewed_batches": len(reference_results),
+                "scheduled_batches": len(reference_jobs),
+                "unresolved_references": sum(
+                    item["match_decision"] == "unresolved" for item in attachment_references
+                ),
+            },
             "issues": issues,
             "protocols": [],
             "disagreement_items": disagreement_items,
@@ -897,6 +1038,8 @@ def _empty_candidate_projection(*, status: str, gaps: list[str]) -> dict[str, An
         "process": None,
         "assessment": None,
         "clauses": [],
+        "attachment_references": [],
+        "reference_review": {"status": "not_routed", "reviewed_batches": 0, "scheduled_batches": 0, "unresolved_references": 0},
         "issues": [],
         "protocols": [],
         "disagreement_items": [],

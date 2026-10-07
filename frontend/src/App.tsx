@@ -2719,6 +2719,10 @@ function TenderContractAnalysisBody({
   workspaceId: string;
 }) {
   const clauses = value.clauses as Array<Record<string, unknown>>;
+  const attachmentReferences = (value.attachment_references ?? []) as Array<
+    Record<string, unknown>
+  >;
+  const referenceReview = (value.reference_review ?? {}) as Record<string, unknown>;
   const issues = value.issues as Array<Record<string, unknown>>;
   const disagreementItems = value.disagreement_items as Array<
     Record<string, unknown>
@@ -2800,6 +2804,56 @@ function TenderContractAnalysisBody({
           Анализ договорных документов ещё не завершён: {incompleteContractSources.join(", ")}.
           Выводы и предложения относятся только к уже обработанному тексту.
         </InfoNotice>
+      ) : null}
+      {attachmentReferences.length ||
+      referenceReview.status === "in_progress" ||
+      referenceReview.status === "failed" ? (
+        <section className="panel">
+          <h2>Документы, на которые ссылается договор</h2>
+          {referenceReview.status === "in_progress" ? (
+            <p>Проверка ссылок на договорные документы продолжается.</p>
+          ) : null}
+          {referenceReview.status === "failed" ? (
+            <p>Часть ссылок не удалось проверить; состав приложений требует уточнения.</p>
+          ) : null}
+          {attachmentReferences.length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ссылка в договоре</th>
+                    <th>На что ссылается</th>
+                    <th>Загруженный документ</th>
+                    <th>Источник</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attachmentReferences.map((item, index) => (
+                    <tr key={displayValue(item.reference_id, String(index))}>
+                      <td>{displayValue(item.source_quote, "—")}</td>
+                      <td>{displayValue(item.target_description, "—")}</td>
+                      <td>
+                        {item.match_decision === "matched"
+                          ? displayValue(item.matched_source_name, "Сопоставлен")
+                          : "Соответствующий документ не установлен"}
+                      </td>
+                      <td>
+                        {displayValue(item.source_name, "Договор")}
+                        {item.source_page != null
+                          ? `, стр. ${displayValue(item.source_page, "")}`
+                          : ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          <p>
+            Несопоставленная ссылка требует проверки состава. Она сама по себе не
+            доказывает, что приложение отсутствует.
+          </p>
+        </section>
       ) : null}
       <div className="candidate-actions">
         <a

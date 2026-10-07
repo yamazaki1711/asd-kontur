@@ -96,6 +96,43 @@ def test_contract_report_explains_role_reclassification_in_product_language() ->
     assert "CONTRACT_SOURCE_RECLASSIFICATION_PENDING" not in report_xml
 
 
+def test_contract_reference_is_visible_in_editable_outputs_without_false_absence_claim() -> None:
+    view = {
+        "status": "drafted",
+        "clauses": [],
+        "issues": [],
+        "disagreement_items": [],
+        "revised_clauses": [],
+        "deliverables": [],
+        "gaps": ["CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED"],
+        "attachment_references": [
+            {
+                "reference_id": "reference-1",
+                "source_quote": "Annex C",
+                "target_description": "delivery timetable",
+                "kind": "schedule",
+                "match_decision": "unresolved",
+                "source_version_id": "source-a",
+                "source_locator_id": "locator-a",
+                "source_name": "Draft agreement.docx",
+                "source_page": 7,
+            }
+        ],
+    }
+    with zipfile.ZipFile(io.BytesIO(render_tender_contract_analysis_docx(view))) as package:
+        report_xml = package.read("word/document.xml").decode("utf-8")
+    assert "Annex C" in report_xml
+    assert "Соответствующий документ не установлен" in report_xml
+    assert "не доказывает отсутствие приложения" in report_xml
+    assert "CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED" not in report_xml
+    rows = list(
+        csv.DictReader(io.StringIO(render_tender_contract_analysis_csv(view).decode("utf-8-sig")))
+    )
+    reference = next(row for row in rows if row["row_kind"] == "contract_reference")
+    assert reference["source_locator_id"] == "locator-a"
+    assert reference["state"] == "unresolved"
+
+
 def test_contract_only_input_declares_unperformed_project_cross_checks() -> None:
     checks = _contract_cross_check_coverage({"documents": [{"document_role": "Договор"}]})
     assert {item["status"] for item in checks} == {"input_not_established"}

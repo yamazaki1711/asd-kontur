@@ -2416,6 +2416,19 @@ def _assistant_contract_analysis(view: Mapping[str, Any], *, limit: int = 24) ->
 
     assessment = view.get("assessment")
     assessment_mapping = dict(assessment) if isinstance(assessment, Mapping) else {}
+    referenced_documents = [
+        {
+            "exact_contract_reference": item.get("source_quote"),
+            "referenced_document": item.get("target_description"),
+            "admitted_document": item.get("matched_source_name"),
+            "match_state": item.get("match_decision"),
+            "source_document": item.get("source_name"),
+            "source_page": item.get("source_page"),
+            "source_locator_ids": [item.get("source_locator_id")],
+        }
+        for item in view.get("attachment_references") or ()
+        if isinstance(item, Mapping) and item.get("source_locator_id")
+    ]
     return {
         "status": view.get("status"),
         "source_documents": list(assessment_mapping.get("source_names") or ()),
@@ -2423,10 +2436,15 @@ def _assistant_contract_analysis(view: Mapping[str, Any], *, limit: int = 24) ->
             "clause_count": len(clauses),
             "contractor_risk_count": len(issues),
             "proposed_revision_count": len(disagreements),
+            "referenced_document_count": len(referenced_documents),
+            "unresolved_reference_count": sum(
+                item["match_state"] == "unresolved" for item in referenced_documents
+            ),
         },
         "relevant_clauses": [professional_clause(item) for item in selected_clauses[:limit]],
         "contractor_risks": professional_risks,
         "proposed_revisions": proposed_revisions,
+        "referenced_documents": referenced_documents[:limit],
         "deliverables": [
             {
                 "kind": item.get("deliverable_kind"),
@@ -2474,6 +2492,7 @@ def _focused_contract_analysis(
         **common,
         "contractor_risks": list(contract_analysis.get("contractor_risks") or ())[:limit],
         "proposed_revisions": list(contract_analysis.get("proposed_revisions") or ())[:limit],
+        "referenced_documents": list(contract_analysis.get("referenced_documents") or ())[:limit],
     }
 
 

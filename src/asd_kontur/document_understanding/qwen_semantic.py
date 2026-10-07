@@ -244,6 +244,21 @@ class QwenDocumentSemanticAdapter:
             timeout_seconds=self._timeout_seconds,
         ).analyze(fragments)
 
+    def review_contract_references(
+        self,
+        fragments: Iterable[Mapping[str, object]],
+        *,
+        admitted_sources: Iterable[Mapping[str, object]],
+    ) -> dict[str, object]:
+        """Interpret exact contract-to-document references through local Qwen."""
+
+        from asd_kontur.tender.qwen_contract_references import QwenContractReferenceReviewer
+
+        return QwenContractReferenceReviewer(
+            self._endpoint,
+            timeout_seconds=self._timeout_seconds,
+        ).review(fragments, admitted_sources=admitted_sources)
+
     def extract_structures(
         self, elements: Iterable[LayoutElement]
     ) -> tuple[StructureNodeCandidate, ...]:

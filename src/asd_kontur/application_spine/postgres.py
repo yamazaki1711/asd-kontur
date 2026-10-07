@@ -47,6 +47,10 @@ from asd_kontur.tender.project_engineering import (
     work_reconciliation_priority,
 )
 from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
+from asd_kontur.tender.qwen_contract_references import (
+    CONTRACT_REFERENCE_PROFILE,
+    reference_context_candidate,
+)
 from asd_kontur.tender.qwen_work_reconciliation import (
     PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES,
     PROJECT_WORK_RECONCILIATION_PROFILE,
@@ -206,6 +210,7 @@ _CANDIDATE_PERSISTENCE_RECOVERY_PRIORITY = 180
 # prevents a large new package from starving other projects.
 _PROJECT_WORK_RECONCILIATION_PRIORITY = 175
 _CONTRACT_ANALYSIS_PRIORITY = 188
+_CONTRACT_REFERENCE_PRIORITY = 187
 # Production v21 receipts showed that relationship-review fan-out, rather than
 # the prompt input size, dominates strict-JSON reliability.  Two-row batches
 # completed in one call for all 9 measured jobs (58.1 s average), while only
@@ -1920,7 +1925,8 @@ class SpinePostgresRepository:
                         "'OCR_EXTRACTION','DOCUMENT_PAGE_CLASSIFICATION',"
                         "'PROJECT_DEFINITION_EXTRACTION',"
                         "'WORK_QUANTITY_MATERIAL_EXTRACTION','PROJECT_STRUCTURE_RECONCILIATION',"
-                        "'PROJECT_WORK_RECONCILIATION','CONTRACT_ANALYSIS')) AS qwen_active "
+                        "'PROJECT_WORK_RECONCILIATION','CONTRACT_ANALYSIS',"
+                        "'CONTRACT_REFERENCE_REVIEW')) AS qwen_active "
                         "FROM workspace.durable_jobs job WHERE job.organization_id=:organization "
                         "AND job.workspace_id=:workspace AND "
                         f"{effective_job}"
@@ -1985,6 +1991,7 @@ class SpinePostgresRepository:
             JobKind.WORK_PACKAGE_ASSEMBLY.value,
             JobKind.REQUIREMENT_MATRIX_ASSEMBLY.value,
             JobKind.CONTRACT_ANALYSIS.value,
+            JobKind.CONTRACT_REFERENCE_REVIEW.value,
         }
         active_count = int(jobs["active_count"] or 0)
         blocked_count = int(jobs["blocked_count"] or 0)
@@ -2700,6 +2707,7 @@ class SpinePostgresRepository:
                 JobKind.ID_DOCUMENT_GENERATION,
                 JobKind.PROJECT_WORK_RECONCILIATION,
                 JobKind.CONTRACT_ANALYSIS,
+                JobKind.CONTRACT_REFERENCE_REVIEW,
             }
         )
         if media_type == "application/zip":
@@ -3282,6 +3290,7 @@ class SpinePostgresRepository:
                         "'qwen_semantic_runtime_unavailable',"
                         "'qwen_work_reconciliation_runtime_unavailable',"
                         "'qwen_contract_analysis_runtime_unavailable',"
+                        "'qwen_contract_reference_runtime_unavailable',"
                         "'qwen_vision_runtime_unavailable') OR ("
                         "failed.typed_failure_code IN ("
                         "'qwen_contract_clause_source_not_exact',"
@@ -3294,6 +3303,7 @@ class SpinePostgresRepository:
                         "'qwen_semantic_runtime_unavailable',"
                         "'qwen_work_reconciliation_runtime_unavailable',"
                         "'qwen_contract_analysis_runtime_unavailable',"
+                        "'qwen_contract_reference_runtime_unavailable',"
                         "'qwen_vision_runtime_unavailable') OR ("
                         "terminal.result_manifest->>'last_failure_code' IN ("
                         "'qwen_contract_clause_source_not_exact',"
@@ -6493,6 +6503,279 @@ class SpinePostgresRepository:
                 )
         return scheduled
 
+    def _schedule_contract_references(
+        self,
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        owner_identity_id: str,
+        correlation_id: UUID,
+        sources: list[dict[str, Any]],
+    ) -> list[dict[str, object]]:
+        """Autonomously route likely contract cross-references to bounded Qwen review.
+
+        The lexical gate only controls expensive inference. It never declares a
+        referenced document present or missing. The entire active source roster
+        is part of the immutable input identity, so later admission causes a
+        new review rather than silently retaining an outdated absence claim.
+        """
+
+        inventory = [
+            {
+                "source_version_id": str(source["source_version_id"]),
+                "safe_display_name": str(source["safe_display_name"]),
+            }
+            for source in sources
+        ]
+        inventory.sort(key=lambda source: source["source_version_id"])
+        inventory_digest = semantic_digest(inventory)
+        current_contract_source_ids = [
+            str(source["source_version_id"])
+            for source in sources
+            if "contract" in {
+                str(value) for value in source.get("current_document_roles", ())
+            }
+        ]
+        self._supersede_queued_contract_reference_inventories(
+            session,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            inventory_digest=inventory_digest,
+            current_contract_source_ids=current_contract_source_ids,
+        )
+        if not 1 <= len(inventory) <= 64:
+            return []
+        scheduled: list[dict[str, object]] = []
+        for source in sources:
+            if "contract" not in {
+                str(value) for value in source.get("current_document_roles", ())
+            } or int(source["native_locator_count"]) < 1:
+                continue
+            source_version_id = UUID(str(source["source_version_id"]))
+            rows = [
+                dict(row)
+                for row in session.execute(
+                    sa.text(
+                        "SELECT DISTINCT ON (source_locator_id) source_locator_id,page_number,"
+                        "reading_order,element_kind,row_index,column_index,"
+                        "COALESCE(NULLIF(raw_text,''),normalized_text) AS source_text "
+                        "FROM workspace.native_layout_element_versions WHERE "
+                        "organization_id=:o AND workspace_id=:w AND source_version_id=:source "
+                        "AND COALESCE(NULLIF(raw_text,''),normalized_text)<>'' "
+                        "ORDER BY source_locator_id,page_number,reading_order"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "source": source_version_id},
+                ).mappings()
+            ]
+            candidate_rows = [
+                row for row in rows if reference_context_candidate(str(row["source_text"]))
+            ]
+            batches = _contract_context_batches(
+                candidate_rows,
+                max_locators=6,
+                max_chars=6_000,
+            )
+            for ordinal, batch in enumerate(batches, start=1):
+                batch_rows = cast(tuple[dict[str, Any], ...], batch["rows"])
+                source_segments = [
+                    {
+                        "source_locator_id": str(row["source_locator_id"]),
+                        "start": int(row["segment_start"]),
+                        "end": int(row["segment_end"]),
+                    }
+                    for row in batch_rows
+                ]
+                batch_digest = semantic_digest(
+                    {
+                        "profile": CONTRACT_REFERENCE_PROFILE,
+                        "source_version_id": str(source_version_id),
+                        "source_segments": source_segments,
+                        "inventory_digest": inventory_digest,
+                    }
+                )
+                key = (
+                    f"contract-references:{source_version_id}:"
+                    f"{CONTRACT_REFERENCE_PROFILE}:{batch_digest}"
+                )
+                existing = session.execute(
+                    sa.text(
+                        "SELECT job_id,state FROM workspace.durable_jobs WHERE "
+                        "organization_id=:o AND workspace_id=:w AND idempotency_key=:key"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "key": key},
+                ).mappings().one_or_none()
+                if existing is not None:
+                    scheduled.append(
+                        {"job_id": str(existing["job_id"]), "state": str(existing["state"])}
+                    )
+                    continue
+                job_id = uuid7()
+                manifest = {
+                    "document_id": str(source["document_id"]),
+                    "document_version": int(source["version"]),
+                    "source_version_id": str(source_version_id),
+                    "object_key": str(source["object_key"]),
+                    "media_type": str(source["media_type"]),
+                    "content_digest": str(source["content_digest"]),
+                    "contract_reference_profile": CONTRACT_REFERENCE_PROFILE,
+                    "batch_ordinal": ordinal,
+                    "batch_digest": batch_digest,
+                    "source_locator_ids": list(
+                        dict.fromkeys(str(row["source_locator_id"]) for row in batch_rows)
+                    ),
+                    "source_segments": source_segments,
+                    "source_inventory": inventory,
+                    "source_inventory_digest": inventory_digest,
+                    "model_identity": "local-qwen3.8-27b",
+                }
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                        "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,state,"
+                        "priority,max_attempts,retry_policy_version,provenance,correlation_id,"
+                        "created_by_identity_id) VALUES (:o,:w,:job,:document,'CONTRACT_REFERENCE_REVIEW',"
+                        "CAST(:manifest AS jsonb),:digest,:key,'queued',:priority,3,"
+                        "'spine-retry-v0.1',CAST(:provenance AS jsonb),:correlation,:owner)"
+                    ),
+                    {
+                        "o": organization_id,
+                        "w": workspace_id,
+                        "job": job_id,
+                        "document": source["document_id"],
+                        "manifest": _json(manifest),
+                        "digest": semantic_digest(
+                            {"kind": JobKind.CONTRACT_REFERENCE_REVIEW.value, "manifest": manifest}
+                        ),
+                        "key": key,
+                        "priority": _CONTRACT_REFERENCE_PRIORITY,
+                        "provenance": _json(
+                            {
+                                "contract": CONTRACT_REFERENCE_PROFILE,
+                                "source_version_id": str(source_version_id),
+                            }
+                        ),
+                        "correlation": correlation_id,
+                        "owner": owner_identity_id,
+                    },
+                )
+                self._append_event(
+                    session,
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    job_id=job_id,
+                    event_type="job.queued",
+                    safe_message_code="contract_reference_review_queued",
+                    current=0,
+                    total=1,
+                    terminal=False,
+                )
+                scheduled.append({"job_id": str(job_id), "state": "queued"})
+        return scheduled
+
+    def _supersede_queued_contract_reference_inventories(
+        self,
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        inventory_digest: str,
+        current_contract_source_ids: list[str],
+        limit: int = 256,
+    ) -> int:
+        """Cancel unclaimed reviews whose source or comparison roster changed."""
+
+        rows = session.execute(
+            sa.text(
+                "SELECT job_id,lease_generation FROM workspace.durable_jobs WHERE "
+                "organization_id=:o AND workspace_id=:w AND "
+                "job_kind='CONTRACT_REFERENCE_REVIEW' AND state='queued' AND ("
+                "COALESCE(input_manifest->>'contract_reference_profile','')<>:profile OR "
+                "COALESCE(input_manifest->>'source_inventory_digest','')<>:inventory OR "
+                "COALESCE(input_manifest->>'source_version_id','')<>ALL(:sources)) "
+                "ORDER BY created_at,job_id LIMIT :limit FOR UPDATE SKIP LOCKED"
+            ),
+            {
+                "o": organization_id,
+                "w": workspace_id,
+                "profile": CONTRACT_REFERENCE_PROFILE,
+                "inventory": inventory_digest,
+                "sources": current_contract_source_ids,
+                "limit": limit,
+            },
+        ).all()
+        for row in rows:
+            job_id = UUID(str(row.job_id))
+            reason = "superseded_contract_reference_inventory"
+            cancellation_id, receipt_id = uuid7(), uuid7()
+            result = {"semantic_effect": False, "reason": reason}
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.job_cancellations "
+                    "(organization_id,workspace_id,cancellation_id,job_id,"
+                    "requested_by_identity_id,reason_code,cancellation_digest) VALUES "
+                    "(:o,:w,:cancellation,:job,'system:project-orchestrator',:reason,:digest)"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "cancellation": cancellation_id,
+                    "job": job_id,
+                    "reason": reason,
+                    "digest": semantic_digest(
+                        {"cancellation_id": cancellation_id, "job_id": job_id, "reason": reason}
+                    ),
+                },
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.job_terminal_receipts "
+                    "(organization_id,workspace_id,terminal_receipt_id,job_id,lease_generation,"
+                    "terminal_state,typed_outcome_code,result_manifest,result_digest) VALUES "
+                    "(:o,:w,:receipt,:job,:generation,'cancelled',:reason,CAST(:result AS jsonb),"
+                    ":digest)"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "receipt": receipt_id,
+                    "job": job_id,
+                    "generation": int(row.lease_generation),
+                    "reason": reason,
+                    "result": _json(result),
+                    "digest": semantic_digest(
+                        {"job_id": job_id, "state": "cancelled", "result": result}
+                    ),
+                },
+            )
+            session.execute(
+                sa.text(
+                    "UPDATE workspace.durable_jobs SET state='cancelled',"
+                    "cancellation_state='acknowledged',completed_at=CURRENT_TIMESTAMP,"
+                    "typed_failure_code=:reason,result_receipt_id=:receipt WHERE "
+                    "organization_id=:o AND workspace_id=:w AND job_id=:job AND state='queued'"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "job": job_id,
+                    "reason": reason,
+                    "receipt": receipt_id,
+                },
+            )
+            self._append_event(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                job_id=job_id,
+                event_type="job.cancelled",
+                safe_message_code=reason,
+                current=1,
+                total=1,
+                terminal=True,
+            )
+        return len(rows)
+
     def _supersede_queued_contract_analysis_profiles(
         self,
         session: Session,
@@ -6813,7 +7096,7 @@ class SpinePostgresRepository:
                     sa.text(
                         "WITH active_versions AS ("
                         " SELECT v.document_id,v.version,v.source_version_id,v.object_key,v.media_type,"
-                        " v.content_digest,v.recorded_at FROM workspace.document_versions v JOIN LATERAL ("
+                        " v.content_digest,v.safe_display_name,v.recorded_at FROM workspace.document_versions v JOIN LATERAL ("
                         " SELECT selected_document_version FROM "
                         " workspace.document_version_activation_decisions a WHERE "
                         " a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id "
@@ -6886,6 +7169,14 @@ class SpinePostgresRepository:
                 correlation_id=correlation_id,
                 sources=[dict(source) for source in sources],
             )
+            contract_reference_jobs = self._schedule_contract_references(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                owner_identity_id=owner_identity_id,
+                correlation_id=correlation_id,
+                sources=[dict(source) for source in sources],
+            )
             reviews = session.scalars(
                 sa.text(
                     "SELECT decision_digest FROM workspace.project_candidate_review_decisions WHERE "
@@ -6901,6 +7192,7 @@ class SpinePostgresRepository:
                     "classification_jobs": classification_jobs,
                     "semantic_jobs": semantic_jobs,
                     "contract_jobs": contract_jobs,
+                    "contract_reference_jobs": contract_reference_jobs,
                 }
             )
             idempotency_key = (

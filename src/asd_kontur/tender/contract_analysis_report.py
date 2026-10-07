@@ -96,6 +96,27 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
             _records(project_context.get("project_contract_findings")), start=1
         )
     ]
+    reference_rows = [
+        (
+            str(ordinal),
+            str(item.get("source_quote") or ""),
+            str(item.get("target_description") or ""),
+            (
+                str(item.get("matched_source_name") or "")
+                if str(item.get("match_decision")) == "matched"
+                else "Соответствующий документ не установлен"
+            ),
+            ", ".join(
+                part
+                for part in (
+                    str(item.get("source_name") or ""),
+                    f"стр. {item['source_page']}" if item.get("source_page") is not None else "",
+                )
+                if part
+            ),
+        )
+        for ordinal, item in enumerate(_records(view.get("attachment_references")), start=1)
+    ]
     process = _mapping(view.get("process"))
     status = _status_label(view.get("status"))
     gaps = _gap_summary(view.get("gaps"))
@@ -140,6 +161,22 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
             _paragraph(
                 "Проект договора не найден среди загруженных документов. Договорные риски "
                 "и предложения по изменению условий без исходного договора не подготовлены."
+            )
+        )
+
+    if reference_rows:
+        body.extend(
+            (
+                _heading("Документы, на которые ссылается договор", "Heading1"),
+                _table(
+                    ("№", "Точная ссылка", "Предмет ссылки", "Принятый документ", "Источник"),
+                    reference_rows,
+                    "",
+                ),
+                _paragraph(
+                    "Неустановленная связь с загруженным документом требует проверки состава "
+                    "перед согласованием; сама по себе она не доказывает отсутствие приложения."
+                ),
             )
         )
 
@@ -324,6 +361,21 @@ def _gap_summary(value: Any) -> str:
         "CONTRACT_ANALYSIS_IN_PROGRESS": "анализ продолжается; документ будет дополнен",
         "CONTRACT_ANALYSIS_BATCH_FAILURES": (
             "часть условий пока не удалось интерпретировать; доступные выводы сохранены"
+        ),
+        "CONTRACT_ANALYSIS_SOURCE_COVERAGE_INCOMPLETE": (
+            "не весь исходный текст договора обработан"
+        ),
+        "CONTRACT_REFERENCE_REVIEW_IN_PROGRESS": (
+            "ссылки на договорные документы ещё проверяются"
+        ),
+        "CONTRACT_REFERENCE_REVIEW_FAILED": (
+            "часть ссылок на договорные документы не удалось проверить"
+        ),
+        "CONTRACT_REFERENCE_INVENTORY_LIMIT": (
+            "состав загруженных документов слишком велик для текущей проверки ссылок"
+        ),
+        "CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED": (
+            "связь части договорных ссылок с загруженными документами не установлена"
         ),
         "CONTRACT_RISKS_NOT_IDENTIFIED_IN_COMPLETED_BATCHES": (
             "в обработанной части договора риски не установлены"

@@ -536,6 +536,8 @@ class TenderContractAnalysisView(ApiModel):
     process: dict[str, Any] | None
     assessment: dict[str, Any] | None
     clauses: list[dict[str, Any]]
+    attachment_references: list[dict[str, Any]] = Field(default_factory=list)
+    reference_review: dict[str, Any] = Field(default_factory=dict)
     issues: list[dict[str, Any]]
     protocols: list[dict[str, Any]]
     disagreement_items: list[dict[str, Any]]

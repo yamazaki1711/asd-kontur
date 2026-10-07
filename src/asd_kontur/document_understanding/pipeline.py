@@ -14,6 +14,7 @@ from asd_kontur.application_spine.models import (
     JobKind,
 )
 from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
+from asd_kontur.tender.qwen_contract_references import CONTRACT_REFERENCE_PROFILE
 from asd_kontur.tender.qwen_work_reconciliation import (
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
@@ -98,6 +99,7 @@ class IndustrialDocumentUnderstandingPipeline:
             JobKind.PROJECT_STRUCTURE_RECONCILIATION: self._reconciliation,
             JobKind.PROJECT_WORK_RECONCILIATION: self._work_reconciliation,
             JobKind.CONTRACT_ANALYSIS: self._contract_analysis,
+            JobKind.CONTRACT_REFERENCE_REVIEW: self._contract_references,
         }
         handler = handlers.get(claimed.job_kind)
         if handler is None:
@@ -875,6 +877,67 @@ class IndustrialDocumentUnderstandingPipeline:
         self._repository.record_contract_analysis_result(claimed, output_manifest=result)
         return result
 
+    def _contract_references(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
+        if self._qwen_semantic is None:
+            raise UnderstandingStageFailure("qwen_contract_reference_runtime_unavailable")
+        manifest = claimed.input_manifest
+        if str(manifest.get("contract_reference_profile") or "") != CONTRACT_REFERENCE_PROFILE:
+            raise UnderstandingStageFailure("contract_reference_profile_superseded")
+        reusable = self._repository.load_contract_analysis_result(claimed)
+        if reusable is not None:
+            return reusable
+        raw_segments = manifest.get("source_segments")
+        inventory = manifest.get("source_inventory")
+        if (
+            not isinstance(raw_segments, list)
+            or not raw_segments
+            or not isinstance(inventory, list)
+        ):
+            raise UnderstandingStageFailure("contract_reference_manifest_invalid")
+        elements = {
+            str(element.locator.source_locator_id): element
+            for element in self._repository.load_elements(claimed)
+        }
+        fragments: list[dict[str, object]] = []
+        for segment in raw_segments:
+            if not isinstance(segment, dict):
+                raise UnderstandingStageFailure("contract_reference_manifest_invalid")
+            locator_id = str(segment.get("source_locator_id") or "")
+            element = elements.get(locator_id)
+            start, end = segment.get("start"), segment.get("end")
+            value = (element.raw_text or element.normalized_text) if element else ""
+            if (
+                element is None
+                or not isinstance(start, int)
+                or isinstance(start, bool)
+                or not isinstance(end, int)
+                or isinstance(end, bool)
+                or start < 0
+                or end <= start
+                or end > len(value)
+            ):
+                raise UnderstandingStageFailure("contract_reference_source_context_incomplete")
+            fragments.append(
+                {
+                    "source_locator_id": locator_id,
+                    "page": element.locator.page_number,
+                    "text": value[start:end],
+                }
+            )
+        if [str(value["source_locator_id"]) for value in fragments] != [
+            str(value) for value in manifest.get("source_locator_ids") or ()
+        ]:
+            raise UnderstandingStageFailure("contract_reference_manifest_invalid")
+        try:
+            result = self._qwen_semantic.review_contract_references(
+                fragments,
+                admitted_sources=inventory,
+            )
+        except QwenSemanticFailure as exc:
+            raise UnderstandingStageFailure(exc.code) from exc
+        self._repository.record_contract_reference_result(claimed, output_manifest=result)
+        return result
+
 
 def _read_bounded(source: BinaryIO) -> bytes:
     content = source.read(MAX_BOUNDED_PROCESSING_BYTES + 1)
@@ -906,6 +969,7 @@ def _profile_for(kind: JobKind) -> str:
         JobKind.PROJECT_STRUCTURE_RECONCILIATION: UNDERSTANDING_PROFILE_VERSION,
         JobKind.PROJECT_WORK_RECONCILIATION: PROJECT_WORK_RECONCILIATION_PROFILE,
         JobKind.CONTRACT_ANALYSIS: CONTRACT_ANALYSIS_PROFILE,
+        JobKind.CONTRACT_REFERENCE_REVIEW: CONTRACT_REFERENCE_PROFILE,
     }[kind]
 
 

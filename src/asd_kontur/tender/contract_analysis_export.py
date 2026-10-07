@@ -88,6 +88,26 @@ def render_tender_contract_analysis_csv(view: Mapping[str, Any]) -> bytes:
             )
         )
 
+    for item in _records(view.get("attachment_references")):
+        writer.writerow(
+            _row(
+                common,
+                row_kind="contract_reference",
+                item_id=item.get("reference_id", ""),
+                item_kind=item.get("kind", ""),
+                subject=item.get("target_description", ""),
+                trigger_text=item.get("source_quote", ""),
+                source_version_id=item.get("source_version_id", ""),
+                source_locator_id=item.get("source_locator_id", ""),
+                state=item.get("match_decision", ""),
+                recommendation=(
+                    "Verify referenced document against admitted contract package"
+                    if item.get("match_decision") == "unresolved"
+                    else ""
+                ),
+            )
+        )
+
     clauses = tuple(_records(view.get("clauses")))
     clause_by_identity = {
         (str(item.get("clause_id", "")), str(item.get("clause_version", ""))): item

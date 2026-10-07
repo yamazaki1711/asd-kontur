@@ -118,6 +118,17 @@ def test_assistant_contract_projection_keeps_professional_facts_not_process_ids(
             "deliverables": [
                 {"deliverable_kind": "disagreement_protocol", "state": "partial_draft"}
             ],
+            "attachment_references": [
+                {
+                    "source_quote": "Annex C",
+                    "target_description": "delivery timetable",
+                    "matched_source_name": None,
+                    "match_decision": "unresolved",
+                    "source_name": "Draft agreement RA-62.docx",
+                    "source_page": 18,
+                    "source_locator_id": str(locator_id),
+                }
+            ],
             "gaps": ["CONTRACT_ANALYSIS_IN_PROGRESS"],
             "authority_boundary": "human legal review required",
         }
@@ -127,10 +138,13 @@ def test_assistant_contract_projection_keeps_professional_facts_not_process_ids(
         "clause_count": 1,
         "contractor_risk_count": 1,
         "proposed_revision_count": 1,
+        "referenced_document_count": 1,
+        "unresolved_reference_count": 1,
     }
     assert projected["contractor_risks"][0]["clause"] == "8.4"
     assert projected["contractor_risks"][0]["source_locator_ids"] == [str(locator_id)]
     assert projected["proposed_revisions"][0]["contractor_wording"].startswith("Pay accepted")
+    assert projected["referenced_documents"][0]["match_state"] == "unresolved"
     assert "process" not in projected
     assert str(clause_id) not in str(projected)
     assert str(issue_id) not in str(projected)

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from asd_kontur.application_spine.config import SessionProfile, SpineSettings
 from asd_kontur.application_spine.models import ClaimedJob, JobKind, JobState, semantic_digest
 from asd_kontur.application_spine.object_store import WorkspaceObjectStore
+from asd_kontur.application_spine.orchestrator import ProjectOrchestrator
 from asd_kontur.application_spine.postgres import (
     SpinePersistenceError,
     SpinePostgresRepository,
@@ -24,11 +25,14 @@ from asd_kontur.application_spine.worker import DocumentWorker
 from asd_kontur.assistant.models import AssistantMode
 from asd_kontur.assistant.postgres import AssistantRepository
 from asd_kontur.document_understanding.models import StructureIdentityCandidate
+from asd_kontur.document_understanding.pipeline import IndustrialDocumentUnderstandingPipeline
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
 from asd_kontur.document_understanding.qwen_semantic import (
     QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
+    QwenDocumentSemanticAdapter,
 )
 from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
+from asd_kontur.tender.qwen_contract_references import CONTRACT_REFERENCE_PROFILE
 from asd_kontur.tender.qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 from asd_kontur.web_app import create_app
 
@@ -1618,9 +1622,19 @@ def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
         assert stale["lease_expired"] is True
 
 
+@pytest.mark.parametrize(
+    ("source_text", "expected_reference_jobs"),
+    [
+        ("Payment on acceptance.", 0),
+        ("Appendix C sets the delivery timetable.", 1),
+    ],
+)
 def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source_text: str,
+    expected_reference_jobs: int,
 ) -> None:
     settings = _settings(postgres_environment, tmp_path)
     app = create_app(engine=postgres_environment.application_engine, settings=settings)
@@ -1687,7 +1701,7 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
                     "normalized_text,reading_order,region,cell_locator,row_index,column_index,"
                     "evidence_digest,extraction_method,profile_version,semantic_digest) VALUES "
                     "(:organization,:workspace,:element,1,:document,:version,:source,:locator,1,"
-                    "'paragraph','','Payment on acceptance.',1,CAST(:region AS jsonb),NULL,NULL,"
+                    "'paragraph','',:source_text,1,CAST(:region AS jsonb),NULL,NULL,"
                     "NULL,:evidence,'qualified_ocr','native-layout-v0.1',:digest)"
                 ),
                 {
@@ -1699,6 +1713,7 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
                     "source": source["source_version_id"],
                     "locator": locator_id,
                     "region": json.dumps([0, 0, 1, 1]),
+                    "source_text": source_text,
                     "evidence": semantic_digest({"source": "normalized-contract"}),
                     "digest": semantic_digest({"element": "normalized-contract"}),
                 },
@@ -1733,11 +1748,18 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
             "complete_sources": 0,
             "incomplete_source_names": ["terms.txt"],
         }
-        queued = client.post(
-            f"/api/v1/workspaces/{workspace_id}/project-understanding/runs",
-            headers=csrf,
-        )
-        assert queued.status_code == 202, queued.text
+        if expected_reference_jobs:
+            sweep = ProjectOrchestrator(
+                SpinePostgresRepository(postgres_environment.document_worker_engine)
+            ).run_once()
+            assert sweep.scopes >= 1
+            assert not sweep.scope_failures
+        else:
+            queued = client.post(
+                f"/api/v1/workspaces/{workspace_id}/project-understanding/runs",
+                headers=csrf,
+            )
+            assert queued.status_code == 202, queued.text
         with postgres_environment.owner_engine.connect() as connection:
             count = connection.scalar(
                 sa.text(
@@ -1753,6 +1775,142 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
                 },
             )
         assert count == 1
+        with postgres_environment.owner_engine.connect() as connection:
+            reference_jobs = list(
+                connection.execute(
+                    sa.text(
+                    "SELECT job_id,input_manifest,input_digest FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "job_kind='CONTRACT_REFERENCE_REVIEW' AND "
+                        "input_manifest->>'contract_reference_profile'=:profile"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace_id,
+                        "profile": CONTRACT_REFERENCE_PROFILE,
+                    },
+                ).mappings()
+            )
+        assert len(reference_jobs) == expected_reference_jobs
+        if reference_jobs:
+            assert reference_jobs[0]["input_manifest"]["source_inventory"] == [
+                {
+                    "source_version_id": str(source["source_version_id"]),
+                    "safe_display_name": "terms.txt",
+                }
+            ]
+            monkeypatch.setattr(
+                "asd_kontur.tender.qwen_contract_references._complete",
+                lambda *_args, **_kwargs: json.dumps(
+                    {
+                        "references": [
+                            {
+                                "source_locator_id": str(locator_id),
+                                "source_quote": "Appendix C",
+                                "target_description": "delivery timetable",
+                                "kind": "schedule",
+                                "match_decision": "unresolved",
+                                "matched_source_version_id": None,
+                                "confidence": 0.8,
+                            }
+                        ]
+                    }
+                ),
+            )
+            job = reference_jobs[0]
+            claimed = ClaimedJob(
+                organization_id=UUID(workspace["organization_id"]),
+                workspace_id=workspace_id,
+                job_id=UUID(str(job["job_id"])),
+                job_kind=JobKind.CONTRACT_REFERENCE_REVIEW,
+                input_manifest=job["input_manifest"],
+                input_digest=str(job["input_digest"]),
+                attempt_number=1,
+                lease_generation=1,
+                cancellation_state="active",
+            )
+            pipeline = IndustrialDocumentUnderstandingPipeline(
+                IndustrialUnderstandingRepository(postgres_environment.document_worker_engine),
+                qwen_vision=cast(Any, None),
+                qwen_semantic=QwenDocumentSemanticAdapter("http://127.0.0.1:8765/v1"),
+            )
+            result = pipeline._contract_references(claimed, io.BytesIO(b""))
+            assert result["references"][0]["match_decision"] == "unresolved"
+            with postgres_environment.owner_engine.begin() as connection:
+                connection.execute(
+                    sa.text(
+                        "UPDATE workspace.durable_jobs SET state='running',"
+                        "lease_owner='test-worker',"
+                        "lease_generation=1,lease_expires_at=CURRENT_TIMESTAMP+INTERVAL '1 minute' "
+                        "WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace AND job_id=:job"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace_id,
+                        "job": job["job_id"],
+                    },
+                )
+            SpinePostgresRepository(postgres_environment.document_worker_engine).finish_job(
+                claimed,
+                terminal_state=JobState.SUCCEEDED,
+                outcome_code="contract_reference_review_complete",
+                result_manifest=result,
+                worker_identity="test-worker",
+            )
+            review = client.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+            assert review.status_code == 200, review.text
+            assert review.json()["reference_review"]["status"] == "complete"
+            assert review.json()["attachment_references"][0]["source_quote"] == "Appendix C"
+            assert "CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED" in review.json()["gaps"]
+            later_upload = client.post(
+                f"/api/v1/workspaces/{workspace_id}/documents",
+                files=[("files", ("delivery.txt", b"Delivery timetable", "text/plain"))],
+                headers=csrf,
+            )
+            assert later_upload.status_code == 202, later_upload.text
+            stale = client.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+            assert stale.status_code == 200, stale.text
+            assert stale.json()["attachment_references"] == []
+            next_sweep = ProjectOrchestrator(
+                SpinePostgresRepository(postgres_environment.document_worker_engine)
+            ).run_once()
+            assert not next_sweep.scope_failures
+            refreshed = client.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+            assert refreshed.status_code == 200, refreshed.text
+            assert refreshed.json()["reference_review"]["status"] == "in_progress"
+            with postgres_environment.owner_engine.connect() as connection:
+                pending_review = connection.scalar(
+                    sa.text(
+                        "SELECT job_id FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "job_kind='CONTRACT_REFERENCE_REVIEW' AND state='queued' "
+                        "ORDER BY created_at DESC LIMIT 1"
+                    ),
+                    {"organization": workspace["organization_id"], "workspace": workspace_id},
+                )
+            third_upload = client.post(
+                f"/api/v1/workspaces/{workspace_id}/documents",
+                files=[("files", ("drawing.txt", b"General arrangement", "text/plain"))],
+                headers=csrf,
+            )
+            assert third_upload.status_code == 202, third_upload.text
+            ProjectOrchestrator(
+                SpinePostgresRepository(postgres_environment.document_worker_engine)
+            ).run_once()
+            with postgres_environment.owner_engine.connect() as connection:
+                superseded_state = connection.scalar(
+                    sa.text(
+                        "SELECT state FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND job_id=:job"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace_id,
+                        "job": pending_review,
+                    },
+                )
+            assert superseded_state == "cancelled"
 
 
 def test_start_project_understanding_queues_native_semantic_recovery_once(

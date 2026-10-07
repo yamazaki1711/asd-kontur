@@ -1101,3 +1101,52 @@ even `soffice --version` did not return. Both bounded attempts were stopped.
 Existing ZIP/XML integrity and first-page Quick Look checks do not satisfy
 all-page visual acceptance. The owner-facing launchd services were not
 restarted or repointed during this qualification.
+
+## 2026-10-07 autonomous contract-reference review (source candidate)
+
+The prior clause analyzer worked on bounded pieces of each contract document.
+It could identify explicit clause risks but had no corpus-level account of
+documents referenced by those clauses. An absent attachment could therefore
+be invisible to the user even when its reference was readable. The new
+`CONTRACT_REFERENCE_REVIEW` stage is a separate, workspace-owned Qwen task:
+
+1. the supervised project reconciler selects active sources with a current
+   Qwen `contract` role and routes likely cross-reference text; its lexical
+   gate does not decide whether an attachment exists;
+2. every job identifies exact source segments and the complete active admitted
+   source inventory in its idempotency digest;
+3. the same persistent local Qwen endpoint interprets the reference and may
+   match an admitted source, or returns `unresolved` with an exact source quote;
+4. validation rejects invented quotes, unknown source identities, malformed
+   decisions and unsupported output; one output-budget failure splits the
+   bounded task instead of retrying an identical oversized prompt;
+5. accepted results are stored with model/profile identity in the existing
+   workspace-owned contract result store, exposed in the contract screen,
+   editable Word/CSV analysis and consultant context. An unmatched reference
+   is a request to verify package composition, not proof that an attachment
+   is missing.
+
+The read model invalidates old reference matches when the admitted document
+inventory changes. Unclaimed jobs tied to a superseded inventory are
+terminally cancelled rather than spending the model slot on stale work. The
+new job kind shares the existing single-heavy-model claim policy and is
+handled by the supervised document worker; Codex is not its dispatcher.
+Migration `0129_contract_reference_review` adds the job kind and result
+profile without adding a new project-data store. Workspace destruction already
+owns the result table. A disposable PostgreSQL database passed full upgrade,
+clean downgrade and re-upgrade. Isolated API qualification exercised automatic
+orchestrator scheduling, exact-source Qwen-response validation and persistence,
+unresolved-reference publication, and invalidation/requeue after a later source
+admission. Unit tests use changed synthetic contract names and do not encode
+the real owner's project findings.
+
+This is a **source candidate, not a deployed capability**. The live API/worker
+remain on the older pinned release. No real-project reference result or live
+Qwen output from this new stage is claimed. The v1 routing gate can miss an
+unusual implicit document reference; inventories above 64 active sources are
+explicitly marked outside its current comparison bound. The separate legacy
+Tender-process read path does not yet merge this new reference projection.
+Substantive all-page Word rendering, live contract-only acceptance and legal
+review remain open. A local Pages automation attempt on a trivial DOCX did
+not return a PDF; it was stopped. LibreOffice still stalls before its main
+code despite verified signing and a targeted quarantine-attribute removal.

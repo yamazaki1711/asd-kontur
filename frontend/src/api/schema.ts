@@ -2850,6 +2850,10 @@ export interface components {
         };
         /** TenderContractAnalysisView */
         TenderContractAnalysisView: {
+            /** Attachment References */
+            attachment_references?: {
+                [key: string]: unknown;
+            }[];
             /** Assessment */
             assessment: {
                 [key: string]: unknown;
@@ -2878,6 +2882,10 @@ export interface components {
             process: {
                 [key: string]: unknown;
             } | null;
+            /** Reference Review */
+            reference_review?: {
+                [key: string]: unknown;
+            };
             /** Project Context */
             project_context?: {
                 [key: string]: unknown;
