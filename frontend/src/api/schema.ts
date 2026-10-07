@@ -3043,6 +3043,10 @@ export interface components {
             clauses: {
                 [key: string]: unknown;
             }[];
+            /** Coherence Review */
+            coherence_review?: {
+                [key: string]: unknown;
+            };
             /** Deliverables */
             deliverables: {
                 [key: string]: unknown;

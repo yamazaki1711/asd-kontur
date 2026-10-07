@@ -1750,7 +1750,10 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
         }
         if expected_reference_jobs:
             sweep = ProjectOrchestrator(
-                SpinePostgresRepository(postgres_environment.document_worker_engine)
+                SpinePostgresRepository(
+                    postgres_environment.document_worker_engine,
+                    contract_view_engine=postgres_environment.application_engine,
+                )
             ).run_once()
             assert sweep.scopes >= 1
             assert not any(
@@ -1876,7 +1879,10 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
             assert stale.status_code == 200, stale.text
             assert stale.json()["attachment_references"] == []
             next_sweep = ProjectOrchestrator(
-                SpinePostgresRepository(postgres_environment.document_worker_engine)
+                SpinePostgresRepository(
+                    postgres_environment.document_worker_engine,
+                    contract_view_engine=postgres_environment.application_engine,
+                )
             ).run_once()
             assert not any(
                 failure["workspace_id"] == str(workspace_id)
@@ -1941,7 +1947,10 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
             )
             for _ in range(2):
                 repair_sweep = ProjectOrchestrator(
-                    SpinePostgresRepository(postgres_environment.document_worker_engine)
+                    SpinePostgresRepository(
+                        postgres_environment.document_worker_engine,
+                        contract_view_engine=postgres_environment.application_engine,
+                    )
                 ).run_once()
                 assert not any(
                     failure["workspace_id"] == str(workspace_id)
@@ -1975,7 +1984,10 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
             )
             assert third_upload.status_code == 202, third_upload.text
             ProjectOrchestrator(
-                SpinePostgresRepository(postgres_environment.document_worker_engine)
+                SpinePostgresRepository(
+                    postgres_environment.document_worker_engine,
+                    contract_view_engine=postgres_environment.application_engine,
+                )
             ).run_once()
             with postgres_environment.owner_engine.connect() as connection:
                 superseded_state = connection.scalar(

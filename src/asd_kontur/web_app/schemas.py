@@ -604,6 +604,7 @@ class TenderContractAnalysisView(ApiModel):
     disagreement_items: list[dict[str, Any]]
     revised_contracts: list[dict[str, Any]]
     revised_clauses: list[dict[str, Any]]
+    coherence_review: dict[str, Any] = Field(default_factory=dict)
     deliverables: list[dict[str, Any]]
     project_context: dict[str, Any] = Field(default_factory=dict)
     gaps: list[str]

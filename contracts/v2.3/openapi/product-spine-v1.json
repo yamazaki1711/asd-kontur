@@ -3942,6 +3942,11 @@
             "title": "Clauses",
             "type": "array"
           },
+          "coherence_review": {
+            "additionalProperties": true,
+            "title": "Coherence Review",
+            "type": "object"
+          },
           "deliverables": {
             "items": {
               "additionalProperties": true,

@@ -133,9 +133,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "run-project-orchestrator":
         engine = sa.create_engine(settings.worker_database_url, pool_pre_ping=True)
+        contract_view_engine = sa.create_engine(settings.database_url, pool_pre_ping=True)
         try:
-            ProjectOrchestrator(SpinePostgresRepository(engine)).run_forever()
+            ProjectOrchestrator(
+                SpinePostgresRepository(engine, contract_view_engine=contract_view_engine)
+            ).run_forever()
         finally:
+            contract_view_engine.dispose()
             engine.dispose()
         return 0
     if args.command == "run-assistant-worker":

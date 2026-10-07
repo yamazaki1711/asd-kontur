@@ -141,7 +141,8 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                 )
                 contract_priority = claim_definition.index(
                     "CASE WHEN j.job_kind IN "
-                    "('CONTRACT_ANALYSIS','CONTRACT_REFERENCE_REVIEW') THEN 3"
+                    "('CONTRACT_ANALYSIS','CONTRACT_REFERENCE_REVIEW',"
+                    "'CONTRACT_COHERENCE_REVIEW') THEN 3"
                 )
                 primary_facts_priority = claim_definition.index(
                     "EXISTS (\n                 SELECT 1\n"

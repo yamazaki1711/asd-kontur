@@ -132,7 +132,10 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
         password="Synthetic-Owner-Password-42!",
         display_name="Synthetic contract owner",
     )
-    repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+    repository = SpinePostgresRepository(
+        postgres_environment.document_worker_engine,
+        contract_view_engine=postgres_environment.application_engine,
+    )
     orchestrator = ProjectOrchestrator(repository)
     with TestClient(app) as client:
         login = client.post(
@@ -189,6 +192,7 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
             view = response.json()
             revisions = view.get("revised_contracts") or []
             reference_review = view.get("reference_review")
+            coherence_review = view.get("coherence_review")
             if (
                 view.get("disagreement_items")
                 and isinstance(revisions, list)
@@ -199,6 +203,8 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
                 )
                 and isinstance(reference_review, dict)
                 and reference_review.get("status") == "complete"
+                and isinstance(coherence_review, dict)
+                and coherence_review.get("status") == "reviewed_bounded_context"
             ):
                 break
             if time.monotonic() - last_outcome_at > 45:
@@ -259,6 +265,29 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
         assert "9.2." in revised_text
         revised_clauses = view.get("revised_clauses")
         assert isinstance(revised_clauses, list) and revised_clauses
+        coherence_review = view.get("coherence_review")
+        assert isinstance(coherence_review, dict)
+        with postgres_environment.owner_engine.connect() as connection:
+            coherence_receipts = [
+                dict(row)
+                for row in connection.execute(
+                    sa.text(
+                        "SELECT receipt.typed_outcome_code,receipt.result_manifest "
+                        "FROM workspace.job_terminal_receipts receipt JOIN "
+                        "workspace.durable_jobs job ON job.organization_id=receipt.organization_id "
+                        "AND job.workspace_id=receipt.workspace_id AND job.job_id=receipt.job_id "
+                        "WHERE job.organization_id=:o AND job.workspace_id=:w AND "
+                        "job.job_kind='CONTRACT_COHERENCE_REVIEW'"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                ).mappings()
+            ]
+        assert coherence_review.get("status") == "reviewed_bounded_context", {
+            "coherence_review": coherence_review,
+            "job_outcomes": seen_jobs,
+            "coherence_receipts": coherence_receipts,
+        }
+        assert int(coherence_review.get("accepted_contexts") or 0) > 0
         assert any(
             " ".join(str(item.get("revised_text") or "").split()) in " ".join(revised_text.split())
             for item in revised_clauses

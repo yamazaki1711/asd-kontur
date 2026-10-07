@@ -141,6 +141,30 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
         )
         for ordinal, item in enumerate(_records(view.get("attachment_references")), start=1)
     ]
+    coherence = _mapping(view.get("coherence_review"))
+    revisions_by_id = {
+        str(item.get("revised_clause_id") or ""): item
+        for item in _records(view.get("revised_clauses"))
+    }
+    clauses_by_id = {str(item.get("clause_id") or ""): item for item in clauses}
+    coherence_rows = []
+    for ordinal, conflict in enumerate(_records(coherence.get("conflicts")), start=1):
+        revision = revisions_by_id.get(str(conflict.get("revision_id") or ""), {})
+        original = clauses_by_id.get(str(revision.get("source_clause_id") or ""), {})
+        related = clauses_by_id.get(str(conflict.get("other_clause_id") or ""), {})
+        coherence_rows.append(
+            (
+                str(ordinal),
+                display_clause_reference(original),
+                str(conflict.get("proposal_quote") or ""),
+                display_clause_reference(related),
+                str(conflict.get("other_quote") or ""),
+                str(conflict.get("conflict") or ""),
+                str(conflict.get("contractor_consequence") or ""),
+                str(conflict.get("recommended_action") or ""),
+                "; ".join(filter(None, (_source_reference(original), _source_reference(related)))),
+            )
+        )
     process = _mapping(view.get("process"))
     status = _status_label(view.get("status"))
     gaps = _gap_summary(view.get("gaps"))
@@ -200,6 +224,37 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
                 _paragraph(
                     "Неустановленная связь с загруженным документом требует проверки состава "
                     "перед согласованием; сама по себе она не доказывает отсутствие приложения."
+                ),
+            )
+        )
+
+    if revisions_by_id:
+        body.append(
+            _paragraph(
+                "Проверка согласованности предлагаемых редакций: проверены только "
+                f"отобранные связанные пункты ({coherence.get('accepted_contexts', 0)} "
+                f"из {coherence.get('scheduled_contexts', 0)} контекстов). "
+                "Отсутствие выявленного конфликта не подтверждает согласованность всего договора."
+            )
+        )
+    if coherence_rows:
+        body.extend(
+            (
+                _heading("Возможные противоречия предлагаемых редакций", "Heading1"),
+                _table(
+                    (
+                        "№",
+                        "Изменяемый пункт",
+                        "Предложенная формулировка",
+                        "Связанный пункт",
+                        "Исходная формулировка",
+                        "Противоречие",
+                        "Последствие",
+                        "Действие",
+                        "Источники",
+                    ),
+                    coherence_rows,
+                    "",
                 ),
             )
         )

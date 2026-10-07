@@ -137,6 +137,13 @@ def test_revised_contract_package_applies_two_sources_and_preserves_unchanged_do
     assert manifest["change_register"]["sha256"] == hashlib.sha256(change_register).hexdigest()
     assert [item["revision_count"] for item in manifest["sources"]] == [1, 1, 0]
     assert manifest["status"] == "human_review_candidate"
+    assert manifest["coherence_review"] == {
+        "status": "not_performed",
+        "scope": "selected_related_clauses_only",
+        "accepted_contexts": 0,
+        "scheduled_contexts": 0,
+        "potential_conflict_count": 0,
+    }
     assert manifest["analysis_gaps"] == ["CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED"]
 
 

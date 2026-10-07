@@ -126,6 +126,14 @@ class ProjectOrchestrator:
                 )
                 models += 1
                 work_batches += len(
+                    self._repository.schedule_contract_coherence_reviews(
+                        organization_id=organization_id,
+                        workspace_id=workspace_id,
+                        owner_identity_id=owner_identity_id,
+                        correlation_id=uuid7(),
+                    )
+                )
+                work_batches += len(
                     self._repository.refill_workspace_project_work_reconciliation_if_idle(
                         organization_id=organization_id,
                         workspace_id=workspace_id,

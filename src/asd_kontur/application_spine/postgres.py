@@ -28,6 +28,11 @@ from asd_kontur.document_understanding.qwen_semantic import (
 from asd_kontur.document_understanding.semantic import normalize_unit
 from asd_kontur.domain import uuid7
 from asd_kontur.tender.analysis_harness import TenderAnalysisTask
+from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
+from asd_kontur.tender.contract_coherence import (
+    CONTRACT_COHERENCE_PROFILE,
+    contract_coherence_tasks,
+)
 from asd_kontur.tender.excavation_pit_inventory import build_excavation_pit_inventory
 from asd_kontur.tender.facility_work_projection import (
     build_facility_work_candidate_projection,
@@ -210,6 +215,7 @@ _CANDIDATE_PERSISTENCE_RECOVERY_PRIORITY = 180
 # prevents a large new package from starving other projects.
 _PROJECT_WORK_RECONCILIATION_PRIORITY = 175
 _CONTRACT_ANALYSIS_PRIORITY = 188
+_CONTRACT_COHERENCE_PRIORITY = 187
 _CONTRACT_REFERENCE_PRIORITY = 187
 # Production v21 receipts showed that relationship-review fan-out, rather than
 # the prompt input size, dominates strict-JSON reliability.  Two-row batches
@@ -1702,8 +1708,15 @@ class RegisteredDocument:
 class SpinePostgresRepository:
     """All Product Spine SQL lives here; web handlers use application services."""
 
-    def __init__(self, engine: Engine, *, event_retention_seconds: int = 86400) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        *,
+        contract_view_engine: Engine | None = None,
+        event_retention_seconds: int = 86400,
+    ) -> None:
         self._engine = engine
+        self._contract_view_engine = contract_view_engine
         self._event_retention_seconds = event_retention_seconds
 
     @property
@@ -1926,7 +1939,7 @@ class SpinePostgresRepository:
                         "'PROJECT_DEFINITION_EXTRACTION',"
                         "'WORK_QUANTITY_MATERIAL_EXTRACTION','PROJECT_STRUCTURE_RECONCILIATION',"
                         "'PROJECT_WORK_RECONCILIATION','CONTRACT_ANALYSIS',"
-                        "'CONTRACT_REFERENCE_REVIEW')) AS qwen_active "
+                        "'CONTRACT_REFERENCE_REVIEW','CONTRACT_COHERENCE_REVIEW')) AS qwen_active "
                         "FROM workspace.durable_jobs job WHERE job.organization_id=:organization "
                         "AND job.workspace_id=:workspace AND "
                         f"{effective_job}"
@@ -1992,6 +2005,7 @@ class SpinePostgresRepository:
             JobKind.REQUIREMENT_MATRIX_ASSEMBLY.value,
             JobKind.CONTRACT_ANALYSIS.value,
             JobKind.CONTRACT_REFERENCE_REVIEW.value,
+            JobKind.CONTRACT_COHERENCE_REVIEW.value,
         }
         active_count = int(jobs["active_count"] or 0)
         blocked_count = int(jobs["blocked_count"] or 0)
@@ -2708,6 +2722,7 @@ class SpinePostgresRepository:
                 JobKind.PROJECT_WORK_RECONCILIATION,
                 JobKind.CONTRACT_ANALYSIS,
                 JobKind.CONTRACT_REFERENCE_REVIEW,
+                JobKind.CONTRACT_COHERENCE_REVIEW,
             }
         )
         if media_type == "application/zip":
@@ -3291,6 +3306,7 @@ class SpinePostgresRepository:
                         "'qwen_work_reconciliation_runtime_unavailable',"
                         "'qwen_contract_analysis_runtime_unavailable',"
                         "'qwen_contract_reference_runtime_unavailable',"
+                        "'qwen_contract_coherence_runtime_unavailable',"
                         "'qwen_vision_runtime_unavailable') OR ("
                         "failed.typed_failure_code IN ("
                         "'qwen_contract_clause_source_not_exact',"
@@ -3304,6 +3320,7 @@ class SpinePostgresRepository:
                         "'qwen_work_reconciliation_runtime_unavailable',"
                         "'qwen_contract_analysis_runtime_unavailable',"
                         "'qwen_contract_reference_runtime_unavailable',"
+                        "'qwen_contract_coherence_runtime_unavailable',"
                         "'qwen_vision_runtime_unavailable') OR ("
                         "terminal.result_manifest->>'last_failure_code' IN ("
                         "'qwen_contract_clause_source_not_exact',"
@@ -6502,6 +6519,229 @@ class SpinePostgresRepository:
                     }
                 )
         return scheduled
+
+    def schedule_contract_coherence_reviews(
+        self,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        owner_identity_id: str,
+        correlation_id: UUID,
+    ) -> list[str]:
+        """Autonomously review current proposed wording against bounded related clauses.
+
+        A model result is a source-linked candidate, not contract approval. The
+        exact current clause/proposal digest is the idempotency boundary.
+        """
+
+        if self._contract_view_engine is None:
+            raise SpinePersistenceError("contract_coherence_read_boundary_unavailable")
+        view = TenderContractAnalysisRepository(self._contract_view_engine).latest(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        assessment = view.get("assessment")
+        if not isinstance(assessment, dict) or assessment.get("status") != "complete":
+            return []
+        tasks = contract_coherence_tasks(view)
+        if not tasks:
+            return []
+        keys = {
+            f"contract-coherence:{CONTRACT_COHERENCE_PROFILE}:{task['context_digest']}"
+            for task in tasks
+        }
+        scheduled: list[str] = []
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            if not self._workspace_accepts_jobs(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ):
+                return []
+            self._supersede_queued_contract_coherence_contexts(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                current_keys=keys,
+            )
+            for task in tasks:
+                key = f"contract-coherence:{CONTRACT_COHERENCE_PROFILE}:{task['context_digest']}"
+                existing = session.scalar(
+                    sa.text(
+                        "SELECT job_id FROM workspace.durable_jobs WHERE "
+                        "organization_id=:o AND workspace_id=:w AND idempotency_key=:key"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "key": key},
+                )
+                if existing is not None:
+                    continue
+                source = task["source_clause"]
+                source_version_id = UUID(str(source["source_version_id"]))
+                document = session.execute(
+                    sa.text(
+                        "SELECT document_id,version FROM workspace.document_versions WHERE "
+                        "organization_id=:o AND workspace_id=:w AND source_version_id=:source "
+                        "ORDER BY version DESC LIMIT 1"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "source": source_version_id},
+                ).one_or_none()
+                if document is None:
+                    continue
+                locator_ids = list(
+                    dict.fromkeys(
+                        str(item.get("source_locator_id"))
+                        for item in [source, *task["related_clauses"]]
+                        if item.get("source_locator_id")
+                    )
+                )
+                if not locator_ids:
+                    continue
+                job_id = uuid7()
+                manifest = {
+                    "document_id": str(document.document_id),
+                    "document_version": int(document.version),
+                    "source_version_id": str(source_version_id),
+                    "source_locator_ids": locator_ids,
+                    "contract_coherence_profile": CONTRACT_COHERENCE_PROFILE,
+                    "revision_id": task["revision_id"],
+                    "revision_digest": task["revision_digest"],
+                    "context_digest": task["context_digest"],
+                    "coherence_context": task,
+                    "model_identity": "local-qwen3.8-27b",
+                }
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                        "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,"
+                        "state,priority,max_attempts,retry_policy_version,provenance,correlation_id,"
+                        "created_by_identity_id) VALUES (:o,:w,:job,:document,'CONTRACT_COHERENCE_REVIEW',"
+                        "CAST(:manifest AS jsonb),:digest,:key,'queued',:priority,2,"
+                        "'spine-retry-v0.1',CAST(:provenance AS jsonb),:correlation,:owner)"
+                    ),
+                    {
+                        "o": organization_id,
+                        "w": workspace_id,
+                        "job": job_id,
+                        "document": document.document_id,
+                        "manifest": _json(manifest),
+                        "digest": semantic_digest(
+                            {"kind": JobKind.CONTRACT_COHERENCE_REVIEW.value, "manifest": manifest}
+                        ),
+                        "key": key,
+                        "priority": _CONTRACT_COHERENCE_PRIORITY,
+                        "provenance": _json(
+                            {
+                                "contract": CONTRACT_COHERENCE_PROFILE,
+                                "revision_id": task["revision_id"],
+                            }
+                        ),
+                        "correlation": correlation_id,
+                        "owner": owner_identity_id,
+                    },
+                )
+                self._append_event(
+                    session,
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    job_id=job_id,
+                    event_type="job.queued",
+                    safe_message_code="contract_coherence_review_queued",
+                    current=0,
+                    total=1,
+                    terminal=False,
+                )
+                scheduled.append(str(job_id))
+        return scheduled
+
+    def _supersede_queued_contract_coherence_contexts(
+        self,
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        current_keys: set[str],
+    ) -> int:
+        rows = session.execute(
+            sa.text(
+                "SELECT job_id,lease_generation,idempotency_key FROM workspace.durable_jobs "
+                "WHERE organization_id=:o AND workspace_id=:w AND "
+                "job_kind='CONTRACT_COHERENCE_REVIEW' AND state='queued' "
+                "ORDER BY created_at,job_id LIMIT 64 FOR UPDATE SKIP LOCKED"
+            ),
+            {"o": organization_id, "w": workspace_id},
+        ).all()
+        for row in rows:
+            if str(row.idempotency_key) in current_keys:
+                continue
+            job_id = UUID(str(row.job_id))
+            reason = "superseded_contract_coherence_context"
+            cancellation_id, receipt_id = uuid7(), uuid7()
+            result = {"semantic_effect": False, "reason": reason}
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.job_cancellations "
+                    "(organization_id,workspace_id,cancellation_id,job_id,"
+                    "requested_by_identity_id,reason_code,cancellation_digest) VALUES "
+                    "(:o,:w,:cancellation,:job,'system:project-orchestrator',:reason,:digest)"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "cancellation": cancellation_id,
+                    "job": job_id,
+                    "reason": reason,
+                    "digest": semantic_digest(
+                        {"cancellation_id": cancellation_id, "job_id": job_id, "reason": reason}
+                    ),
+                },
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.job_terminal_receipts "
+                    "(organization_id,workspace_id,terminal_receipt_id,job_id,lease_generation,"
+                    "terminal_state,typed_outcome_code,result_manifest,result_digest) VALUES "
+                    "(:o,:w,:receipt,:job,:generation,'cancelled',:reason,CAST(:result AS jsonb),"
+                    ":digest)"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "receipt": receipt_id,
+                    "job": job_id,
+                    "generation": int(row.lease_generation),
+                    "reason": reason,
+                    "result": _json(result),
+                    "digest": semantic_digest(
+                        {"job_id": job_id, "state": "cancelled", "result": result}
+                    ),
+                },
+            )
+            session.execute(
+                sa.text(
+                    "UPDATE workspace.durable_jobs SET state='cancelled',"
+                    "cancellation_state='acknowledged',completed_at=CURRENT_TIMESTAMP,"
+                    "typed_failure_code=:reason,result_receipt_id=:receipt WHERE "
+                    "organization_id=:o AND workspace_id=:w AND job_id=:job AND state='queued'"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "job": job_id,
+                    "reason": reason,
+                    "receipt": receipt_id,
+                },
+            )
+            self._append_event(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                job_id=job_id,
+                event_type="job.cancelled",
+                safe_message_code=reason,
+                current=1,
+                total=1,
+                terminal=True,
+            )
+        return sum(str(row.idempotency_key) not in current_keys for row in rows)
 
     def _schedule_contract_references(
         self,

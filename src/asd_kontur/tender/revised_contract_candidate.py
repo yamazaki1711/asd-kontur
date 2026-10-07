@@ -124,10 +124,23 @@ def render_revised_contract_source_package(
             }
         )
     change_register = _render_change_register(change_rows)
+    coherence = view.get("coherence_review")
+    coherence = coherence if isinstance(coherence, Mapping) else {}
+    conflicts = _records(coherence.get("conflicts"))
     manifest = {
         "contract": "revised-contract-source-package@1.0.0",
         "status": "human_review_candidate",
-        "warning": "Candidate only; no approval or signature. Check unresolved references.",
+        "warning": (
+            "Candidate only; no approval or signature. Check unresolved references and "
+            "cross-clause coherence before agreement."
+        ),
+        "coherence_review": {
+            "status": str(coherence.get("status") or "not_performed"),
+            "scope": "selected_related_clauses_only",
+            "accepted_contexts": int(coherence.get("accepted_contexts") or 0),
+            "scheduled_contexts": int(coherence.get("scheduled_contexts") or 0),
+            "potential_conflict_count": len(conflicts),
+        },
         "unresolved_reference_count": sum(
             item.get("match_decision") == "unresolved"
             for item in _records(view.get("attachment_references"))

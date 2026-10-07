@@ -13,6 +13,7 @@ from asd_kontur.application_spine.models import (
     ClaimedJob,
     JobKind,
 )
+from asd_kontur.tender.contract_coherence import CONTRACT_COHERENCE_PROFILE
 from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
 from asd_kontur.tender.qwen_contract_references import CONTRACT_REFERENCE_PROFILE
 from asd_kontur.tender.qwen_work_reconciliation import (
@@ -100,6 +101,7 @@ class IndustrialDocumentUnderstandingPipeline:
             JobKind.PROJECT_WORK_RECONCILIATION: self._work_reconciliation,
             JobKind.CONTRACT_ANALYSIS: self._contract_analysis,
             JobKind.CONTRACT_REFERENCE_REVIEW: self._contract_references,
+            JobKind.CONTRACT_COHERENCE_REVIEW: self._contract_coherence,
         }
         handler = handlers.get(claimed.job_kind)
         if handler is None:
@@ -877,6 +879,27 @@ class IndustrialDocumentUnderstandingPipeline:
         self._repository.record_contract_analysis_result(claimed, output_manifest=result)
         return result
 
+    def _contract_coherence(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
+        if self._qwen_semantic is None:
+            raise UnderstandingStageFailure("qwen_contract_coherence_runtime_unavailable")
+        manifest = claimed.input_manifest
+        if str(manifest.get("contract_coherence_profile") or "") != CONTRACT_COHERENCE_PROFILE:
+            raise UnderstandingStageFailure("contract_coherence_profile_superseded")
+        reusable = self._repository.load_contract_analysis_result(claimed)
+        if reusable is not None:
+            return reusable
+        context = manifest.get("coherence_context")
+        if not isinstance(context, dict) or context.get("context_digest") != manifest.get(
+            "context_digest"
+        ):
+            raise UnderstandingStageFailure("contract_coherence_manifest_invalid")
+        try:
+            result = self._qwen_semantic.review_contract_coherence(context)
+        except QwenSemanticFailure as exc:
+            raise UnderstandingStageFailure(exc.code) from exc
+        self._repository.record_contract_coherence_result(claimed, output_manifest=result)
+        return result
+
     def _contract_references(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
         if self._qwen_semantic is None:
             raise UnderstandingStageFailure("qwen_contract_reference_runtime_unavailable")
@@ -970,6 +993,7 @@ def _profile_for(kind: JobKind) -> str:
         JobKind.PROJECT_WORK_RECONCILIATION: PROJECT_WORK_RECONCILIATION_PROFILE,
         JobKind.CONTRACT_ANALYSIS: CONTRACT_ANALYSIS_PROFILE,
         JobKind.CONTRACT_REFERENCE_REVIEW: CONTRACT_REFERENCE_PROFILE,
+        JobKind.CONTRACT_COHERENCE_REVIEW: CONTRACT_COHERENCE_PROFILE,
     }[kind]
 
 

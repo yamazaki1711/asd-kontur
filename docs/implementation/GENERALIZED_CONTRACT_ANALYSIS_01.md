@@ -1909,3 +1909,37 @@ cross-clause conflict or blocker. The review must not rewrite accepted clauses
 or make an API request wait on Qwen. Qualify conflicting and benign changed
 contracts, then use the same release path. Until then the revised package is
 an editable candidate, not a semantically or legally approved contract.
+
+## 2026-10-07 bounded cross-clause review implementation checkpoint
+
+Source code now adds `CONTRACT_COHERENCE_REVIEW` as a durable, autonomously
+scheduled Qwen task after effective contract analysis completes. One proposed
+revision is compared with up to 12 selected related clauses in a bounded
+context. Source/version/locator identities and exact quoted passages are
+validated before a conflict can enter the read model. The context digest
+changes when a selected original or proposed passage changes; superseded queued
+contexts are cancelled and historical results are not presented as current.
+The task never certifies full-contract coherence: omitted clause coverage is
+explicit, the editable assessment reports only accepted bounded candidates,
+and the revised-contract ZIP remains a human-review candidate.
+
+The first isolated live-Qwen qualification exposed a missing document identity
+in the new job manifest. This caused a `KeyError` at the shared stage-receipt
+writer while other contract outputs still completed. The scheduler now records
+the exact admitted document ID/version as well as source version. A rerun on a
+different-party synthetic contract autonomously completed intake, contract
+analysis, attachment-reference review, coherence review and editable outputs
+in 121.98 seconds. The ordinary warranty clause was not promoted to a risk.
+This proves one changed-corpus path, not legal approval or exhaustive review.
+
+Migration `0133_contract_coherence_review` passed upgrade, guarded downgrade
+and re-upgrade on a separate restore of the public database; the public
+database and deployed release remained at `0132`/`181e580` at this source
+checkpoint. The public pre-migration dump is 72 MB with SHA-256
+`c193a2a8564dc72ab4ae5ead345c42d5f7df19091db517b77a122b83c657e271`.
+The isolated full Python gate passed 1,496 tests with one skip; frontend
+typecheck, lint and build passed. A generated synthetic DOCX report reopened
+in LibreOffice, rendered to one PDF page and was visually checked for source
+quotes, action and bounded-review warning. Authenticated owner-browser and
+four-mode acceptance are not claimed. The owner workspace was not modified
+during qualification.

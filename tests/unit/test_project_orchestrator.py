@@ -97,6 +97,10 @@ def test_orchestrator_repairs_dependencies_and_ensures_successors() -> None:
             self.calls.append("refill_work")
             return (object(), object())
 
+        def schedule_contract_coherence_reviews(self, **_kwargs: object):
+            self.calls.append("review_contract_coherence")
+            return ()
+
     repository = Repository()
     result = ProjectOrchestrator(repository, interval_seconds=30).run_once()  # type: ignore[arg-type]
 
@@ -112,6 +116,7 @@ def test_orchestrator_repairs_dependencies_and_ensures_successors() -> None:
         "retry_transient",
         "supersede_reconciliations",
         "ensure_project_model",
+        "review_contract_coherence",
         "refill_work",
         "recover_dependencies",
     ]
@@ -153,6 +158,9 @@ def test_orchestrator_rotates_across_more_scopes_than_one_sweep() -> None:
             return object()
 
         def refill_workspace_project_work_reconciliation_if_idle(self, **_kwargs: object):
+            return ()
+
+        def schedule_contract_coherence_reviews(self, **_kwargs: object):
             return ()
 
     repository = Repository()

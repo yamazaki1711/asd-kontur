@@ -15,6 +15,10 @@ from asd_kontur.document_understanding.qwen_semantic import (
     QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
 )
 from asd_kontur.tender.clause_reference import display_clause_reference
+from asd_kontur.tender.contract_coherence import (
+    CONTRACT_COHERENCE_PROFILE,
+    contract_coherence_tasks,
+)
 from asd_kontur.tender.qwen_contract_analysis import (
     CONTRACT_ANALYSIS_PROFILE,
     contract_commercial_narrative_without_unverified_authority,
@@ -228,6 +232,14 @@ class TenderContractAnalysisRepository:
             "clauses": [_row(x) for x in clauses],
             "attachment_references": autonomous_review["attachment_references"],
             "reference_review": autonomous_review["reference_review"],
+            "coherence_review": {
+                "status": "not_applicable" if not revised_clauses else "not_routed",
+                "scope": "selected_related_clauses_only",
+                "scheduled_contexts": 0,
+                "accepted_contexts": 0,
+                "reviews": [],
+                "conflicts": [],
+            },
             "issues": [_row(x) for x in issues],
             "protocols": [_row(x) for x in protocols],
             "disagreement_items": [_row(x) for x in disagreement_items],
@@ -739,6 +751,55 @@ class TenderContractAnalysisRepository:
         )
         if revised_contract_available and external_revision_count:
             gaps.append("REVISED_CONTRACT_EXCLUDES_NON_PRIMARY_SOURCE_REVISIONS")
+        coherence_tasks = contract_coherence_tasks(
+            {"clauses": clauses, "revised_clauses": revised_clauses}
+        )
+        coherence_digests = [str(task["context_digest"]) for task in coherence_tasks]
+        coherence_rows = (
+            list(
+                session.execute(
+                    sa.text(
+                        "SELECT job.state,job.input_manifest->>'context_digest' AS context_digest,"
+                        "result.result_manifest FROM workspace.durable_jobs job LEFT JOIN "
+                        "workspace.contract_analysis_results result ON "
+                        "result.organization_id=job.organization_id AND "
+                        "result.workspace_id=job.workspace_id AND result.job_id=job.job_id AND "
+                        "result.profile_version=:profile WHERE job.organization_id=:o AND "
+                        "job.workspace_id=:w AND job.job_kind='CONTRACT_COHERENCE_REVIEW' AND "
+                        "job.input_manifest->>'context_digest'=ANY(:digests)"
+                    ),
+                    {
+                        "o": organization_id,
+                        "w": workspace_id,
+                        "profile": CONTRACT_COHERENCE_PROFILE,
+                        "digests": coherence_digests,
+                    },
+                ).mappings()
+            )
+            if coherence_digests
+            else []
+        )
+        coherence_reviews = [
+            dict(row["result_manifest"])
+            for row in coherence_rows
+            if str(row["state"]) == "succeeded" and isinstance(row["result_manifest"], dict)
+        ]
+        accepted_digests = {str(item.get("context_digest")) for item in coherence_reviews}
+        coherence_status = (
+            "not_applicable"
+            if not revised_clauses
+            else "bounded_context_unavailable"
+            if not coherence_tasks
+            else "reviewed_bounded_context"
+            if len(accepted_digests) == len(coherence_tasks)
+            else "partial_with_blockers"
+            if any(
+                str(row["state"]) in {"failed", "reconciliation_required"} for row in coherence_rows
+            )
+            else "in_progress"
+            if any(str(row["state"]) in {"queued", "leased", "running"} for row in coherence_rows)
+            else "pending"
+        )
         return {
             "status": status,
             "process": {
@@ -819,6 +880,23 @@ class TenderContractAnalysisRepository:
                 else []
             ),
             "revised_clauses": revised_clauses,
+            "coherence_review": {
+                "status": coherence_status,
+                "scope": "selected_related_clauses_only",
+                "scheduled_contexts": len(coherence_tasks),
+                "accepted_contexts": len(accepted_digests),
+                "reviews": coherence_reviews,
+                "conflicts": [
+                    {
+                        "revision_id": review.get("revision_id"),
+                        "source_locator_id": review.get("source_locator_id"),
+                        **conflict,
+                    }
+                    for review in coherence_reviews
+                    for conflict in review.get("conflicts") or ()
+                    if isinstance(conflict, dict)
+                ],
+            },
             "deliverables": [
                 {
                     "deliverable_kind": "disagreement_protocol",
@@ -1060,6 +1138,14 @@ def _empty_candidate_projection(*, status: str, gaps: list[str]) -> dict[str, An
             "reviewed_batches": 0,
             "scheduled_batches": 0,
             "unresolved_references": 0,
+        },
+        "coherence_review": {
+            "status": "not_applicable",
+            "scope": "selected_related_clauses_only",
+            "scheduled_contexts": 0,
+            "accepted_contexts": 0,
+            "reviews": [],
+            "conflicts": [],
         },
         "issues": [],
         "protocols": [],

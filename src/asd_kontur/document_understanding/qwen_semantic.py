@@ -259,6 +259,16 @@ class QwenDocumentSemanticAdapter:
             timeout_seconds=self._timeout_seconds,
         ).review(fragments, admitted_sources=admitted_sources)
 
+    def review_contract_coherence(self, context: Mapping[str, object]) -> dict[str, object]:
+        """Review one selected contract revision against bounded related clauses."""
+
+        from asd_kontur.tender.qwen_contract_coherence import QwenContractCoherenceReviewer
+
+        return QwenContractCoherenceReviewer(
+            self._endpoint,
+            timeout_seconds=self._timeout_seconds,
+        ).review(context)
+
     def extract_structures(
         self, elements: Iterable[LayoutElement]
     ) -> tuple[StructureNodeCandidate, ...]:

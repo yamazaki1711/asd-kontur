@@ -70,6 +70,7 @@ _RETRYABLE_STAGE_FAILURES = frozenset(
         "qwen_work_reconciliation_runtime_unavailable",
         "qwen_contract_analysis_runtime_unavailable",
         "qwen_contract_reference_runtime_unavailable",
+        "qwen_contract_coherence_runtime_unavailable",
         "qwen_vision_runtime_unavailable",
     }
 )
@@ -449,8 +450,11 @@ class DocumentWorker:
             JobKind.PROJECT_WORK_RECONCILIATION,
             JobKind.CONTRACT_ANALYSIS,
             JobKind.CONTRACT_REFERENCE_REVIEW,
+            JobKind.CONTRACT_COHERENCE_REVIEW,
         }:
             try:
+                if claimed.job_kind is JobKind.CONTRACT_COHERENCE_REVIEW:
+                    return self._understanding.execute(claimed, io.BytesIO())
                 with self._open_source(claimed) as source:
                     return self._understanding.execute(claimed, source)
             except (UnderstandingStageFailure, NativeExtractionFailure, OcrFailure) as exc:

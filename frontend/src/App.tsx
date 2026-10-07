@@ -2796,6 +2796,13 @@ function TenderContractAnalysisBody({
   const revisedClauses = value.revised_clauses as Array<
     Record<string, unknown>
   >;
+  const coherenceReview = (value.coherence_review ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const coherenceConflicts = (coherenceReview.conflicts ?? []) as Array<
+    Record<string, unknown>
+  >;
   const revisionReviewCandidates = (value.revision_review_candidates ??
     []) as Array<Record<string, unknown>>;
   const [selectedRevisionIds, setSelectedRevisionIds] = useState<string[]>([]);
@@ -3169,6 +3176,89 @@ function TenderContractAnalysisBody({
           </p>
         )}
       </section>
+      {revisedClauses.length ? (
+        <section className="panel">
+          <h2>Согласованность предлагаемых редакций</h2>
+          <p>
+            Проверяются только связанные положения, указанные в составе анализа.
+            Отсутствие найденного противоречия не означает проверки всего
+            договора или юридического согласования.
+          </p>
+          {coherenceConflicts.length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Предлагаемая редакция</th>
+                    <th>Связанный пункт</th>
+                    <th>Противоречие и последствие</th>
+                    <th>Действие</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coherenceConflicts.map((item, index) => (
+                    <tr
+                      key={`${String(item.revision_id)}:${String(item.other_clause_id)}:${index.toString()}`}
+                    >
+                      <td>
+                        {displayValue(item.proposal_quote, "—")}
+                        {typeof item.source_locator_id === "string" &&
+                        item.source_locator_id ? (
+                          <small>
+                            <Link
+                              to={workspaceRoute(
+                                "Tender",
+                                workspaceId,
+                                `/evidence/locators/${item.source_locator_id}`,
+                              )}
+                            >
+                              Открыть исходный пункт
+                            </Link>
+                          </small>
+                        ) : null}
+                      </td>
+                      <td>
+                        {displayValue(item.other_quote, "—")}
+                        {typeof item.other_source_locator_id === "string" &&
+                        item.other_source_locator_id ? (
+                          <small>
+                            <Link
+                              to={workspaceRoute(
+                                "Tender",
+                                workspaceId,
+                                `/evidence/locators/${item.other_source_locator_id}`,
+                              )}
+                            >
+                              Открыть связанный пункт
+                            </Link>
+                          </small>
+                        ) : null}
+                      </td>
+                      <td>
+                        {displayValue(item.conflict, "—")}
+                        <small>
+                          {displayValue(item.contractor_consequence, "—")}
+                        </small>
+                      </td>
+                      <td>{displayValue(item.recommended_action, "—")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : coherenceReview.status === "reviewed_bounded_context" ? (
+            <p>
+              В проверенных связанных положениях прямое противоречие не
+              установлено.
+            </p>
+          ) : (
+            <p>
+              Проверка согласованности ещё выполняется или ограничена исходными
+              данными.
+            </p>
+          )}
+        </section>
+      ) : null}
       <section className="panel">
         <h2>Протокол разногласий и переработанные положения</h2>
         {revisedClauses.length ? (
