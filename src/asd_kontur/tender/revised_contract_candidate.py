@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import io
 import json
@@ -10,6 +11,8 @@ import zipfile
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 from xml.etree import ElementTree as ET
+
+from asd_kontur.tender.clause_reference import display_clause_reference
 
 _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 _MARKUP_COMPATIBILITY_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -68,6 +71,7 @@ def render_revised_contract_source_package(
 
     files: list[tuple[str, bytes]] = []
     manifest_sources: list[dict[str, Any]] = []
+    change_rows: list[tuple[str, ...]] = []
     for ordinal, source in enumerate(sources, start=1):
         source_id = str(source["source_version_id"])
         original = source.get("content")
@@ -91,6 +95,24 @@ def render_revised_contract_source_package(
         )
         entry_name = f"contract-source-{ordinal:02d}.docx"
         files.append((entry_name, output))
+        for revision in selected:
+            clause = clauses[
+                (
+                    str(revision.get("source_clause_id", "")),
+                    str(revision.get("source_clause_version", "")),
+                )
+            ]
+            change_rows.append(
+                (
+                    str(len(change_rows) + 1),
+                    str(source.get("safe_display_name") or entry_name),
+                    str(clause.get("source_page") or ""),
+                    display_clause_reference(clause),
+                    str(revision.get("replacement_source_text") or clause.get("source_text") or ""),
+                    str(revision.get("revised_text") or ""),
+                    "Проект редакции; требует согласования",
+                )
+            )
         manifest_sources.append(
             {
                 "source_version_id": source_id,
@@ -101,6 +123,7 @@ def render_revised_contract_source_package(
                 "candidate_sha256": hashlib.sha256(output).hexdigest(),
             }
         )
+    change_register = _render_change_register(change_rows)
     manifest = {
         "contract": "revised-contract-source-package@1.0.0",
         "status": "human_review_candidate",
@@ -116,6 +139,11 @@ def render_revised_contract_source_package(
             and item != "REVISED_CONTRACT_EXCLUDES_NON_PRIMARY_SOURCE_REVISIONS"
         ],
         "sources": manifest_sources,
+        "change_register": {
+            "entry": "change-register.csv",
+            "sha256": hashlib.sha256(change_register).hexdigest(),
+            "revision_count": len(change_rows),
+        },
     }
     if protocol_docx is not None:
         try:
@@ -135,6 +163,9 @@ def render_revised_contract_source_package(
             member = zipfile.ZipInfo(entry_name, (1980, 1, 1, 0, 0, 0))
             member.compress_type = zipfile.ZIP_DEFLATED
             package.writestr(member, output)
+        member = zipfile.ZipInfo("change-register.csv", (1980, 1, 1, 0, 0, 0))
+        member.compress_type = zipfile.ZIP_DEFLATED
+        package.writestr(member, change_register)
         if protocol_docx is not None:
             member = zipfile.ZipInfo("reviewed-disagreement-protocol.docx", (1980, 1, 1, 0, 0, 0))
             member.compress_type = zipfile.ZIP_DEFLATED
@@ -148,6 +179,30 @@ def render_revised_contract_source_package(
             ).encode(),
         )
     return archive.getvalue()
+
+
+def _render_change_register(rows: Sequence[tuple[str, ...]]) -> bytes:
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(
+        (
+            "№",
+            "Документ",
+            "Страница/лист",
+            "Пункт договора",
+            "Исходная редакция",
+            "Редакция Подрядчика",
+            "Статус",
+        )
+    )
+    for row in rows:
+        writer.writerow(
+            tuple(
+                "'" + value if value.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")) else value
+                for value in row
+            )
+        )
+    return ("\ufeff" + output.getvalue()).encode("utf-8")
 
 
 def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str, Any]) -> bytes:

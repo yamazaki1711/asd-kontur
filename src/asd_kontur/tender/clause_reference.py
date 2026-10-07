@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-_SOURCE_CLAUSE_NUMBER = re.compile(r"^\s*(\d{1,3}(?:\.\d{1,3}){1,4})\.(?=\s|$)")
+_SOURCE_CLAUSE_NUMBER = re.compile(r"^\s*(\d{1,3}(?:\.\d{1,3}){0,4})\.(?=\s|$)")
 
 
 def display_clause_reference(clause: Mapping[str, Any]) -> str:

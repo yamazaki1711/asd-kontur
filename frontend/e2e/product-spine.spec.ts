@@ -770,6 +770,11 @@ test("reviewer selects only desired contract revisions for draft export", async 
   await expect(firstBox).not.toBeChecked();
   await expect(secondBox).not.toBeChecked();
   await expect(
+    page.getByText(
+      "Архив редакции включает договорные файлы с выбранными правками",
+    ),
+  ).toBeVisible();
+  await expect(
     page.getByRole("link", {
       name: "Скачать выбранные редакции договорных документов (ZIP)",
     }),

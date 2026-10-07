@@ -3035,6 +3035,16 @@ function TenderContractAnalysisBody({
           </a>
         ) : null}
       </div>
+      {revisedContracts.some(
+        (candidate) =>
+          String(candidate.package_state) === "exact_source_package_available",
+      ) ? (
+        <p>
+          Архив редакции включает договорные файлы с выбранными правками и
+          таблицу точных изменений для проверки. Прочие файлы сохранены без
+          правок; архив не означает согласования редакции Заказчиком.
+        </p>
+      ) : null}
       {exactRevisedContract && externalRevisionCount > 0 ? (
         <InfoNotice>
           Редакция основного договора подготовлена только по изменениям,

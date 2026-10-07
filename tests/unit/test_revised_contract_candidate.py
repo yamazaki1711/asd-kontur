@@ -1,6 +1,8 @@
 # ruff: noqa: RUF001 -- Russian contract examples are intentional.
 from __future__ import annotations
 
+import csv
+import hashlib
 import io
 import json
 import zipfile
@@ -111,6 +113,7 @@ def test_revised_contract_package_applies_two_sources_and_preserves_unchanged_do
             "contract-source-01.docx",
             "contract-source-02.docx",
             "contract-source-03.docx",
+            "change-register.csv",
             "manifest.json",
         ]
         assert _paragraphs(archive.read("contract-source-01.docx"))[1] == (
@@ -120,7 +123,18 @@ def test_revised_contract_package_applies_two_sources_and_preserves_unchanged_do
             "Приложение. График корректируется при задержке Заказчика."
         )
         assert archive.read("contract-source-03.docx") == source_c
+        change_register = archive.read("change-register.csv")
+        changes = list(csv.DictReader(io.StringIO(change_register.decode("utf-8-sig"))))
         manifest = json.loads(archive.read("manifest.json"))
+    assert len(changes) == 2
+    assert [change["Документ"] for change in changes] == ["contract.docx", "annex.docx"]
+    assert changes[0]["Пункт договора"] == "2"
+    assert (
+        changes[0]["Редакция Подрядчика"]
+        == "2. Оплата после подписания акта в течение десяти дней."
+    )
+    assert manifest["change_register"]["revision_count"] == 2
+    assert manifest["change_register"]["sha256"] == hashlib.sha256(change_register).hexdigest()
     assert [item["revision_count"] for item in manifest["sources"]] == [1, 1, 0]
     assert manifest["status"] == "human_review_candidate"
     assert manifest["analysis_gaps"] == ["CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED"]
@@ -160,6 +174,7 @@ def test_reviewed_package_carries_matching_editable_protocol() -> None:
     with zipfile.ZipFile(io.BytesIO(package)) as archive:
         assert archive.namelist() == [
             "contract-source-01.docx",
+            "change-register.csv",
             "reviewed-disagreement-protocol.docx",
             "manifest.json",
         ]
@@ -167,6 +182,50 @@ def test_reviewed_package_carries_matching_editable_protocol() -> None:
         assert manifest["reviewed_protocol"]["proposal_count"] == 1
         assert archive.read("reviewed-disagreement-protocol.docx") == protocol
         assert _paragraphs(archive.read("contract-source-01.docx")) == [proposed]
+
+
+def test_revised_contract_change_register_is_editable_and_formula_safe() -> None:
+    source = "=unsafe source formula"
+    proposal = "@unsafe proposed formula"
+    package = render_revised_contract_source_package(
+        [{"source_version_id": "source-a", "content": _source_docx(source)}],
+        {
+            "clauses": [
+                {
+                    "clause_id": "clause-a",
+                    "clause_version": 1,
+                    "source_version_id": "source-a",
+                    "source_text": source,
+                    "source_page": 4,
+                }
+            ],
+            "revised_clauses": [
+                {
+                    "source_clause_id": "clause-a",
+                    "source_clause_version": 1,
+                    "revised_text": proposal,
+                }
+            ],
+        },
+    )
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        rows = list(
+            csv.DictReader(io.StringIO(archive.read("change-register.csv").decode("utf-8-sig")))
+        )
+        assert _paragraphs(archive.read("contract-source-01.docx")) == [proposal]
+    assert rows[0]["Исходная редакция"] == "'=unsafe source formula"
+    assert rows[0]["Редакция Подрядчика"] == "'@unsafe proposed formula"
+    assert rows[0]["Пункт договора"] == "Пункт без номера (стр./лист 4)"
+    guarded = list(
+        csv.reader(
+            io.StringIO(
+                revised_contract_module._render_change_register([(" \t=delayed formula",)]).decode(
+                    "utf-8-sig"
+                )
+            )
+        )
+    )
+    assert guarded[1][0] == "' \t=delayed formula"
 
 
 def test_selected_revision_package_preserves_unselected_contract_source() -> None:
