@@ -6885,31 +6885,44 @@ class SpinePostgresRepository:
                     .one_or_none()
                 )
                 repair_version: str | None = None
+                invalid_reference_output = {
+                    "qwen_contract_reference_invalid_json",
+                    "qwen_contract_reference_invalid_shape",
+                    "qwen_contract_reference_invalid_item",
+                }
                 if (
                     existing is not None
                     and str(existing["state"]) == "failed"
-                    and str(existing["typed_failure_code"])
-                    in {
-                        "qwen_contract_reference_invalid_json",
-                        "qwen_contract_reference_invalid_shape",
-                        "qwen_contract_reference_invalid_item",
-                    }
+                    and str(existing["typed_failure_code"]) in invalid_reference_output
                 ):
-                    # A changed, bounded repair strategy may replace one failed
-                    # batch. Accepted batches keep their original job identity.
-                    repair_version = "invalid-output-split-v1"
-                    key = f"{key}:{repair_version}"
-                    existing = (
-                        session.execute(
-                            sa.text(
-                                "SELECT job_id,state,typed_failure_code FROM workspace.durable_jobs WHERE "
-                                "organization_id=:o AND workspace_id=:w AND idempotency_key=:key"
-                            ),
-                            {"o": organization_id, "w": workspace_id, "key": key},
+                    # v1 was historically only a new job identity, not a
+                    # changed worker strategy. v2 is the final bounded
+                    # replacement for a failed v1; no unbounded refill.
+                    base_key = key
+                    for candidate_version in (
+                        "invalid-output-split-v1",
+                        "invalid-output-split-v2",
+                    ):
+                        repair_version = candidate_version
+                        key = f"{base_key}:{candidate_version}"
+                        existing = (
+                            session.execute(
+                                sa.text(
+                                    "SELECT job_id,state,typed_failure_code FROM "
+                                    "workspace.durable_jobs WHERE organization_id=:o "
+                                    "AND workspace_id=:w AND idempotency_key=:key"
+                                ),
+                                {"o": organization_id, "w": workspace_id, "key": key},
+                            )
+                            .mappings()
+                            .one_or_none()
                         )
-                        .mappings()
-                        .one_or_none()
-                    )
+                        if (
+                            existing is None
+                            or str(existing["state"]) != "failed"
+                            or str(existing["typed_failure_code"]) not in invalid_reference_output
+                        ):
+                            break
                 if existing is not None:
                     scheduled.append(
                         {"job_id": str(existing["job_id"]), "state": str(existing["state"])}

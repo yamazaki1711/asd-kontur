@@ -25,6 +25,7 @@ _REFERENCE_KINDS = frozenset(
 _MATCH_DECISIONS = frozenset({"matched", "partially_matched", "unresolved"})
 _MAX_CONTEXT_CHARS = 9_000
 _MAX_INVENTORY = 64
+_REPAIR_POLICIES = frozenset({"invalid-output-split-v1", "invalid-output-split-v2"})
 _REFERENCE_SIGNAL = re.compile(
     r"(?:приложени\w*|техническ\w*\s+задан\w*|график\w*|ведомост\w*|"
     r"чертеж\w*|спецификац\w*|appendix|annex|attachment|schedule|drawing|"
@@ -53,11 +54,23 @@ class QwenContractReferenceReviewer:
         fragments: Iterable[Mapping[str, object]],
         *,
         admitted_sources: Iterable[Mapping[str, object]],
+        repair_policy_version: str | None = None,
     ) -> dict[str, object]:
         rows = [dict(row) for row in fragments]
         sources = [dict(source) for source in admitted_sources]
-        if not rows or not sources or len(sources) > _MAX_INVENTORY:
+        if (
+            not rows
+            or not sources
+            or len(sources) > _MAX_INVENTORY
+            or repair_policy_version not in (None, *_REPAIR_POLICIES)
+        ):
             raise QwenSemanticFailure("qwen_contract_reference_input_invalid")
+        if repair_policy_version is not None and len(rows) > 1:
+            return self._split_review(
+                rows,
+                sources,
+                repair_policy_version=repair_policy_version,
+            )
         allowed_text: dict[str, str] = {}
         prompt_rows: list[dict[str, object]] = []
         for row in rows:
@@ -93,6 +106,17 @@ class QwenContractReferenceReviewer:
         if sum(map(len, allowed_text.values())) > _MAX_CONTEXT_CHARS:
             raise QwenSemanticFailure("qwen_contract_reference_context_too_large")
         prompt = _prompt(prompt_rows, inventory)
+        if repair_policy_version is not None:
+            prompt += (
+                "\nREPAIR POLICY: проверяй только этот source_locator_id. "
+                "source_quote должен быть непрерывной подстрокой CONTEXT. "
+                "matched: только один admitted matched_source_version_id и пустой список. "
+                "partially_matched: matched_source_version_id=null, непустой список "
+                "admitted matched_source_version_ids и явное uncertainty о неполноте. "
+                "unresolved: matched_source_version_id=null и пустой список. "
+                "Если явной документной ссылки нет, верни пустой references. "
+                "Никаких придуманных идентификаторов или цитат."
+            )
         try:
             raw = _complete(self._endpoint, prompt, self._timeout_seconds, max_tokens=3000)
         except QwenSemanticFailure as exc:
@@ -161,13 +185,25 @@ class QwenContractReferenceReviewer:
         return result
 
     def _split_review(
-        self, rows: list[dict[str, object]], sources: list[dict[str, object]]
+        self,
+        rows: list[dict[str, object]],
+        sources: list[dict[str, object]],
+        *,
+        repair_policy_version: str | None = None,
     ) -> dict[str, object]:
         """Shrink a rejected multi-locator task without accepting invalid output."""
 
         midpoint = len(rows) // 2
-        left = self.review(rows[:midpoint], admitted_sources=sources)
-        right = self.review(rows[midpoint:], admitted_sources=sources)
+        left = self.review(
+            rows[:midpoint],
+            admitted_sources=sources,
+            repair_policy_version=repair_policy_version,
+        )
+        right = self.review(
+            rows[midpoint:],
+            admitted_sources=sources,
+            repair_policy_version=repair_policy_version,
+        )
         merged: dict[str, object] = {
             "contract": CONTRACT_REFERENCE_CONTRACT,
             "profile_version": CONTRACT_REFERENCE_PROFILE,

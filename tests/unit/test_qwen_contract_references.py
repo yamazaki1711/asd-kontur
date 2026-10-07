@@ -242,6 +242,35 @@ def test_output_exhaustion_splits_only_the_bounded_input(
     assert result["references"] == []
 
 
+def test_versioned_repair_forces_single_locator_requests_with_stricter_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        prompts.append(prompt)
+        assert max_tokens >= 2_000
+        return '{"references":[]}'
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_contract_references._complete", complete)
+    result = QwenContractReferenceReviewer("http://127.0.0.1:8765/v1").review(
+        [
+            {"source_locator_id": "a", "text": "Appendix A is incorporated."},
+            {"source_locator_id": "b", "text": "Annex B is incorporated."},
+        ],
+        admitted_sources=[{"source_version_id": "source-c", "safe_display_name": "Contract"}],
+        repair_policy_version="invalid-output-split-v2",
+    )
+    assert result["references"] == []
+    assert len(prompts) == 2
+    assert all("REPAIR POLICY" in prompt for prompt in prompts)
+    assert all("source_quote должен быть непрерывной подстрокой" in prompt for prompt in prompts)
+    assert '"source_locator_id":"a"' in prompts[0]
+    assert '"source_locator_id":"b"' not in prompts[0]
+    assert '"source_locator_id":"b"' in prompts[1]
+    assert '"source_locator_id":"a"' not in prompts[1]
+
+
 def test_invalid_multi_locator_output_splits_without_accepting_an_invented_quote(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

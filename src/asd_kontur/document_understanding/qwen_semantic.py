@@ -249,6 +249,7 @@ class QwenDocumentSemanticAdapter:
         fragments: Iterable[Mapping[str, object]],
         *,
         admitted_sources: Iterable[Mapping[str, object]],
+        repair_policy_version: str | None = None,
     ) -> dict[str, object]:
         """Interpret exact contract-to-document references through local Qwen."""
 
@@ -257,7 +258,11 @@ class QwenDocumentSemanticAdapter:
         return QwenContractReferenceReviewer(
             self._endpoint,
             timeout_seconds=self._timeout_seconds,
-        ).review(fragments, admitted_sources=admitted_sources)
+        ).review(
+            fragments,
+            admitted_sources=admitted_sources,
+            repair_policy_version=repair_policy_version,
+        )
 
     def review_contract_coherence(self, context: Mapping[str, object]) -> dict[str, object]:
         """Review one selected contract revision against bounded related clauses."""

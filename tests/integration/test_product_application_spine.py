@@ -2185,6 +2185,74 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
             recovering = client.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
             assert recovering.json()["reference_review"]["status"] == "in_progress"
             assert recovering.json()["reference_review"]["scheduled_batches"] == 1
+            with postgres_environment.owner_engine.begin() as connection:
+                repair_input = connection.execute(
+                    sa.text(
+                        "SELECT input_manifest,input_digest FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND job_id=:job"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace_id,
+                        "job": pending_review,
+                    },
+                ).one()
+                connection.execute(
+                    sa.text(
+                        "UPDATE workspace.durable_jobs SET state='running',"
+                        "lease_owner='test-worker',lease_generation=1,"
+                        "lease_expires_at=CURRENT_TIMESTAMP+INTERVAL '1 minute' "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace "
+                        "AND job_id=:job"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace_id,
+                        "job": pending_review,
+                    },
+                )
+            SpinePostgresRepository(postgres_environment.document_worker_engine).finish_job(
+                ClaimedJob(
+                    organization_id=UUID(workspace["organization_id"]),
+                    workspace_id=workspace_id,
+                    job_id=UUID(str(pending_review)),
+                    job_kind=JobKind.CONTRACT_REFERENCE_REVIEW,
+                    input_manifest=repair_input.input_manifest,
+                    input_digest=str(repair_input.input_digest),
+                    attempt_number=1,
+                    lease_generation=1,
+                    cancellation_state="active",
+                ),
+                terminal_state=JobState.FAILED,
+                outcome_code="qwen_contract_reference_invalid_item",
+                result_manifest={},
+                worker_identity="test-worker",
+            )
+            for _ in range(2):
+                ProjectOrchestrator(
+                    SpinePostgresRepository(
+                        postgres_environment.document_worker_engine,
+                        contract_view_engine=postgres_environment.application_engine,
+                    )
+                ).run_once()
+            with postgres_environment.owner_engine.connect() as connection:
+                final_repairs = list(
+                    connection.execute(
+                        sa.text(
+                            "SELECT job_id,state FROM workspace.durable_jobs WHERE "
+                            "organization_id=:organization AND workspace_id=:workspace "
+                            "AND job_kind='CONTRACT_REFERENCE_REVIEW' AND "
+                            "input_manifest->>'repair_policy_version'='invalid-output-split-v2'"
+                        ),
+                        {
+                            "organization": workspace["organization_id"],
+                            "workspace": workspace_id,
+                        },
+                    ).mappings()
+                )
+            assert len(final_repairs) == 1
+            assert final_repairs[0]["state"] == "queued"
+            pending_review = final_repairs[0]["job_id"]
             third_upload = client.post(
                 f"/api/v1/workspaces/{workspace_id}/documents",
                 files=[("files", ("drawing.txt", b"General arrangement", "text/plain"))],

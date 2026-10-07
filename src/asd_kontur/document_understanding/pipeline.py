@@ -955,6 +955,11 @@ class IndustrialDocumentUnderstandingPipeline:
             result = self._qwen_semantic.review_contract_references(
                 fragments,
                 admitted_sources=inventory,
+                repair_policy_version=(
+                    str(manifest["repair_policy_version"])
+                    if manifest.get("repair_policy_version") is not None
+                    else None
+                ),
             )
         except QwenSemanticFailure as exc:
             raise UnderstandingStageFailure(exc.code) from exc

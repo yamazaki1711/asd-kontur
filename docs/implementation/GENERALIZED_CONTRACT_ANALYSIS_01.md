@@ -1,5 +1,25 @@
 # Generalized Contract Analysis 01
 
+## Bounded invalid-output repair is now a real worker strategy — source checkpoint
+
+During the autonomous v3 run, one reference batch failed with typed
+`qwen_contract_reference_invalid_item`. The orchestrator correctly queued
+its versioned replacement, but the existing `invalid-output-split-v1` marker
+changed only the job key and manifest: the worker ignored it and would repeat
+the same broad request. This was a concrete retry defect, not a reason to
+manually requeue owner work or weaken source validation.
+
+The production Qwen adapter now receives the persisted repair policy. A
+replacement is split into single-locator prompts before inference, with
+explicit constraints for exact contract quotes and admitted-source identities;
+malformed output still fails closed. If a historical v1 replacement also
+failed with a typed invalid output, the supervised reconciler may create one
+final `invalid-output-split-v2` replacement. No third replacement is permitted.
+Accepted batches remain accepted. This has passed 21/21 focused model-contract
+checks and 2/2 isolated PostgreSQL scheduling cases. It remains source-only
+until the current owner's bounded Qwen run drains, so no live worker is
+interrupted and no public recovery claim is made yet.
+
 ## Partial contract-package evidence — 2026-10-08 source checkpoint
 
 The autonomous v2 reviewer finished seven of seven batches. It found 39
