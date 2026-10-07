@@ -1959,3 +1959,17 @@ publication fingerprint were identical immediately before and after the
 workspace-only migration. The in-app browser connector exposed no browser in
 this session, so authenticated visual acceptance of the new panel remains
 unverified; API/read-model and isolated output acceptance were completed.
+
+Release `234e8e32efc395a9cfc2dd89b0f684601b75c584` adds the bounded
+review to the consultant's structured contract context and direct answer path.
+The answer reports selected-context coverage and candidate conflicts without
+treating an empty conflict list as whole-contract approval. No owner
+conversation answer is claimed because authenticated browser access was
+unavailable. The isolated Python gate passed 1,498 tests with two skips;
+focused assistant checks passed 68/68, and mypy/ruff passed. The source-only
+release was staged from its exact commit, passed 4/4 launchd preflight, and
+the four application roles were rolled with no real-workspace job running at
+cutover. Qwen and NTD process IDs were preserved. API readiness returned
+migration `0133_contract_coherence_review` after rollout. The contract journey
+remains `PARTIAL` pending full legal coherence, owner decisions and authenticated
+UI acceptance.
