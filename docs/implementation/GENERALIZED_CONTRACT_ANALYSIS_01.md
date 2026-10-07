@@ -2245,3 +2245,17 @@ wording, and the revised contract body were legible and not clipped. This
 qualification does not imply that the public workspace's 307 clauses have
 received whole-contract legal clearance or that an owner has accepted the
 proposals.
+
+The follow-up user-language correction was released as exact SHA
+`58b826d7c77aa71f8b947589ea9c1c3593a29026`, still on migration
+`0135_support_incoming_inspection_preflights`. The staged archive passed 45/45
+focused revised-contract/report tests, frontend typecheck/build, and 4/4
+private launchd topology preflight. All four application roles were cut over;
+their first immediate post-bootout bootstrap attempts returned launchd I/O
+error 5, while a bounded second bootstrap succeeded for each. Every role then
+reported `running` from the pinned release path. API readiness and frontend
+HTTP 200 passed, with one active workspace, 21 source versions, 274 persisted
+contract-analysis results and no queued/leased/running durable job. This
+release changes the report/UI explanation only; it does not add a new legal
+finding or alter public project data. The recurring launchd bootstrap race
+remains an Operations automation defect to address in a separate checkpoint.
