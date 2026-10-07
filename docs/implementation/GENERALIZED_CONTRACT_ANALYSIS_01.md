@@ -36,6 +36,17 @@ environment values. A deterministic test covers the observed 18-second drain
 and timeout. This guard is not a substitute for the release preflight, queue
 drain, backup, readiness checks or rollback procedure.
 
+Read-only qualification through the pinned owner-scoped service found 307
+extracted contract clauses, seven issues, five disagreement items, five
+proposed revisions and 34 referenced-attachment statements in the current
+contract projection. The application-generated protocol DOCX opened in
+LibreOffice and rendered to a nonempty three-page PDF. The revised-source ZIP
+contained two DOCX files that opened and rendered to 30 and seven pages. This
+used an isolated temporary directory that was removed at the end of the
+check; no owner project row or source was changed. It establishes file
+openability and basic pagination, not legal approval, full-page visual quality
+or correctness of each proposed revision.
+
 ## 2026-10-07 confirmed execution-conditions schedule
 
 The Support production view now separates reviewed contract candidates from
