@@ -61,3 +61,33 @@ project has not been performed because there are no owner-supplied bidder facts
 to submit. Isolated PostgreSQL API acceptance covered submission and replay;
 the sample DOCX was rendered to PDF and its new first-page decision section was
 visually checked. This does not establish full Tender readiness or ProductReady.
+
+## Quality-gate follow-up release
+
+The first full local Python suite exposed two outdated test expectations for
+already-existing contract revision review fields and the project-material
+export. It reported 1,487 passed, two failed and two skipped. The expected
+contract-review fields and material CSV were added to those tests; the
+production behavior was not weakened. A full mypy run exposed a Decimal
+special-value exponent typing case in the new decision validator and a variable
+name collision in the report renderer. Both were fixed. Repository-wide Ruff
+formatting also identified three files; only mechanical formatting changed in
+the two pre-existing files.
+
+Follow-up SHA `dcf66131e2980a7d7b2297b3691c194660f49cc6` passed full local
+Python acceptance: 1,489 passed, two skipped, one dependency deprecation
+warning. Full mypy, Ruff format/lint and frontend format/typecheck/lint/unit
+checks also passed. GitHub Actions does not trigger for this feature branch;
+no exact-SHA hosted CI result is claimed.
+
+The follow-up release is pinned at
+`~/.asd-kontur/public-demo/releases/20261007-dcf6613-tender-participation-gate-v2`
+on the same migration 0132. During launchd cutover, bootstrap initially
+returned error 5 because the prior orchestrator was still in `SIGTERMed` and
+retained its label. The API, worker and assistant worker restarted; after the
+orchestrator exited cleanly, it bootstrapped from the pinned v2 release. All
+four process command paths and staged/installed plists were verified against
+the exact SHA. The API is ready, Qwen and NTD remained running, and the
+platform-memory fingerprint is unchanged. No project job was running at either
+cutover boundary. This incident shows the release procedure must wait for
+launchd label removal before attempting bootstrap.
