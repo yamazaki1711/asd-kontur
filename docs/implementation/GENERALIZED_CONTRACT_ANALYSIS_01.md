@@ -1,6 +1,6 @@
 # Generalized Contract Analysis 01
 
-## Clause-number and overlapping-edit safety (source checkpoint)
+## Clause-number and overlapping-edit safety (deployed checkpoint)
 
 Exact DOCX substitution now preserves the source's explicit clause number when
 the drafted replacement omits it, rejects a conflicting proposed clause
@@ -9,7 +9,15 @@ deterministic formatting safeguards, not legal interpretation. Focused tests
 cover omitted/changed numbering and the overlapping-edit refusal. A read-only
 render of the current owner workspace's existing draft package still succeeds
 under the new guard (121,155 bytes); no project fact or review decision was
-written. This source checkpoint is not yet deployed. It does not establish
+written. This guard is deployed at exact SHA
+`4bd64785236c33477f06093ef14f5dedad01fcfb` in
+`~/.asd-kontur/public-demo/releases/20261007-4bd6478-clause-number-guard-v1`.
+The API, document worker, project orchestrator and assistant worker launchd
+plists are pinned to that SHA and running. The API readiness check returned
+`ready` with migration `0131_contract_revision_review`, and the existing
+frontend asset returned HTTP 200. The pre-cutover application plists are in
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-4bd6478-clause-number-guard/`.
+Qwen and NTD services were not restarted. This does not establish
 cross-clause semantic coherence, defined-term consistency or attachment
 completeness; those require the production Qwen harness and professional
 review. `ProductReady=false`.
