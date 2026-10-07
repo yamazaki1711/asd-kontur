@@ -56,6 +56,7 @@ from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 from asd_kontur.tender.revised_contract_candidate import (
     RevisedContractCandidateError,
     render_revised_contract_candidate_docx,
+    render_revised_contract_source_package,
 )
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
 from asd_kontur.tender.structure_identity_schedule import (
@@ -633,6 +634,24 @@ class ProductSpineService:
                         and deliverable.get("deliverable_kind") == "revised_contract"
                     ):
                         deliverable["state"] = "exact_source_candidate_available"
+        if any(
+            isinstance(candidate, dict) and int(candidate.get("external_revision_count") or 0) > 0
+            for candidate in view.get("revised_contracts", ())
+        ):
+            try:
+                _, source_count = self._render_revised_contract_source_package(
+                    owner_identity_id=owner_identity_id,
+                    workspace_id=workspace_id,
+                    view=view,
+                )
+            except RevisedContractCandidateError as exc:
+                gap = str(exc)
+                if gap not in view["gaps"]:
+                    view["gaps"].append(gap)
+            else:
+                for candidate in view["revised_contracts"]:
+                    candidate["package_state"] = "exact_source_package_available"
+                    candidate["package_source_count"] = source_count
         return view
 
     def _contract_project_context(
@@ -775,6 +794,85 @@ class ProductSpineService:
             len(data),
             (data,),
         )
+
+    def tender_revised_contract_package(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export all current DOCX contract sources with explicit revisions only."""
+
+        view = self._tender_contract_analysis.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data, _ = self._render_revised_contract_source_package(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            view=view,
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "application/zip",
+            len(data),
+            digest,
+            f"tender-revised-contract-package-{workspace_id}.zip",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def _render_revised_contract_source_package(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        view: dict[str, Any],
+    ) -> tuple[bytes, int]:
+        assessment = view.get("assessment")
+        source_rows = assessment.get("sources") if isinstance(assessment, dict) else None
+        if not isinstance(source_rows, list) or not source_rows:
+            raise RevisedContractCandidateError("revised_contract_source_roster_invalid")
+        contracts = [
+            item
+            for item in view.get("revised_contracts", ())
+            if isinstance(item, dict) and item.get("source_contract_version_id")
+        ]
+        if len(contracts) != 1:
+            raise RevisedContractCandidateError("revised_contract_requires_one_exact_source")
+        primary_id = str(contracts[0]["source_contract_version_id"])
+        ordered_rows = sorted(
+            (item for item in source_rows if isinstance(item, dict)),
+            key=lambda item: (
+                str(item.get("source_version_id") or "") != primary_id,
+                str(item.get("source_version_id") or ""),
+            ),
+        )
+        if len(ordered_rows) != len(source_rows):
+            raise RevisedContractCandidateError("revised_contract_source_roster_invalid")
+        package_sources: list[dict[str, Any]] = []
+        for item in ordered_rows:
+            source_id = UUID(str(item.get("source_version_id")))
+            source = self._repository.get_workspace_source_object(
+                owner_identity_id=owner_identity_id,
+                workspace_id=workspace_id,
+                source_version_id=source_id,
+            )
+            media_type = str(source["media_type"])
+            safe_display_name = str(source["safe_display_name"])
+            if media_type != (
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ) and not (
+                media_type == "application/octet-stream"
+                and safe_display_name.lower().endswith(".docx")
+            ):
+                raise RevisedContractCandidateError("revised_contract_source_format_unsupported")
+            with self._object_store.open(str(source["object_key"])) as source_file:
+                package_sources.append(
+                    {
+                        "source_version_id": str(source_id),
+                        "safe_display_name": safe_display_name,
+                        "content": source_file.read(),
+                    }
+                )
+        return render_revised_contract_source_package(package_sources, view), len(package_sources)
 
     def _render_revised_contract_candidate(
         self,

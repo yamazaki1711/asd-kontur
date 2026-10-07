@@ -2899,6 +2899,18 @@ function TenderContractAnalysisBody({
             Скачать редакцию договора Подрядчика (Word)
           </a>
         ) : null}
+        {revisedContracts.some(
+          (candidate) =>
+            String(candidate.package_state) ===
+            "exact_source_package_available",
+        ) ? (
+          <a
+            className="button-link secondary"
+            href={`/api/v1/workspaces/${workspaceId}/tender/revised-contract-package.zip`}
+          >
+            Скачать комплект редакций договорных документов (ZIP)
+          </a>
+        ) : null}
       </div>
       {exactRevisedContract && externalRevisionCount > 0 ? (
         <InfoNotice>
@@ -2910,6 +2922,10 @@ function TenderContractAnalysisBody({
           к приложениям или другим договорным документам.{" "}
           {externalRevisionCount === 1 ? "Оно сохранено" : "Они сохранены"} в
           протоколе разногласий.
+          {String(exactRevisedContract.package_state) ===
+          "exact_source_package_available"
+            ? " Полный комплект изменённых исходных договорных файлов доступен отдельно; он остаётся проектом для проверки и согласования."
+            : " Полный комплект редактируемых исходных файлов пока не подготовлен."}
         </InfoNotice>
       ) : null}
       <section className="metrics" aria-label="Состояние договорного анализа">

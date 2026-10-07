@@ -8680,6 +8680,45 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/tender/revised-contract-package.zip": {
+      "get": {
+        "operationId": "tender_revised_contract_package_api_v1_workspaces__workspace_id__tender_revised_contract_package_zip_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Revised Contract Package",
+        "tags": [
+          "tender"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/tender/revised-contract.docx": {
       "get": {
         "operationId": "tender_revised_contract_candidate_api_v1_workspaces__workspace_id__tender_revised_contract_docx_get",

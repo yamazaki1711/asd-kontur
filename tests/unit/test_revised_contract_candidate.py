@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from copy import deepcopy
 from typing import Any
@@ -15,6 +16,7 @@ from asd_kontur.tender.contract_analysis_view import _select_primary_revised_con
 from asd_kontur.tender.revised_contract_candidate import (
     RevisedContractCandidateError,
     render_revised_contract_candidate_docx,
+    render_revised_contract_source_package,
 )
 
 _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -49,6 +51,108 @@ def _source_docx_with_ignorable_namespace(paragraph: str) -> bytes:
     with zipfile.ZipFile(output, "w") as package:
         package.writestr("word/document.xml", document)
     return output.getvalue()
+
+
+def test_revised_contract_package_applies_two_sources_and_preserves_unchanged_docx() -> None:
+    source_a = _source_docx("1. Предмет договора.", "2. Оплата после акта.")
+    source_b = _source_docx("Приложение. График обязателен.")
+    source_c = _source_docx("Неизменённые условия страхования.")
+    view = {
+        "clauses": [
+            {
+                "clause_id": "payment-1",
+                "clause_version": 1,
+                "source_version_id": "source-a",
+                "source_text": "2. Оплата после акта.",
+            },
+            {
+                "clause_id": "schedule-1",
+                "clause_version": 1,
+                "source_version_id": "source-b",
+                "source_text": "Приложение. График обязателен.",
+            },
+        ],
+        "revised_clauses": [
+            {
+                "source_clause_id": "payment-1",
+                "source_clause_version": 1,
+                "revised_text": "2. Оплата после подписания акта в течение десяти дней.",
+            },
+            {
+                "source_clause_id": "schedule-1",
+                "source_clause_version": 1,
+                "revised_text": "Приложение. График корректируется при задержке Заказчика.",
+            },
+        ],
+        "gaps": [
+            "REVISED_CONTRACT_EXCLUDES_NON_PRIMARY_SOURCE_REVISIONS",
+            "CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED",
+        ],
+    }
+    sources = [
+        {
+            "source_version_id": "source-a",
+            "safe_display_name": "contract.docx",
+            "content": source_a,
+        },
+        {"source_version_id": "source-b", "safe_display_name": "annex.docx", "content": source_b},
+        {"source_version_id": "source-c", "safe_display_name": "terms.docx", "content": source_c},
+    ]
+    first = render_revised_contract_source_package(sources, view)
+    assert render_revised_contract_source_package(sources, view) == first
+    with zipfile.ZipFile(io.BytesIO(first)) as archive:
+        assert archive.namelist() == [
+            "contract-source-01.docx",
+            "contract-source-02.docx",
+            "contract-source-03.docx",
+            "manifest.json",
+        ]
+        assert _paragraphs(archive.read("contract-source-01.docx"))[1] == (
+            "2. Оплата после подписания акта в течение десяти дней."
+        )
+        assert _paragraphs(archive.read("contract-source-02.docx"))[0] == (
+            "Приложение. График корректируется при задержке Заказчика."
+        )
+        assert archive.read("contract-source-03.docx") == source_c
+        manifest = json.loads(archive.read("manifest.json"))
+    assert [item["revision_count"] for item in manifest["sources"]] == [1, 1, 0]
+    assert manifest["status"] == "human_review_candidate"
+    assert manifest["analysis_gaps"] == ["CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED"]
+
+
+def test_revised_contract_package_fails_when_revision_source_is_not_admitted() -> None:
+    with pytest.raises(RevisedContractCandidateError, match="clause_source_unavailable"):
+        render_revised_contract_source_package(
+            [{"source_version_id": "source-a", "content": _source_docx("1. Условие.")}],
+            {
+                "clauses": [
+                    {
+                        "clause_id": "c",
+                        "clause_version": 1,
+                        "source_version_id": "source-b",
+                        "source_text": "1. Условие.",
+                    }
+                ],
+                "revised_clauses": [
+                    {
+                        "source_clause_id": "c",
+                        "source_clause_version": 1,
+                        "revised_text": "1. Иное условие.",
+                    }
+                ],
+            },
+        )
+
+
+def test_revised_contract_does_not_carry_invalidated_source_signature() -> None:
+    source = io.BytesIO()
+    with zipfile.ZipFile(source, "w") as package:
+        with zipfile.ZipFile(io.BytesIO(_source_docx("1. Условие договора."))) as original:
+            for member in original.namelist():
+                package.writestr(member, original.read(member))
+        package.writestr("_xmlsignatures/sig1.xml", b"<Signature />")
+    with pytest.raises(RevisedContractCandidateError, match="signed_source_unsupported"):
+        render_revised_contract_candidate_docx(source.getvalue(), _view("1. Условие договора."))
 
 
 def _view(source_text: str) -> dict[str, Any]:
@@ -526,6 +630,12 @@ def test_exact_candidate_changes_only_primary_contract_source_revisions() -> Non
         "deliverables": [
             {"deliverable_kind": "revised_contract", "state": "source_format_supported"}
         ],
+        "assessment": {
+            "sources": [
+                {"source_version_id": primary_id, "safe_display_name": "main.docx"},
+                {"source_version_id": attachment_id, "safe_display_name": "annex.docx"},
+            ]
+        },
         "gaps": ["REVISED_CONTRACT_EXCLUDES_NON_PRIMARY_SOURCE_REVISIONS"],
     }
     service = ProductSpineService.__new__(ProductSpineService)
@@ -545,6 +655,21 @@ def test_exact_candidate_changes_only_primary_contract_source_revisions() -> Non
     assert _paragraphs(b"".join(candidate.chunks)) == [
         "2.4. Оплата производится после приёмки выполненных работ."
     ]
+    projected = service.tender_contract_analysis(
+        owner_identity_id="owner:changed", workspace_id=UUID(int=75)
+    )
+    assert projected["revised_contracts"][0]["package_state"] == ("exact_source_package_available")
+    package = service.tender_revised_contract_package(
+        owner_identity_id="owner:changed", workspace_id=UUID(int=75)
+    )
+    assert package.media_type == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(b"".join(package.chunks))) as archive:
+        assert _paragraphs(archive.read("contract-source-01.docx")) == [
+            "2.4. Оплата производится после приёмки выполненных работ."
+        ]
+        assert _paragraphs(archive.read("contract-source-02.docx")) == [
+            "3.2. Транспорт предоставляет сторона, инициировавшая выезд."
+        ]
 
 
 def test_product_projection_joins_contract_parties_and_project_wide_conditions() -> None:

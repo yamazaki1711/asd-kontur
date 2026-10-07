@@ -1257,3 +1257,28 @@ The failed launchd cutover also gained a read-only release preflight:
 each application role, executable/frontend presence, pinned SHA and migration
 head before bootout. A changed synthetic plist test rejects the duplicate
 Python argument that caused the outage. No secret environment value is printed.
+
+The two owner-workspace replacement jobs subsequently both succeeded under
+supervised workers. The effective review is seven of seven source batches;
+the two original failed jobs remain historical terminal receipts. The current
+projection contains 34 source-grounded references, 31 with unresolved
+admitted-document matches. This is a package-composition question, not proof
+that 31 attachments are absent. Qwen's completed-request counter advanced
+from 859 to 873 while the two bounded repairs ran, showing that this narrow
+task was expensive despite eventual convergence.
+
+The resulting contract view exposed a separate professional gap: three
+proposed revisions belonged to the primary admitted DOCX and two to a second
+admitted DOCX. The existing single-file candidate correctly disclosed the two
+excluded revisions but did not give the user a complete set of edited source
+documents. A new source-only package renderer now emits every current admitted
+DOCX contract source, applies only exact, source-bound revisions, preserves
+unaffected files byte-for-byte, and includes a manifest with per-source hashes
+and revision counts. It fails closed on unknown revision sources, ambiguous
+clause matches and signed sources whose signature would be invalidated. The
+user-facing endpoint and link name this an editable candidate package, not an
+approved contract. Read-only in-memory qualification against the actual owner
+workspace produced a valid ZIP with two DOCX files, revision counts 3 and 2,
+and no corrupt ZIP member (121,083 bytes). This exercised deterministic
+assembly from persisted Qwen results and admitted source bytes; it did not
+alter the owner's project or prove browser download/all-page visual quality.

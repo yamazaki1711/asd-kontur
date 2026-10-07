@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
+import json
 import re
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any, cast
 from xml.etree import ElementTree as ET
 
@@ -17,6 +19,111 @@ _PARAGRAPH = f"{{{_WORD_NS}}}p"
 
 class RevisedContractCandidateError(ValueError):
     """A full revised contract cannot be produced without changing unsupported content."""
+
+
+def render_revised_contract_source_package(
+    sources: Sequence[Mapping[str, Any]], view: Mapping[str, Any]
+) -> bytes:
+    """Return every admitted DOCX contract source, editing only selected clauses.
+
+    The package is a human-review candidate, not an agreed or signed contract.
+    A revision whose exact source is absent fails the whole package closed.
+    """
+
+    clauses = {
+        (str(item.get("clause_id", "")), str(item.get("clause_version", ""))): item
+        for item in _records(view.get("clauses"))
+    }
+    revisions_by_source: dict[str, list[Mapping[str, Any]]] = {}
+    for revision in _records(view.get("revised_clauses")):
+        clause = clauses.get(
+            (
+                str(revision.get("source_clause_id", "")),
+                str(revision.get("source_clause_version", "")),
+            )
+        )
+        source_id = str(clause.get("source_version_id") or "") if clause else ""
+        if not source_id:
+            raise RevisedContractCandidateError("revised_contract_clause_source_unavailable")
+        revisions_by_source.setdefault(source_id, []).append(revision)
+    if not revisions_by_source:
+        raise RevisedContractCandidateError("revised_contract_revisions_unavailable")
+
+    source_ids = [str(item.get("source_version_id") or "") for item in sources]
+    if (
+        not source_ids
+        or len(source_ids) != len(set(source_ids))
+        or any(not item for item in source_ids)
+    ):
+        raise RevisedContractCandidateError("revised_contract_source_roster_invalid")
+    if not set(revisions_by_source).issubset(source_ids):
+        raise RevisedContractCandidateError("revised_contract_clause_source_unavailable")
+
+    files: list[tuple[str, bytes]] = []
+    manifest_sources: list[dict[str, Any]] = []
+    for ordinal, source in enumerate(sources, start=1):
+        source_id = str(source["source_version_id"])
+        original = source.get("content")
+        if not isinstance(original, bytes):
+            raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
+        try:
+            with zipfile.ZipFile(io.BytesIO(original)) as package:
+                if package.testzip() is not None or "word/document.xml" not in package.namelist():
+                    raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
+        except zipfile.BadZipFile as exc:
+            raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
+        selected = revisions_by_source.get(source_id, [])
+        output = (
+            render_revised_contract_candidate_docx(
+                original,
+                {"clauses": list(clauses.values()), "revised_clauses": selected},
+            )
+            if selected
+            else original
+        )
+        entry_name = f"contract-source-{ordinal:02d}.docx"
+        files.append((entry_name, output))
+        manifest_sources.append(
+            {
+                "source_version_id": source_id,
+                "source_name": str(source.get("safe_display_name") or ""),
+                "entry": entry_name,
+                "revision_count": len(selected),
+                "original_sha256": hashlib.sha256(original).hexdigest(),
+                "candidate_sha256": hashlib.sha256(output).hexdigest(),
+            }
+        )
+    manifest = {
+        "contract": "revised-contract-source-package@1.0.0",
+        "status": "human_review_candidate",
+        "warning": "Candidate only; no approval or signature. Check unresolved references.",
+        "unresolved_reference_count": sum(
+            item.get("match_decision") == "unresolved"
+            for item in _records(view.get("attachment_references"))
+        ),
+        "analysis_gaps": [
+            str(item)
+            for item in (view.get("gaps") or ())
+            if isinstance(item, str)
+            and item != "REVISED_CONTRACT_EXCLUDES_NON_PRIMARY_SOURCE_REVISIONS"
+        ],
+        "sources": manifest_sources,
+    }
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as package:
+        for entry_name, output in files:
+            member = zipfile.ZipInfo(entry_name, (1980, 1, 1, 0, 0, 0))
+            member.compress_type = zipfile.ZIP_DEFLATED
+            package.writestr(member, output)
+        member = zipfile.ZipInfo("manifest.json", (1980, 1, 1, 0, 0, 0))
+        member.compress_type = zipfile.ZIP_DEFLATED
+        package.writestr(
+            member,
+            json.dumps(
+                manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode(),
+        )
+    return archive.getvalue()
 
 
 def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str, Any]) -> bytes:
@@ -52,6 +159,11 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
     try:
         with zipfile.ZipFile(io.BytesIO(source_docx), "r") as source:
             infos = source.infolist()
+            if any(
+                info.filename.startswith("_xmlsignatures/") or info.filename.endswith(".sigs")
+                for info in infos
+            ):
+                raise RevisedContractCandidateError("revised_contract_signed_source_unsupported")
             payloads = {info.filename: source.read(info.filename) for info in infos}
     except (zipfile.BadZipFile, KeyError) as exc:
         raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
