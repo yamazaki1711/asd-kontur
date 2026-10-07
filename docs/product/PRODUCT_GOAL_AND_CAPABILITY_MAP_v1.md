@@ -193,8 +193,8 @@ pass does not substitute for a sufficient-input success path.
 
 | Requirement ID | Directive source | User input/action and required professional output | Qwen / deterministic boundary | UI, API and export acceptance | Current whole-journey state |
 | --- | --- | --- | --- | --- | --- |
-| FFC-01 | Required contract capability | Upload contract alone or with attachments; receive sourced contractor assessment, editable protocol and complete coherent revised contract | Qwen clauses, risks and drafting; code verifies source identity, dates, selection and OOXML assembly | Contract view and DOCX outputs reopen; missing references and conflicting terms reported | PARTIAL: drafts exist; legal coherence and durable amendment review not accepted |
-| FFC-02 | Required Tender mode | Upload PD/RD, commercial and optional company/logistics inputs; receive scoped quantities, omissions, costs, conditions and reasoned participation decision | Qwen semantic scope; code computes quantities, costs and decision gates | Tender view and editable report on distinct projects | NOT VERIFIED |
+| FFC-01 | Required contract capability | Upload contract alone or with attachments; receive sourced contractor assessment, editable protocol and complete coherent revised contract | Qwen clauses, risks and drafting; code verifies source identity, dates, selection and OOXML assembly | Contract view and DOCX outputs reopen; missing references and conflicting terms reported | PARTIAL: durable human amendment review and editable drafts exist; no owner decision or accepted cross-clause/legal coherence |
+| FFC-02 | Required Tender mode | Upload PD/RD, commercial and optional company/logistics inputs; receive scoped quantities, omissions, costs, conditions and reasoned participation decision | Qwen semantic scope; code computes quantities, costs and decision gates | Tender view and editable report on distinct projects | PARTIAL: source-scoped comparisons and a bounded editable report exist; company fit, viable cost and reasoned participation decision are not accepted |
 | FFC-03 | Required Construction Support mode | Confirm real work, materials and inspections; receive required ID, registers, as-built and KS packages with exact blockers | Qwen applicable requirements; code enforces prerequisites and factual authority | Support workflow, reopenable documents and exports | NOT VERIFIED |
 | FFC-04 | Required Audit mode | Upload existing ID; receive document inventory, findings, corrective actions and declared unexamined scope | Qwen semantic contradiction review; code checks identity, chronology and completeness | Audit view and editable register/report | NOT VERIFIED |
 | FFC-05 | Required Restoration mode | Supply audited ID and confirmed facts; receive prioritized plan, grounded drafts, pre-inspection and final/partial package | Qwen grounded drafting and independent review; code prohibits invented field facts | Restoration workflow and editable package | NOT VERIFIED |
@@ -205,6 +205,18 @@ pass does not substitute for a sufficient-input success path.
 | FFC-10 | Knowledge and regulatory applicability | Ask for applicable requirements on real scoped works; receive edition-qualified source-linked conclusions | Qwen reasons over Knowledge Gateway context; code checks source/version/applicability | Mode outputs cite exact normative locators without altering global memory | NOT VERIFIED |
 | FFC-11 | Delivery and acceptance | Run qualified diverse-corpus, false-negative/positive and representative thousands-of-documents acceptance | Qwen production tasks only; code measures work, replay, failure and time-to-value | Same tested/deployed release exposes all results and files | NOT VERIFIED |
 | FFC-12 | Application and field use | Use role-appropriate access and protected device/session data | Code enforces authentication, authorization, attempt limits and local-data controls | API/UI/field security and offline-lock boundary acceptance | NOT VERIFIED |
+
+The FFC-02 partial delivery is pinned to application release
+`81af71af3d12a988dbd2100d664233272bc20f09` on migration
+`0131_contract_revision_review`. A read-only render of the current real
+workspace's unchanged model reduced the main editable report from 1,570 to
+314 table rows; all 845 material-observation rows remain available in the
+separate source-linked CSV included in the Tender archive. Exact repeated
+quantity displays are collapsed only in the overview, never summed, and
+unreviewed quantity values are excluded from its principal quantity table.
+The DOCX reopened and converted to a 36-page PDF; three sampled pages were
+visually inspected. This is not all-page or browser acceptance, a new
+engineering conclusion, a participation decision, or a mode PASS.
 
 For each row, the detailed acceptance record must additionally name the
 tested release, delivered release, actual observed result and remaining
