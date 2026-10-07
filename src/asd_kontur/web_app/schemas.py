@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
@@ -501,8 +502,14 @@ class SupportProductionView(ApiModel):
 
 class IncomingInspectionCheck(ApiModel):
     key: Literal[
-        "quality_documents", "specified_standard", "marking", "visual_condition",
-        "shelf_life", "delivery_quantity", "storage_conditions", "incoming_log",
+        "quality_documents",
+        "specified_standard",
+        "marking",
+        "visual_condition",
+        "shelf_life",
+        "delivery_quantity",
+        "storage_conditions",
+        "incoming_log",
     ]
     state: Literal["passed", "failed", "pending", "not_applicable"]
     basis: str = Field(default="", max_length=600)
@@ -511,6 +518,8 @@ class IncomingInspectionCheck(ApiModel):
 class IncomingInspectionRequest(ApiModel):
     material_name: str = Field(min_length=2, max_length=200)
     batch_reference: str = Field(min_length=1, max_length=200)
+    material_batch_id: UUID | None = None
+    material_batch_version: int | None = Field(default=None, ge=1)
     checks: list[IncomingInspectionCheck] = Field(min_length=8, max_length=8)
     idempotency_key: str = Field(min_length=8, max_length=200)
 
@@ -519,9 +528,52 @@ class IncomingInspectionView(ApiModel):
     preflight_id: UUID
     material_name: str
     batch_reference: str
+    material_batch_id: UUID | None = None
+    material_batch_version: int | None = None
     payload_digest: str
     result: dict[str, Any]
     submitted_at: datetime
+
+
+class MaterialAdmissionRequest(ApiModel):
+    support_process_id: UUID
+    material_batch_id: UUID
+    material_batch_version: int = Field(ge=1)
+    work_instance_id: UUID
+    work_instance_version: int = Field(ge=1)
+    incoming_preflight_id: UUID
+    certificate_evidence_ids: list[UUID] = Field(default_factory=list)
+    passport_evidence_ids: list[UUID] = Field(default_factory=list)
+    quantity_evidence_link_id: UUID
+    delivered_quantity: Decimal = Field(gt=0)
+    delivered_unit: str = Field(min_length=1, max_length=32)
+    manufacturer_ref: str = Field(min_length=2, max_length=200)
+    supplier_ref: str = Field(min_length=2, max_length=200)
+    custody_complete: bool
+    applicable_to_work: bool
+    decision_basis: str = Field(min_length=3, max_length=1000)
+    professional_grant_id: UUID
+    professional_grant_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=200)
+
+
+class MaterialAdmissionView(ApiModel):
+    admission_id: UUID
+    outcome: Literal["admitted", "quarantined", "waiting_for_documents", "rejected"]
+    reason_codes: list[str]
+    admission_fingerprint: str
+    decided_at: datetime
+
+
+class MaterialAdmissionContextView(ApiModel):
+    processes: list[dict[str, Any]]
+    batches: list[dict[str, Any]]
+    works: list[dict[str, Any]]
+    preflights: list[dict[str, Any]]
+    evidence: list[dict[str, Any]]
+    grants: list[dict[str, Any]]
+    decisions: list[dict[str, Any]]
+    truncated_sections: list[str]
 
 
 class ContractObligationReviewRequest(ApiModel):

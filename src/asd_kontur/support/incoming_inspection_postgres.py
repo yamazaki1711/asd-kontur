@@ -50,6 +50,8 @@ class IncomingInspectionRepository:
         workspace_id: UUID,
         material_name: str,
         batch_reference: str,
+        material_batch_id: UUID | None = None,
+        material_batch_version: int | None = None,
         checks: Sequence[Mapping[str, Any]],
         idempotency_key: str,
     ) -> dict[str, Any]:
@@ -59,6 +61,10 @@ class IncomingInspectionRepository:
             raise IncomingInspectionError("incoming_inspection_identity_invalid")
         if not 8 <= len(idempotency_key) <= 200:
             raise IncomingInspectionError("incoming_inspection_idempotency_key_invalid")
+        if (material_batch_id is None) != (material_batch_version is None) or (
+            material_batch_version is not None and material_batch_version < 1
+        ):
+            raise IncomingInspectionError("incoming_inspection_batch_identity_invalid")
         try:
             result = evaluate_incoming_inspection(checks)
         except ValueError as exc:
@@ -68,13 +74,48 @@ class IncomingInspectionRepository:
             "batch_reference": batch_reference,
             "checks": result["checks"],
         }
+        if material_batch_id is not None:
+            inspection["material_batch_id"] = str(material_batch_id)
+            inspection["material_batch_version"] = material_batch_version
         digest = semantic_digest(inspection)
         with Session(self._engine) as session, session.begin():
             organization_id = self._scope(session, owner_identity_id, workspace_id)
+            if material_batch_id is not None:
+                batch = (
+                    session.execute(
+                        sa.text(
+                            "SELECT b.batch_reference,m.title FROM "
+                            "workspace.material_batch_versions b "
+                            "JOIN platform.material_class_versions m ON "
+                            "m.material_class_id=b.material_class_id AND "
+                            "m.version=b.material_class_version WHERE "
+                            "b.organization_id=:o AND b.workspace_id=:w AND "
+                            "b.material_batch_id=:id AND b.version=:version AND "
+                            "b.version=(SELECT max(v.version) FROM "
+                            "workspace.material_batch_versions v "
+                            "WHERE v.organization_id=b.organization_id AND "
+                            "v.workspace_id=b.workspace_id "
+                            "AND v.material_batch_id=b.material_batch_id)"
+                        ),
+                        {
+                            "o": organization_id,
+                            "w": workspace_id,
+                            "id": material_batch_id,
+                            "version": material_batch_version,
+                        },
+                    )
+                    .mappings()
+                    .first()
+                )
+                if batch is None or batch["batch_reference"] != batch_reference or (
+                    " ".join(str(batch["title"]).split()) != material_name
+                ):
+                    raise IncomingInspectionError("incoming_inspection_batch_mismatch")
             existing = (
                 session.execute(
                     sa.text(
-                        "SELECT preflight_id,payload_digest,result,submitted_at FROM "
+                        "SELECT preflight_id,payload_digest,result,submitted_at,"
+                        "material_batch_id,material_batch_version FROM "
                         "workspace.support_incoming_inspection_preflights WHERE "
                         "organization_id=:o AND workspace_id=:w AND idempotency_key=:k"
                     ),
@@ -94,11 +135,14 @@ class IncomingInspectionRepository:
                         sa.text(
                             "INSERT INTO workspace.support_incoming_inspection_preflights "
                             "(organization_id,workspace_id,preflight_id,idempotency_key,material_name,"
-                            "batch_reference,inspection,result,payload_digest,submitted_by) VALUES "
-                            "(:o,:w,:id,:k,:material,:batch,CAST(:inspection AS jsonb),"
+                            "batch_reference,material_batch_id,material_batch_version,"
+                            "inspection,result,payload_digest,submitted_by) VALUES "
+                            "(:o,:w,:id,:k,:material,:batch,:batch_id,:batch_version,"
+                            "CAST(:inspection AS jsonb),"
                             "CAST(:result AS jsonb),:digest,:owner) ON CONFLICT "
                             "(organization_id,workspace_id,idempotency_key) DO NOTHING "
-                            "RETURNING preflight_id,payload_digest,result,submitted_at"
+                            "RETURNING preflight_id,payload_digest,result,submitted_at,"
+                            "material_batch_id,material_batch_version"
                         ),
                         {
                             "o": organization_id,
@@ -107,6 +151,8 @@ class IncomingInspectionRepository:
                             "k": idempotency_key,
                             "material": material_name,
                             "batch": batch_reference,
+                            "batch_id": material_batch_id,
+                            "batch_version": material_batch_version,
                             "inspection": json.dumps(inspection, ensure_ascii=False),
                             "result": json.dumps(result, ensure_ascii=False),
                             "digest": digest,
@@ -124,7 +170,8 @@ class IncomingInspectionRepository:
                 row = (
                     session.execute(
                         sa.text(
-                            "SELECT preflight_id,payload_digest,result,submitted_at FROM "
+                            "SELECT preflight_id,payload_digest,result,submitted_at,"
+                            "material_batch_id,material_batch_version FROM "
                             "workspace.support_incoming_inspection_preflights WHERE "
                             "organization_id=:o AND workspace_id=:w AND idempotency_key=:k"
                         ),
@@ -143,6 +190,8 @@ class IncomingInspectionRepository:
             "preflight_id": row["preflight_id"],
             "material_name": inspection["material_name"],
             "batch_reference": inspection["batch_reference"],
+            "material_batch_id": row["material_batch_id"],
+            "material_batch_version": row["material_batch_version"],
             "payload_digest": row["payload_digest"],
             "result": row["result"],
             "submitted_at": row["submitted_at"],
@@ -158,7 +207,8 @@ class IncomingInspectionRepository:
             rows = (
                 session.execute(
                     sa.text(
-                        "SELECT preflight_id,material_name,batch_reference,payload_digest,"
+                        "SELECT preflight_id,material_name,batch_reference,material_batch_id,"
+                        "material_batch_version,payload_digest,"
                         "result,submitted_at FROM workspace.support_incoming_inspection_preflights "
                         "WHERE organization_id=:o AND workspace_id=:w "
                         "ORDER BY submitted_at DESC,preflight_id DESC "

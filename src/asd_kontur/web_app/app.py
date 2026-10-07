@@ -65,6 +65,10 @@ from asd_kontur.support.incoming_inspection_postgres import (
     IncomingInspectionError,
     IncomingInspectionRepository,
 )
+from asd_kontur.support.material_admission_postgres import (
+    MaterialAdmissionError,
+    MaterialAdmissionService,
+)
 from asd_kontur.support.production_postgres import SupportProductionError
 from asd_kontur.support.release_readiness import (
     SupportReleaseReadinessService,
@@ -120,6 +124,9 @@ from .schemas import (
     JobView,
     KnowledgeStatusView,
     LoginRequest,
+    MaterialAdmissionContextView,
+    MaterialAdmissionRequest,
+    MaterialAdmissionView,
     ModeView,
     NtdSeedStatusView,
     PackageBackupManifestView,
@@ -211,6 +218,12 @@ class ApplicationContainer:
         )
         self.support_scope_readiness = SupportScopeReadinessService(engine)
         self.incoming_inspections = IncomingInspectionRepository(engine)
+        self.material_admissions = (
+            MaterialAdmissionService(engine, self.support_command_engine)
+            if self.support_command_engine is not None
+            and self.support_command_writer_status["role_valid"]
+            else None
+        )
         self.support_release_readiness = SupportReleaseReadinessService(
             engine, self.support_command_engine
         )
@@ -378,6 +391,13 @@ def _install_middleware(app: FastAPI) -> None:
         request: Request, exc: IncomingInspectionError
     ) -> JSONResponse:
         status_code = 404 if str(exc).endswith("not_found") else 409
+        return _error(request, str(exc), status_code)
+
+    @app.exception_handler(MaterialAdmissionError)
+    async def material_admission_error(
+        request: Request, exc: MaterialAdmissionError
+    ) -> JSONResponse:
+        status_code = 404 if str(exc) == "workspace_not_found" else 409
         return _error(request, str(exc), status_code)
 
     @app.exception_handler(SupportFieldCommandError)
@@ -1654,6 +1674,8 @@ def _api_router() -> APIRouter:
             workspace_id=workspace_id,
             material_name=payload.material_name,
             batch_reference=payload.batch_reference,
+            material_batch_id=payload.material_batch_id,
+            material_batch_version=payload.material_batch_version,
             checks=[check.model_dump() for check in payload.checks],
             idempotency_key=payload.idempotency_key,
         )
@@ -1695,6 +1717,47 @@ def _api_router() -> APIRouter:
                 "Content-Disposition": ('attachment; filename="incoming-inspection-register.csv"')
             },
         )
+
+    @router.get(
+        "/workspaces/{workspace_id}/support/material-admissions/context",
+        response_model=MaterialAdmissionContextView,
+        tags=["support-production"],
+    )
+    def material_admission_context(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> MaterialAdmissionContextView:
+        service = _container(request).material_admissions
+        if service is None:
+            raise HTTPException(status_code=503, detail="support_material_writer_unavailable")
+        value = service.context(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return MaterialAdmissionContextView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/material-admissions",
+        response_model=MaterialAdmissionView,
+        status_code=201,
+        tags=["support-production"],
+    )
+    def record_material_admission(
+        request: Request,
+        workspace_id: UUID,
+        payload: MaterialAdmissionRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> MaterialAdmissionView:
+        service = _container(request).material_admissions
+        if service is None:
+            raise HTTPException(status_code=503, detail="support_material_writer_unavailable")
+        value = service.record(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            **payload.model_dump(),
+        )
+        return MaterialAdmissionView(**jsonable_encoder(value))
 
     @router.get(
         "/workspaces/{workspace_id}/support/contract-execution-conditions.csv",

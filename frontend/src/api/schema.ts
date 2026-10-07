@@ -1286,6 +1286,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/support/material-admissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Material Admission */
+        post: operations["record_material_admission_api_v1_workspaces__workspace_id__support_material_admissions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/support/material-admissions/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Material Admission Context */
+        get: operations["material_admission_context_api_v1_workspaces__workspace_id__support_material_admissions_context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/processes": {
         parameters: {
             query?: never;
@@ -2044,6 +2078,10 @@ export interface components {
             checks: components["schemas"]["IncomingInspectionCheck"][];
             /** Idempotency Key */
             idempotency_key: string;
+            /** Material Batch Id */
+            material_batch_id?: string | null;
+            /** Material Batch Version */
+            material_batch_version?: number | null;
             /** Material Name */
             material_name: string;
         };
@@ -2051,6 +2089,10 @@ export interface components {
         IncomingInspectionView: {
             /** Batch Reference */
             batch_reference: string;
+            /** Material Batch Id */
+            material_batch_id?: string | null;
+            /** Material Batch Version */
+            material_batch_version?: number | null;
             /** Material Name */
             material_name: string;
             /** Payload Digest */
@@ -2190,6 +2232,120 @@ export interface components {
             password: string;
             /** Username */
             username: string;
+        };
+        /** MaterialAdmissionContextView */
+        MaterialAdmissionContextView: {
+            /** Batches */
+            batches: {
+                [key: string]: unknown;
+            }[];
+            /** Decisions */
+            decisions: {
+                [key: string]: unknown;
+            }[];
+            /** Evidence */
+            evidence: {
+                [key: string]: unknown;
+            }[];
+            /** Grants */
+            grants: {
+                [key: string]: unknown;
+            }[];
+            /** Preflights */
+            preflights: {
+                [key: string]: unknown;
+            }[];
+            /** Processes */
+            processes: {
+                [key: string]: unknown;
+            }[];
+            /** Truncated Sections */
+            truncated_sections: string[];
+            /** Works */
+            works: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** MaterialAdmissionRequest */
+        MaterialAdmissionRequest: {
+            /** Applicable To Work */
+            applicable_to_work: boolean;
+            /** Certificate Evidence Ids */
+            certificate_evidence_ids?: string[];
+            /** Custody Complete */
+            custody_complete: boolean;
+            /** Decision Basis */
+            decision_basis: string;
+            /** Delivered Quantity */
+            delivered_quantity: number | string;
+            /** Delivered Unit */
+            delivered_unit: string;
+            /** Idempotency Key */
+            idempotency_key: string;
+            /**
+             * Incoming Preflight Id
+             * Format: uuid
+             */
+            incoming_preflight_id: string;
+            /** Manufacturer Ref */
+            manufacturer_ref: string;
+            /**
+             * Material Batch Id
+             * Format: uuid
+             */
+            material_batch_id: string;
+            /** Material Batch Version */
+            material_batch_version: number;
+            /** Passport Evidence Ids */
+            passport_evidence_ids?: string[];
+            /**
+             * Professional Grant Id
+             * Format: uuid
+             */
+            professional_grant_id: string;
+            /** Professional Grant Version */
+            professional_grant_version: number;
+            /**
+             * Quantity Evidence Link Id
+             * Format: uuid
+             */
+            quantity_evidence_link_id: string;
+            /** Supplier Ref */
+            supplier_ref: string;
+            /**
+             * Support Process Id
+             * Format: uuid
+             */
+            support_process_id: string;
+            /**
+             * Work Instance Id
+             * Format: uuid
+             */
+            work_instance_id: string;
+            /** Work Instance Version */
+            work_instance_version: number;
+        };
+        /** MaterialAdmissionView */
+        MaterialAdmissionView: {
+            /** Admission Fingerprint */
+            admission_fingerprint: string;
+            /**
+             * Admission Id
+             * Format: uuid
+             */
+            admission_id: string;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "admitted" | "quarantined" | "waiting_for_documents" | "rejected";
+            /** Reason Codes */
+            reason_codes: string[];
         };
         /**
          * ModeName
@@ -6075,6 +6231,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_material_admission_api_v1_workspaces__workspace_id__support_material_admissions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialAdmissionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialAdmissionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    material_admission_context_api_v1_workspaces__workspace_id__support_material_admissions_context_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialAdmissionContextView"];
                 };
             };
             /** @description Validation Error */

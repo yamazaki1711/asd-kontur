@@ -2621,6 +2621,7 @@ function SupportProductionPage() {
       lead="Требования к документам, состав комплекта, реестр и подготовка поддержанных форм."
     >
       <IncomingInspectionPanel workspaceId={workspaceId} />
+      <MaterialAdmissionPanel workspaceId={workspaceId} />
       <QueryState query={production}>
         {(value) => (
           <SupportProductionBody
@@ -2689,9 +2690,16 @@ function IncomingInspectionPanel({ workspaceId }: { workspaceId: string }) {
   const queryClient = useQueryClient();
   const [materialName, setMaterialName] = useState("");
   const [batchReference, setBatchReference] = useState("");
-  const [requestKey, setRequestKey] = useState(() => globalThis.crypto.randomUUID());
+  const [materialBatchId, setMaterialBatchId] = useState("");
+  const [requestKey, setRequestKey] = useState(() =>
+    globalThis.crypto.randomUUID(),
+  );
   const [checks, setChecks] = useState<IncomingInspectionCheck[]>(
-    INCOMING_INSPECTION_CHECKS.map(([key]) => ({ key, state: "pending", basis: "" })),
+    INCOMING_INSPECTION_CHECKS.map(([key]) => ({
+      key,
+      state: "pending",
+      basis: "",
+    })),
   );
   const records = useQuery({
     queryKey: ["support-incoming-inspections", workspaceId],
@@ -2703,6 +2711,20 @@ function IncomingInspectionPanel({ workspaceId }: { workspaceId: string }) {
       return requireData(data, error);
     },
   });
+  const admissionContext = useQuery({
+    queryKey: ["support-material-admission-context", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/support/material-admissions/context",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  const batches = admissionContext.data?.batches ?? [];
+  const selectedBatch = batches.find(
+    (item) => String(item.material_batch_id) === materialBatchId,
+  );
   const submit = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST(
@@ -2712,6 +2734,10 @@ function IncomingInspectionPanel({ workspaceId }: { workspaceId: string }) {
           body: {
             material_name: materialName,
             batch_reference: batchReference,
+            material_batch_id: materialBatchId || null,
+            material_batch_version: selectedBatch
+              ? Number(selectedBatch.version)
+              : null,
             checks,
             idempotency_key: requestKey,
           },
@@ -2723,35 +2749,713 @@ function IncomingInspectionPanel({ workspaceId }: { workspaceId: string }) {
       await queryClient.invalidateQueries({
         queryKey: ["support-incoming-inspections", workspaceId],
       });
+      await queryClient.invalidateQueries({
+        queryKey: ["support-material-admission-context", workspaceId],
+      });
     },
   });
-  const updateCheck = (key: IncomingInspectionCheck["key"], patch: Partial<IncomingInspectionCheck>) => {
-    setChecks((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item));
+  const updateCheck = (
+    key: IncomingInspectionCheck["key"],
+    patch: Partial<IncomingInspectionCheck>,
+  ) => {
+    setChecks((current) =>
+      current.map((item) => (item.key === key ? { ...item, ...patch } : item)),
+    );
     setRequestKey(globalThis.crypto.randomUUID());
   };
   return (
     <section className="panel">
       <h2>Входной контроль материалов</h2>
-      <p>Лист предварительной проверки партии. Заполнение не означает приёмку материала или разрешение на применение: фактический осмотр и решение остаются за ответственным лицом.</p>
-      <p><a href={`/api/v1/workspaces/${workspaceId}/support/incoming-inspections/register.csv`}>Скачать реестр входных проверок (CSV)</a></p>
-      <form onSubmit={(event) => { event.preventDefault(); submit.mutate(); }}>
+      <p>
+        Лист предварительной проверки партии. Заполнение не означает приёмку
+        материала или разрешение на применение: фактический осмотр и решение
+        остаются за ответственным лицом.
+      </p>
+      <p>
+        <a
+          href={`/api/v1/workspaces/${workspaceId}/support/incoming-inspections/register.csv`}
+        >
+          Скачать реестр входных проверок (CSV)
+        </a>
+      </p>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit.mutate();
+        }}
+      >
+        <label>
+          Учтённая партия для последующего решения о допуске
+          <select
+            value={materialBatchId}
+            onChange={(event) => {
+              const identity = event.target.value;
+              const batch = batches.find(
+                (item) => String(item.material_batch_id) === identity,
+              );
+              setMaterialBatchId(identity);
+              setMaterialName(batch ? String(batch.material_name) : "");
+              setBatchReference(batch ? String(batch.batch_reference) : "");
+              setRequestKey(globalThis.crypto.randomUUID());
+            }}
+          >
+            <option value="">
+              Без связи с учтённой партией — только предварительная проверка
+            </option>
+            {batches.map((item) => (
+              <option
+                key={String(item.material_batch_id)}
+                value={String(item.material_batch_id)}
+              >
+                {String(item.material_name)} — {String(item.batch_reference)}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="form-row">
-          <label>Материал или изделие<input required minLength={2} maxLength={200} value={materialName} onChange={(event) => { setMaterialName(event.target.value); setRequestKey(globalThis.crypto.randomUUID()); }} /></label>
-          <label>Партия / накладная<input required maxLength={200} value={batchReference} onChange={(event) => { setBatchReference(event.target.value); setRequestKey(globalThis.crypto.randomUUID()); }} /></label>
+          <label>
+            Материал или изделие
+            <input
+              required
+              minLength={2}
+              maxLength={200}
+              readOnly={Boolean(materialBatchId)}
+              value={materialName}
+              onChange={(event) => {
+                setMaterialName(event.target.value);
+                setRequestKey(globalThis.crypto.randomUUID());
+              }}
+            />
+          </label>
+          <label>
+            Партия / накладная
+            <input
+              required
+              maxLength={200}
+              readOnly={Boolean(materialBatchId)}
+              value={batchReference}
+              onChange={(event) => {
+                setBatchReference(event.target.value);
+                setRequestKey(globalThis.crypto.randomUUID());
+              }}
+            />
+          </label>
         </div>
-        <div className="table-wrap"><table><thead><tr><th>Проверка</th><th>Тип</th><th>Состояние</th><th>Основание / замечание</th></tr></thead><tbody>
-          {INCOMING_INSPECTION_CHECKS.map(([key, label, kind]) => {
-            const check = checks.find((item) => item.key === key)!;
-            return <tr key={key}><td>{label}</td><td>{kind}</td><td><select value={check.state} onChange={(event) => updateCheck(key, { state: event.target.value as IncomingInspectionCheck["state"] })}><option value="pending">Не проверено</option><option value="passed">Соответствует</option><option value="failed">Несоответствие</option><option value="not_applicable">Неприменимо</option></select></td><td><input aria-label={`Основание: ${label}`} maxLength={600} value={check.basis} onChange={(event) => updateCheck(key, { basis: event.target.value })} /></td></tr>;
-          })}
-        </tbody></table></div>
-        <button type="submit" disabled={submit.isPending}>Сохранить лист проверки</button>
-        {submit.error ? <p role="alert">Не удалось сохранить проверку: {String(submit.error)}</p> : null}
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Проверка</th>
+                <th>Тип</th>
+                <th>Состояние</th>
+                <th>Основание / замечание</th>
+              </tr>
+            </thead>
+            <tbody>
+              {INCOMING_INSPECTION_CHECKS.map(([key, label, kind]) => {
+                const check = checks.find((item) => item.key === key) ?? {
+                  key,
+                  state: "pending" as const,
+                  basis: "",
+                };
+                return (
+                  <tr key={key}>
+                    <td>{label}</td>
+                    <td>{kind}</td>
+                    <td>
+                      <select
+                        value={check.state}
+                        onChange={(event) =>
+                          updateCheck(key, {
+                            state: event.target
+                              .value as IncomingInspectionCheck["state"],
+                          })
+                        }
+                      >
+                        <option value="pending">Не проверено</option>
+                        <option value="passed">Соответствует</option>
+                        <option value="failed">Несоответствие</option>
+                        <option value="not_applicable">Неприменимо</option>
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        aria-label={`Основание: ${label}`}
+                        maxLength={600}
+                        value={check.basis}
+                        onChange={(event) =>
+                          updateCheck(key, { basis: event.target.value })
+                        }
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <button type="submit" disabled={submit.isPending}>
+          Сохранить лист проверки
+        </button>
+        {submit.error ? (
+          <p role="alert">
+            Не удалось сохранить проверку: {String(submit.error)}
+          </p>
+        ) : null}
       </form>
-      {records.data?.length ? <div><h3>Последние проверки (до 100)</h3><ul>{records.data.map((record) => {
-        const result = record.result as { outcome?: string; actions?: { check_key: string; action: string }[] };
-        return <li key={record.preflight_id}><details><summary><strong>{record.material_name}</strong> — {record.batch_reference}: {result.outcome === "nonconforming" ? "Несоответствие — изолировать партию" : result.outcome === "incomplete" ? "Проверка не завершена" : "Подготовлено к решению ответственного лица"}</summary><p>Материал не допущен к применению этим листом. Решение принимает ответственное лицо после проверки подтверждений и фактического осмотра.</p>{result.actions?.length ? <ul>{result.actions.map((action) => <li key={`${action.check_key}:${action.action}`}>{INCOMING_INSPECTION_CHECKS.find(([key]) => key === action.check_key)?.[1] ?? action.check_key}: {action.action === "isolate_batch_and_resolve_nonconformity" ? "изолировать партию и устранить несоответствие" : action.action === "perform_or_obtain_check" ? "выполнить проверку или получить документ" : "указать подтверждение либо основание неприменимости"}</li>)}</ul> : null}</details></li>;
-      })}</ul></div> : <p>Сохранённых проверок пока нет.</p>}
+      {records.data?.length ? (
+        <div>
+          <h3>Последние проверки (до 100)</h3>
+          <ul>
+            {records.data.map((record) => {
+              const result = record.result as {
+                outcome?: string;
+                actions?: { check_key: string; action: string }[];
+              };
+              return (
+                <li key={record.preflight_id}>
+                  <details>
+                    <summary>
+                      <strong>{record.material_name}</strong> —{" "}
+                      {record.batch_reference}:{" "}
+                      {result.outcome === "nonconforming"
+                        ? "Несоответствие — изолировать партию"
+                        : result.outcome === "incomplete"
+                          ? "Проверка не завершена"
+                          : "Подготовлено к решению ответственного лица"}
+                    </summary>
+                    <p>
+                      Материал не допущен к применению этим листом. Решение
+                      принимает ответственное лицо после проверки подтверждений
+                      и фактического осмотра.
+                    </p>
+                    {result.actions?.length ? (
+                      <ul>
+                        {result.actions.map((action) => (
+                          <li key={`${action.check_key}:${action.action}`}>
+                            {INCOMING_INSPECTION_CHECKS.find(
+                              ([key]) => key === action.check_key,
+                            )?.[1] ?? action.check_key}
+                            :{" "}
+                            {action.action ===
+                            "isolate_batch_and_resolve_nonconformity"
+                              ? "изолировать партию и устранить несоответствие"
+                              : action.action === "perform_or_obtain_check"
+                                ? "выполнить проверку или получить документ"
+                                : "указать подтверждение либо основание неприменимости"}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : (
+        <p>Сохранённых проверок пока нет.</p>
+      )}
+    </section>
+  );
+}
+
+function MaterialAdmissionPanel({ workspaceId }: { workspaceId: string }) {
+  const reasonLabels: Record<string, string> = {
+    MATERIAL_QUANTITY_INVALID: "количество не подтверждено",
+    MATERIAL_IDENTITY_MISSING: "не установлена партия или категория материала",
+    MATERIAL_ORIGIN_MISSING: "не установлен изготовитель или поставщик",
+    QUALITY_DOCUMENT_MISSING: "отсутствует паспорт или сертификат",
+    INCOMING_CONTROL_MISSING: "нет входного контроля",
+    INCOMING_CONTROL_NONCONFORMING: "входной контроль выявил несоответствие",
+    INCOMING_CONTROL_NOT_READY: "входной контроль не завершён",
+    CUSTODY_GAP: "цепочка поставки не подтверждена",
+    MATERIAL_NOT_APPLICABLE_TO_WORK: "не подтверждена применимость к работе",
+    MATERIAL_CONFLICT: "данные о материале противоречат друг другу",
+  };
+  const outcomeLabels: Record<string, string> = {
+    admitted: "Допущено",
+    quarantined: "Изолировать партию",
+    waiting_for_documents: "Ожидает подтверждений",
+    rejected: "Отклонено",
+  };
+  const queryClient = useQueryClient();
+  const [batchId, setBatchId] = useState("");
+  const [workId, setWorkId] = useState("");
+  const [processId, setProcessId] = useState("");
+  const [grantId, setGrantId] = useState("");
+  const [certificateId, setCertificateId] = useState("");
+  const [passportId, setPassportId] = useState("");
+  const [quantityEvidenceId, setQuantityEvidenceId] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [unit, setUnit] = useState("");
+  const [manufacturer, setManufacturer] = useState("");
+  const [supplier, setSupplier] = useState("");
+  const [basis, setBasis] = useState("");
+  const [custodyComplete, setCustodyComplete] = useState(false);
+  const [applicable, setApplicable] = useState(false);
+  const [requestKey, setRequestKey] = useState(() =>
+    globalThis.crypto.randomUUID(),
+  );
+  const context = useQuery({
+    queryKey: ["support-material-admission-context", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/support/material-admissions/context",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  const data = context.data;
+  const batch = data?.batches.find(
+    (item) => String(item.material_batch_id) === batchId,
+  );
+  const work = data?.works.find(
+    (item) => String(item.work_instance_id) === workId,
+  );
+  const process = data?.processes.find(
+    (item) => String(item.support_process_id) === processId,
+  );
+  const grant = data?.grants.find((item) => String(item.grant_id) === grantId);
+  const preflight = data?.preflights.find(
+    (item) =>
+      String(item.material_batch_id) === batchId &&
+      Number(item.material_batch_version) === Number(batch?.version),
+  );
+  const evidence = (data?.evidence ?? []).filter(
+    (item) =>
+      String(item.material_batch_id) === batchId &&
+      Number(item.material_batch_version) === Number(batch?.version),
+  );
+  const byRole = (role: string) =>
+    evidence.filter((item) => item.evidence_role === role);
+  const certificates = byRole("material_certificate");
+  const passports = byRole("material_passport");
+  const quantities = byRole("delivery_quantity");
+  const markChanged = () => setRequestKey(globalThis.crypto.randomUUID());
+  const submit = useMutation({
+    mutationFn: async () => {
+      if (
+        !batch ||
+        !work ||
+        !process ||
+        !grant ||
+        !preflight ||
+        !certificateId ||
+        !passportId ||
+        !quantityEvidenceId
+      ) {
+        throw new Error("Не хватает связанного основания для решения");
+      }
+      const { data: result, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/material-admissions",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: {
+            support_process_id: processId,
+            material_batch_id: batchId,
+            material_batch_version: Number(batch.version),
+            work_instance_id: workId,
+            work_instance_version: Number(work.version),
+            incoming_preflight_id: String(preflight.preflight_id),
+            certificate_evidence_ids: [certificateId],
+            passport_evidence_ids: [passportId],
+            quantity_evidence_link_id: quantityEvidenceId,
+            delivered_quantity: quantity,
+            delivered_unit: unit,
+            manufacturer_ref: manufacturer,
+            supplier_ref: supplier,
+            custody_complete: custodyComplete,
+            applicable_to_work: applicable,
+            decision_basis: basis,
+            professional_grant_id: grantId,
+            professional_grant_version: Number(grant.grant_version),
+            idempotency_key: requestKey,
+          },
+        },
+      );
+      return requireData(result, error);
+    },
+    onSuccess: async () => {
+      setRequestKey(globalThis.crypto.randomUUID());
+      await queryClient.invalidateQueries({
+        queryKey: ["support-material-admission-context", workspaceId],
+      });
+    },
+  });
+  const canSubmit = Boolean(
+    batch &&
+    work &&
+    process &&
+    grant &&
+    preflight &&
+    certificateId &&
+    passportId &&
+    quantityEvidenceId &&
+    quantity &&
+    unit &&
+    manufacturer &&
+    supplier &&
+    basis &&
+    custodyComplete &&
+    applicable &&
+    !data?.truncated_sections.length,
+  );
+  const evidenceOptions = (items: typeof evidence) =>
+    items.map((item) => (
+      <option
+        key={String(item.evidence_link_id)}
+        value={String(item.evidence_link_id)}
+      >
+        {String(item.source_title)} — {String(item.locator_kind)}:{" "}
+        {String(item.locator_key)}
+      </option>
+    ));
+  return (
+    <section className="panel">
+      <h2>Допуск партии материала к конкретной работе</h2>
+      <p>
+        Решение привязывается к учтённой партии, работе, последней входной
+        проверке, подтверждённым документам и полномочию ответственного
+        специалиста. Лист входного контроля сам по себе не разрешает применение.
+      </p>
+      {context.error ? (
+        <p role="alert">
+          Не удалось загрузить основания: {String(context.error)}
+        </p>
+      ) : null}
+      {data?.truncated_sections.length ? (
+        <p role="alert">
+          Список оснований превышает 200 записей в разделах:{" "}
+          {data.truncated_sections.join(", ")}. Решение через эту форму
+          недоступно до выбора полного контекста.
+        </p>
+      ) : null}
+      {data && !data.batches.length ? (
+        <p>
+          Учтённых партий нет. Сначала требуется подтвердить партию материала по
+          исходным документам.
+        </p>
+      ) : null}
+      {data && !data.works.length ? (
+        <p>
+          Подходящих запланированных работ нет. Сначала требуется сформировать и
+          подтвердить работу.
+        </p>
+      ) : null}
+      {data && !data.grants.length ? (
+        <p>
+          У текущего пользователя нет действующего полномочия на допуск
+          материала.
+        </p>
+      ) : null}
+      {data && !data.processes.length ? (
+        <p>
+          Процесс сопровождения ещё не находится на стадии допуска материалов.
+        </p>
+      ) : null}
+      {data ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            submit.mutate();
+          }}
+        >
+          <div className="form-row">
+            <label>
+              Партия
+              <select
+                value={batchId}
+                onChange={(event) => {
+                  setBatchId(event.target.value);
+                  setCertificateId("");
+                  setPassportId("");
+                  setQuantityEvidenceId("");
+                  markChanged();
+                }}
+              >
+                <option value="">Выберите партию</option>
+                {data.batches.map((item) => (
+                  <option
+                    key={String(item.material_batch_id)}
+                    value={String(item.material_batch_id)}
+                  >
+                    {String(item.material_name)} —{" "}
+                    {String(item.batch_reference)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Работа
+              <select
+                value={workId}
+                onChange={(event) => {
+                  setWorkId(event.target.value);
+                  markChanged();
+                }}
+              >
+                <option value="">Выберите работу</option>
+                {data.works.map((item) => (
+                  <option
+                    key={String(item.work_instance_id)}
+                    value={String(item.work_instance_id)}
+                  >
+                    {String(item.work_name)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              Процесс сопровождения
+              <select
+                value={processId}
+                onChange={(event) => {
+                  setProcessId(event.target.value);
+                  markChanged();
+                }}
+              >
+                <option value="">Выберите процесс</option>
+                {data.processes.map((item) => (
+                  <option
+                    key={String(item.support_process_id)}
+                    value={String(item.support_process_id)}
+                  >
+                    {String(item.state)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Полномочие специалиста
+              <select
+                value={grantId}
+                onChange={(event) => {
+                  setGrantId(event.target.value);
+                  markChanged();
+                }}
+              >
+                <option value="">Выберите полномочие</option>
+                {data.grants.map((item) => (
+                  <option
+                    key={String(item.grant_id)}
+                    value={String(item.grant_id)}
+                  >
+                    {String(item.professional_qualification_ref)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {batch && !preflight ? (
+            <p role="alert">
+              Для этой версии партии нет связанного листа входного контроля.
+              Заполните его выше, выбрав учтённую партию.
+            </p>
+          ) : null}
+          {preflight ? (
+            <p>
+              Последняя связанная проверка:{" "}
+              {typeof (preflight.result as Record<string, unknown>).outcome ===
+              "string"
+                ? String((preflight.result as Record<string, unknown>).outcome)
+                : "не определено"}
+              . Новая проверка заменяет её как основание следующего решения.
+            </p>
+          ) : null}
+          <div className="form-row">
+            <label>
+              Сертификат
+              <select
+                value={certificateId}
+                onChange={(event) => {
+                  setCertificateId(event.target.value);
+                  markChanged();
+                }}
+              >
+                <option value="">Выберите подтверждение</option>
+                {evidenceOptions(certificates)}
+              </select>
+            </label>
+            <label>
+              Паспорт
+              <select
+                value={passportId}
+                onChange={(event) => {
+                  setPassportId(event.target.value);
+                  markChanged();
+                }}
+              >
+                <option value="">Выберите подтверждение</option>
+                {evidenceOptions(passports)}
+              </select>
+            </label>
+            <label>
+              Количество по поставке
+              <select
+                value={quantityEvidenceId}
+                onChange={(event) => {
+                  setQuantityEvidenceId(event.target.value);
+                  markChanged();
+                }}
+              >
+                <option value="">Выберите подтверждение</option>
+                {evidenceOptions(quantities)}
+              </select>
+            </label>
+          </div>
+          {batch &&
+          (!certificates.length || !passports.length || !quantities.length) ? (
+            <p role="alert">
+              Для партии не хватает проверенных ссылок на сертификат, паспорт
+              или количество по поставке. Их нельзя заменить текстом в форме.
+            </p>
+          ) : null}
+          {evidence.length ? (
+            <p>
+              Источники подтверждений:{" "}
+              {evidence.map((item, index) => (
+                <span key={String(item.evidence_link_id)}>
+                  {index ? ", " : ""}
+                  <Link
+                    to={workspaceRoute(
+                      "Support",
+                      workspaceId,
+                      `/evidence/locators/${String(item.source_locator_id)}`,
+                    )}
+                  >
+                    {String(item.source_title)}: {String(item.locator_key)}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          ) : null}
+          <div className="form-row">
+            <label>
+              Поставленное количество
+              <input
+                required
+                type="number"
+                min="0.000001"
+                step="any"
+                value={quantity}
+                onChange={(event) => {
+                  setQuantity(event.target.value);
+                  markChanged();
+                }}
+              />
+            </label>
+            <label>
+              Единица
+              <input
+                required
+                maxLength={32}
+                value={unit}
+                onChange={(event) => {
+                  setUnit(event.target.value);
+                  markChanged();
+                }}
+              />
+            </label>
+            <label>
+              Изготовитель
+              <input
+                required
+                maxLength={200}
+                value={manufacturer}
+                onChange={(event) => {
+                  setManufacturer(event.target.value);
+                  markChanged();
+                }}
+              />
+            </label>
+            <label>
+              Поставщик
+              <input
+                required
+                maxLength={200}
+                value={supplier}
+                onChange={(event) => {
+                  setSupplier(event.target.value);
+                  markChanged();
+                }}
+              />
+            </label>
+          </div>
+          <label>
+            <input
+              type="checkbox"
+              checked={custodyComplete}
+              onChange={(event) => {
+                setCustodyComplete(event.target.checked);
+                markChanged();
+              }}
+            />{" "}
+            Цепочка поставки подтверждена
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={applicable}
+              onChange={(event) => {
+                setApplicable(event.target.checked);
+                markChanged();
+              }}
+            />{" "}
+            Партия подходит для выбранной работы
+          </label>
+          <label>
+            Основание решения
+            <textarea
+              required
+              minLength={3}
+              maxLength={1000}
+              value={basis}
+              onChange={(event) => {
+                setBasis(event.target.value);
+                markChanged();
+              }}
+            />
+          </label>
+          <button type="submit" disabled={!canSubmit || submit.isPending}>
+            Записать решение о допуске
+          </button>
+          {submit.error ? (
+            <p role="alert">Решение не сохранено: {String(submit.error)}</p>
+          ) : null}
+          {submit.data ? (
+            <p role="status">
+              Решение:{" "}
+              {submit.data.outcome === "admitted"
+                ? "допущено"
+                : submit.data.outcome === "quarantined"
+                  ? "изолировать партию"
+                  : "ожидает подтверждений"}
+              .
+            </p>
+          ) : null}
+        </form>
+      ) : null}
+      {data?.decisions.length ? (
+        <div>
+          <h3>Последние решения</h3>
+          <ul>
+            {data.decisions.map((item) => (
+              <li key={String(item.admission_id)}>
+                {outcomeLabels[String(item.outcome)] ??
+                  "Решение требует проверки"}{" "}
+                — {String(item.decided_at)}
+                {Array.isArray(item.reason_codes) && item.reason_codes.length
+                  ? `; причины: ${item.reason_codes.map((code) => reasonLabels[String(code)] ?? "неизвестная причина").join(", ")}`
+                  : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -3117,9 +3821,14 @@ function TenderContractAnalysisBody({
           </a>
         ) : null}
         {revisedContracts.some(
-          (candidate) => String(candidate.package_state) === "exact_source_package_available",
+          (candidate) =>
+            String(candidate.package_state) ===
+            "exact_source_package_available",
         ) ? (
-          <a className="button-link secondary" href={`/api/v1/workspaces/${workspaceId}/tender/revised-contract-package.zip`}>
+          <a
+            className="button-link secondary"
+            href={`/api/v1/workspaces/${workspaceId}/tender/revised-contract-package.zip`}
+          >
             Скачать полный черновик редакций договорных документов (ZIP)
           </a>
         ) : null}
@@ -3157,12 +3866,14 @@ function TenderContractAnalysisBody({
       {multiSourceContract && externalRevisionCount > 0 ? (
         <InfoNotice>
           Изменения относятся к нескольким договорным документам. Отдельный
-          Word-файл основного договора не выдаётся как полный результат: ещё {externalRevisionCount}{" "}
+          Word-файл основного договора не выдаётся как полный результат: ещё{" "}
+          {externalRevisionCount}{" "}
           {externalRevisionCount === 1
             ? "предложение относится"
             : "предложения относятся"}{" "}
           к приложениям или другим договорным документам.{" "}
-          {externalRevisionCount === 1 ? "Оно сохранено" : "Они сохранены"} в протоколе разногласий.
+          {externalRevisionCount === 1 ? "Оно сохранено" : "Они сохранены"} в
+          протоколе разногласий.
           {String(multiSourceContract.package_state) ===
           "exact_source_package_available"
             ? " Полный комплект редактируемых исходных договорных файлов доступен в ZIP; он остаётся проектом для проверки и согласования."

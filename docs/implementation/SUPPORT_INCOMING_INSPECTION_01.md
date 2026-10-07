@@ -151,3 +151,37 @@ admission command or a confirmed batch: persistence must still resolve an
 actual batch/work/evidence/preflight/grant in one workspace before it may call
 the evaluator. No public material-admission result is claimed from this source
 checkpoint.
+
+## Batch-bound material-admission command (2026-10-07 source qualification)
+
+The next Support increment adds a human-authorised admission decision without
+turning the eight-check preflight into an automatic approval. New preflights
+can be bound to an exact canonical material-batch identity/version; legacy
+unbound preflights remain readable and exportable but cannot authorize
+admission. The command resolves the exact current batch and work versions,
+latest bound preflight, verified source links for certificate, passport and
+delivery quantity, an active `support.material.admit` grant for the signed-in
+person, delivery origin/quantity and the person's decision basis. It appends a
+workspace-scoped decision through the fenced Support writer with an
+idempotency key. The UI displays available prerequisites, precise missing
+inputs, source locators and decision history. A failed incoming check
+quarantines the batch; an incomplete check cannot produce `admitted`.
+
+Migration 0136 is additive. It adds explicit preflight-to-batch identity and
+the factual basis columns to the existing decision table, owner-scoped read
+policy, and only the read grants needed by the application and Support writer.
+It does not mutate global NTD or create source documents, material batches,
+professional grants or work instances. On the disposable PostgreSQL cluster,
+0135 → 0136 → 0135 → 0136 passed; the bound decision, unbound refusal,
+idempotent replay/conflict, later failing inspection, cross-workspace denial,
+authenticated API reload and lifecycle freeze passed in focused integration.
+The Support UI passed frontend typecheck, lint and production build. These are
+source/isolated-environment qualifications, not public deployment or a
+professional field admission.
+
+The current owner workspace has no registered material batch or active
+`support.material.admit` grant. Therefore the successful real-workspace path
+is not yet available there; the application must show those missing
+prerequisites rather than manufacture them. The decision is not yet connected
+to the effective work-readiness, material-balance or KS/payment chain. Support
+mode and ProductReady remain unaccepted.

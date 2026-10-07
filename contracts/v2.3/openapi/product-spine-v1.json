@@ -1409,6 +1409,30 @@
             "title": "Idempotency Key",
             "type": "string"
           },
+          "material_batch_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Material Batch Id"
+          },
+          "material_batch_version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Material Batch Version"
+          },
           "material_name": {
             "maxLength": 200,
             "minLength": 2,
@@ -1431,6 +1455,29 @@
           "batch_reference": {
             "title": "Batch Reference",
             "type": "string"
+          },
+          "material_batch_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Material Batch Id"
+          },
+          "material_batch_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Material Batch Version"
           },
           "material_name": {
             "title": "Material Name",
@@ -1820,6 +1867,269 @@
           "password"
         ],
         "title": "LoginRequest",
+        "type": "object"
+      },
+      "MaterialAdmissionContextView": {
+        "additionalProperties": false,
+        "properties": {
+          "batches": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Batches",
+            "type": "array"
+          },
+          "decisions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Decisions",
+            "type": "array"
+          },
+          "evidence": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "grants": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Grants",
+            "type": "array"
+          },
+          "preflights": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Preflights",
+            "type": "array"
+          },
+          "processes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Processes",
+            "type": "array"
+          },
+          "truncated_sections": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Truncated Sections",
+            "type": "array"
+          },
+          "works": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Works",
+            "type": "array"
+          }
+        },
+        "required": [
+          "processes",
+          "batches",
+          "works",
+          "preflights",
+          "evidence",
+          "grants",
+          "decisions",
+          "truncated_sections"
+        ],
+        "title": "MaterialAdmissionContextView",
+        "type": "object"
+      },
+      "MaterialAdmissionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "applicable_to_work": {
+            "title": "Applicable To Work",
+            "type": "boolean"
+          },
+          "certificate_evidence_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Certificate Evidence Ids",
+            "type": "array"
+          },
+          "custody_complete": {
+            "title": "Custody Complete",
+            "type": "boolean"
+          },
+          "decision_basis": {
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Decision Basis",
+            "type": "string"
+          },
+          "delivered_quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Delivered Quantity"
+          },
+          "delivered_unit": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Delivered Unit",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "incoming_preflight_id": {
+            "format": "uuid",
+            "title": "Incoming Preflight Id",
+            "type": "string"
+          },
+          "manufacturer_ref": {
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Manufacturer Ref",
+            "type": "string"
+          },
+          "material_batch_id": {
+            "format": "uuid",
+            "title": "Material Batch Id",
+            "type": "string"
+          },
+          "material_batch_version": {
+            "minimum": 1.0,
+            "title": "Material Batch Version",
+            "type": "integer"
+          },
+          "passport_evidence_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Passport Evidence Ids",
+            "type": "array"
+          },
+          "professional_grant_id": {
+            "format": "uuid",
+            "title": "Professional Grant Id",
+            "type": "string"
+          },
+          "professional_grant_version": {
+            "minimum": 1.0,
+            "title": "Professional Grant Version",
+            "type": "integer"
+          },
+          "quantity_evidence_link_id": {
+            "format": "uuid",
+            "title": "Quantity Evidence Link Id",
+            "type": "string"
+          },
+          "supplier_ref": {
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Supplier Ref",
+            "type": "string"
+          },
+          "support_process_id": {
+            "format": "uuid",
+            "title": "Support Process Id",
+            "type": "string"
+          },
+          "work_instance_id": {
+            "format": "uuid",
+            "title": "Work Instance Id",
+            "type": "string"
+          },
+          "work_instance_version": {
+            "minimum": 1.0,
+            "title": "Work Instance Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "support_process_id",
+          "material_batch_id",
+          "material_batch_version",
+          "work_instance_id",
+          "work_instance_version",
+          "incoming_preflight_id",
+          "quantity_evidence_link_id",
+          "delivered_quantity",
+          "delivered_unit",
+          "manufacturer_ref",
+          "supplier_ref",
+          "custody_complete",
+          "applicable_to_work",
+          "decision_basis",
+          "professional_grant_id",
+          "professional_grant_version",
+          "idempotency_key"
+        ],
+        "title": "MaterialAdmissionRequest",
+        "type": "object"
+      },
+      "MaterialAdmissionView": {
+        "additionalProperties": false,
+        "properties": {
+          "admission_fingerprint": {
+            "title": "Admission Fingerprint",
+            "type": "string"
+          },
+          "admission_id": {
+            "format": "uuid",
+            "title": "Admission Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "admitted",
+              "quarantined",
+              "waiting_for_documents",
+              "rejected"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "admission_id",
+          "outcome",
+          "reason_codes",
+          "admission_fingerprint",
+          "decided_at"
+        ],
+        "title": "MaterialAdmissionView",
         "type": "object"
       },
       "ModeName": {
@@ -9227,6 +9537,118 @@
           }
         },
         "summary": "Export Incoming Inspection Register",
+        "tags": [
+          "support-production"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/support/material-admissions": {
+      "post": {
+        "operationId": "record_material_admission_api_v1_workspaces__workspace_id__support_material_admissions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterialAdmissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialAdmissionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Material Admission",
+        "tags": [
+          "support-production"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/support/material-admissions/context": {
+      "get": {
+        "operationId": "material_admission_context_api_v1_workspaces__workspace_id__support_material_admissions_context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialAdmissionContextView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Material Admission Context",
         "tags": [
           "support-production"
         ]
