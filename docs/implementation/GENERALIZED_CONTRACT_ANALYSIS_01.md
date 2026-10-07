@@ -12,6 +12,18 @@ wording and the source DOCX remains editable. This improves internal package
 consistency but is not a semantic/legal-coherence review or agreement by the
 Customer. No current owner proposal has been selected for production export.
 
+The matching-package change is deployed at exact SHA
+`eb63627f6f996c3fffb458a60f814dee7bcc319e` in
+`~/.asd-kontur/public-demo/releases/20261007-eb63627-reviewed-contract-complete-zip-v1`.
+The four application launchd roles report the same SHA. After the controlled
+drain, API readiness and the existing frontend asset returned HTTP 200;
+migration remains `0131_contract_revision_review` and the queue has no
+queued/leased/running jobs. Qwen and NTD worker PIDs were unchanged. The
+previous plists are preserved under
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-eb63627-reviewed-contract-complete-zip/`.
+This release exposes the renderer for future human-reviewed proposals but does
+not create a real owner decision or assert legal acceptance. `ProductReady=false`.
+
 ## Server-authoritative reviewed contract package follow-up
 
 The next source change removes a trust ambiguity: the URL for the reviewed
