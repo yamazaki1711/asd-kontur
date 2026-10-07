@@ -310,7 +310,7 @@ def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
         str(item.get("disagreement_item_id", "")): item
         for item in _records(view.get("revised_clauses"))
     }
-    rows: list[tuple[str, str, str, str, str, str]] = []
+    rows: list[tuple[str, str, str, str, str]] = []
     for ordinal, item in enumerate(_records(view.get("disagreement_items")), start=1):
         clause = clauses.get(
             (str(item.get("clause_id", "")), str(item.get("clause_version", ""))), {}
@@ -323,8 +323,7 @@ def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
                 str(clause.get("clause_key") or "Не указано"),
                 str(clause.get("source_text") or "Текст исходного пункта не извлечён"),
                 str(revision.get("revised_text") or item.get("proposed_clause_text") or ""),
-                _disagreement_basis(issue, item),
-                _source_reference(clause),
+                _disagreement_basis(issue, item) + "; Источник: " + _source_reference(clause),
             )
         )
 
@@ -361,10 +360,11 @@ def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
                 "Редакция Заказчика",
                 "Редакция Подрядчика",
                 "Обоснование / практическая причина",
-                "Источник",
             ),
             rows,
             "Обоснованные предложения для протокола разногласий пока не подготовлены.",
+            column_widths=(550, 1150, 3750, 3750, 5900),
+            keep_rows_together=True,
         ),
     ]
     return _docx_package(_document_xml(body))
@@ -503,11 +503,22 @@ def _paragraph(text: str) -> str:
     return f'<w:p><w:r><w:t xml:space="preserve">{escape(text)}</w:t></w:r></w:p>'
 
 
-def _table(headers: tuple[str, ...], rows: Sequence[Sequence[str]], empty_text: str) -> str:
+def _table(
+    headers: tuple[str, ...],
+    rows: Sequence[Sequence[str]],
+    empty_text: str,
+    *,
+    column_widths: tuple[int, ...] | None = None,
+    keep_rows_together: bool = False,
+) -> str:
     if not rows:
         return _paragraph(empty_text)
     total_width = 15100
-    if len(headers) > 1 and headers[0] == "№":
+    if column_widths is not None:
+        if len(column_widths) != len(headers) or sum(column_widths) != total_width:
+            raise ValueError("contract_report_table_widths_invalid")
+        widths = column_widths
+    elif len(headers) > 1 and headers[0] == "№":
         widths = (600,) + ((total_width - 600) // (len(headers) - 1),) * (len(headers) - 1)
     else:
         widths = (max(900, total_width // len(headers)),) * len(headers)
@@ -527,12 +538,22 @@ def _table(headers: tuple[str, ...], rows: Sequence[Sequence[str]], empty_text: 
         '<w:bottom w:w="90" w:type="dxa"/><w:right w:w="90" w:type="dxa"/>'
         "</w:tblCellMar></w:tblPr>"
         f"<w:tblGrid>{grid}</w:tblGrid>"
-        + "".join(_row(row, widths, header=index == 0) for index, row in enumerate(values))
+        + "".join(
+            _row(
+                row,
+                widths,
+                header=index == 0,
+                keep_together=keep_rows_together,
+            )
+            for index, row in enumerate(values)
+        )
         + "</w:tbl>"
     )
 
 
-def _row(values: Sequence[str], widths: Sequence[int], *, header: bool) -> str:
+def _row(
+    values: Sequence[str], widths: Sequence[int], *, header: bool, keep_together: bool = False
+) -> str:
     run_properties = (
         '<w:rPr><w:b/><w:sz w:val="16"/></w:rPr>'
         if header
@@ -546,7 +567,13 @@ def _row(values: Sequence[str], widths: Sequence[int], *, header: bool) -> str:
         "</w:r></w:p></w:tc>"
         for value, width in zip(values, widths, strict=True)
     )
-    return f"<w:tr>{cells}</w:tr>"
+    properties = (
+        "<w:trPr>"
+        + ('<w:tblHeader w:val="true"/>' if header else "")
+        + ('<w:cantSplit w:val="true"/>' if keep_together else "")
+        + "</w:trPr>"
+    )
+    return f"<w:tr>{properties}{cells}</w:tr>"
 
 
 def _docx_package(document: bytes) -> bytes:
