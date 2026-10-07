@@ -207,13 +207,16 @@ pass does not substitute for a sufficient-input success path.
 | FFC-12 | Application and field use | Use role-appropriate access and protected device/session data | Code enforces authentication, authorization, attempt limits and local-data controls | API/UI/field security and offline-lock boundary acceptance | NOT VERIFIED |
 
 Current FFC-01 delivery checkpoint: application SHA
-`d30a1cadd5da90ec7cd67a9e1fc97611bd6eb699`, migration
+`fea2395429b31c3e87c096af970976020d79668c`, migration
 `0134_contract_coherence_profile_v2`. The release preserves unchanged readable PDF
 contract appendices in the revised-source package, explicitly marks them
 non-editable, and rejects attempts to apply DOCX clause revisions to a PDF.
 It also includes a source-linked CSV of unresolved referenced documents in
 the editable revised-contract ZIP, without asserting that those documents
 are absent from the owner's possession.
+After completed reference review, an owner can also download that CSV directly
+from the contract screen without selecting a clause revision. Incomplete
+review returns an explicit blocker rather than a misleading empty register.
 The previous public worker repeatedly scanned an idle workspace despite zero
 claimable jobs; the supervised orchestrator now owns that safety-net sweep,
 and the released worker idles between claims. A changed-party contract-only corpus

@@ -73,6 +73,21 @@ zero queued/leased/running durable jobs; exact-SHA launchd preflight passed
 Authenticated owner download and visual DOCX review were not repeated on this
 follow-up release. FFC-01 remains PARTIAL.
 
+Next release `fea2395429b31c3e87c096af970976020d79668c` exposes the
+source-linked unresolved-contract-reference CSV as a standalone authenticated
+download after autonomous reference review completes. It requires no selected
+clause revision. An incomplete review returns a typed 409; an unrelated owner
+receives 404 in isolated PostgreSQL API qualification. The focused service
+test confirms only unresolved references enter the editable CSV. The
+application's 85-path OpenAPI SHA-256 is pinned to its actual served schema
+(`755c5ad594b59514fc6bb8d1f34c8ef16cbbcd60ba7a6b485d96c3f5c3835e90`),
+correcting previously stale Operations metadata. All four application roles
+run this SHA with migration `0134_contract_coherence_profile_v2`; API readiness
+passes and the new route returns 401 without authentication. The in-app
+browser had no connected session, so authenticated owner UI/export acceptance
+is still unverified. Qwen and NTD were not restarted. FFC-01 and ProductReady
+remain PARTIAL and false.
+
 Checkpoint 2026-10-07 (Asia/Kamchatka): public application release
 `039ce694a10200a2f24e7cadda61b9c8cd6a58ac` runs migration
 `0134_contract_coherence_profile_v2`. Five owner-workspace contract coherence
