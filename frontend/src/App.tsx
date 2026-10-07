@@ -3962,6 +3962,12 @@ function SupportProductionBody({
             Проверка не заменяет согласование изменений договора и не
             подтверждает выполнение работ на площадке.
           </p>
+          <a
+            className="button-link secondary"
+            href={`/api/v1/workspaces/${workspaceId}/support/contract-execution-conditions.csv`}
+          >
+            Скачать редактируемый реестр условий
+          </a>
           <div className="table-wrap">
             <table>
               <thead>

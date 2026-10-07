@@ -1,5 +1,18 @@
 # Generalized Contract Analysis 01
 
+## 2026-10-07 editable execution-condition register
+
+The current, human-confirmed Support contract conditions can now be downloaded
+as an editable CSV register. It includes clause, category, responsible party,
+required action, condition, source document/page/version/locator and review
+time. Execution status and evidence columns are deliberately blank. Rejected,
+unreviewed, stale and source-less candidates are excluded; spreadsheet formula
+prefixes in source text are neutralized. The export uses the owner-scoped
+Support read model and does not assert performance, acceptance or legal
+agreement. An isolated unit check covers exclusion, source retention and
+formula safety; the browser check covers the visible download route. The
+declared OpenAPI route matches the runtime-generated schema, 81/81 paths.
+
 ## 2026-10-07 confirmed execution-conditions schedule
 
 The Support production view now separates reviewed contract candidates from

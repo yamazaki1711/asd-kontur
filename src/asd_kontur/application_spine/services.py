@@ -29,6 +29,9 @@ from asd_kontur.restoration import (
     build_recovery_plan,
     render_recovery_plan_csv,
 )
+from asd_kontur.support.contract_execution_export import (
+    render_contract_execution_conditions_csv,
+)
 from asd_kontur.support.contract_handover import (
     apply_contract_obligation_reviews,
     contract_obligation_handover,
@@ -1404,6 +1407,14 @@ class ProductSpineService:
                 item for item in reviewed_obligations if item["review_state"] == "confirmed"
             ],
         }
+
+    def support_contract_execution_conditions_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> bytes:
+        view = self.support_production_view(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        return render_contract_execution_conditions_csv(view["contract_execution_conditions"])
 
     def review_contract_obligation(
         self,

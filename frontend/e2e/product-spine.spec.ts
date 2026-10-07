@@ -654,6 +654,12 @@ test("Support shows source-linked contract duties as review candidates", async (
       name: "Подтверждённые договорные условия исполнения",
     }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Скачать редактируемый реестр условий" }),
+  ).toHaveAttribute(
+    "href",
+    `/api/v1/workspaces/${workspaceA}/support/contract-execution-conditions.csv`,
+  );
   expect(reviewed).toBe(true);
   const contractSourceLinks = page.getByRole("link", {
     name: "changed-contract.docx",

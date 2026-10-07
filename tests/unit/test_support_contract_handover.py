@@ -1,9 +1,14 @@
 """Contract duties reach Support without being promoted to accepted facts."""
 
+import csv
+import io
 from types import SimpleNamespace
 from uuid import uuid4
 
 from asd_kontur.application_spine.services import ProductSpineService
+from asd_kontur.support.contract_execution_export import (
+    render_contract_execution_conditions_csv,
+)
 from asd_kontur.support.contract_handover import (
     apply_contract_obligation_reviews,
     contract_obligation_handover,
@@ -157,3 +162,39 @@ def test_support_execution_conditions_require_current_human_confirmation() -> No
     assert stale_result["contract_obligation_candidates"][0]["review_state"] == (
         "stale_requires_review"
     )
+
+
+def test_editable_execution_register_excludes_unreviewed_and_unproven_work() -> None:
+    source_id = str(uuid4())
+    content = render_contract_execution_conditions_csv(
+        [
+            {
+                "review_state": "confirmed",
+                "clause_key": "4.2",
+                "category": "payment",
+                "party": "customer",
+                "obligation": "=unsafe formula",
+                "condition": "After acceptance.",
+                "source_name": "contract.docx",
+                "source_version_id": source_id,
+                "source_locator_id": "locator-a",
+                "reviewed_at": "2026-10-07T00:00:00Z",
+            },
+            {
+                "review_state": "unreviewed",
+                "obligation": "Unreviewed duty",
+                "source_locator_id": "locator-b",
+            },
+            {
+                "review_state": "confirmed",
+                "obligation": "Source-less duty",
+            },
+        ]
+    )
+    rows = list(csv.DictReader(io.StringIO(content.decode("utf-8-sig"))))
+    assert len(rows) == 1
+    assert rows[0]["required_action"] == "'=unsafe formula"
+    assert rows[0]["source_version_id"] == source_id
+    assert rows[0]["source_locator_id"] == "locator-a"
+    assert rows[0]["execution_status"] == ""
+    assert rows[0]["execution_evidence"] == ""

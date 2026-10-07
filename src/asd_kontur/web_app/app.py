@@ -1485,6 +1485,29 @@ def _api_router() -> APIRouter:
         )
         return SupportProductionView(**jsonable_encoder(value))
 
+    @router.get(
+        "/workspaces/{workspace_id}/support/contract-execution-conditions.csv",
+        tags=["support-production"],
+    )
+    def support_contract_execution_conditions_export(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        content = _container(request).service.support_contract_execution_conditions_export(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=content,
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": (
+                    "attachment; filename*=UTF-8''contract-execution-conditions.csv"
+                )
+            },
+        )
+
     @router.post(
         "/workspaces/{workspace_id}/support/contract-obligations/{candidate_id}/review",
         response_model=ContractObligationReviewView,

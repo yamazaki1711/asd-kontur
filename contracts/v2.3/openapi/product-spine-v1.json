@@ -7771,6 +7771,47 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/support/contract-execution-conditions.csv": {
+      "get": {
+        "operationId": "support_contract_execution_conditions_export_api_v1_workspaces__workspace_id__support_contract_execution_conditions_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Support Contract Execution Conditions Export",
+        "tags": [
+          "support-production"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/support/contract-obligations/{candidate_id}/review": {
       "post": {
         "operationId": "review_contract_obligation_api_v1_workspaces__workspace_id__support_contract_obligations__candidate_id__review_post",
