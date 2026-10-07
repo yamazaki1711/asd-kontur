@@ -2219,3 +2219,18 @@ multi-source tests prove both DOCX members receive their respective edits and
 that a stale projected count cannot bypass the guard. The package is still a
 candidate for professional/legal review, and unresolved references remain
 unresolved; this does not complete FFC-01 or ProductReady.
+
+Exact application release `b008df9475a6be5d1eb5cb4bfb4fa053ef489e4c`
+was staged and activated on unchanged migration
+`0135_support_incoming_inspection_preflights`. The staged release passed 77
+focused contract tests, frontend typecheck/build, and four-role launchd
+preflight. The first worker bootstrap returned launchd I/O error 5 after
+bootout; a bounded second bootstrap succeeded and the worker was verified
+before proceeding. The assistant worker, orchestrator and API then started
+normally. Post-cutover 4/4 topology, API readiness and frontend HTTP 200
+passed. The deployed application-service check showed
+`multi_source_package_required`, an available complete package with two DOCX
+members and five revisions, and the expected blocker on the partial standalone
+DOCX. The public workspace/source/result counts remained 1/21/274, with zero
+active durable jobs; Qwen and NTD PIDs were unchanged. This was not an
+authenticated browser download or a full legal/professional acceptance.
