@@ -6,6 +6,7 @@ import io
 import json
 import zipfile
 from io import StringIO
+from types import SimpleNamespace
 from typing import cast
 from uuid import UUID
 
@@ -320,6 +321,27 @@ def test_professional_archive_places_disagreement_protocol_before_internal_sched
         assert "09_delivery_manifest.json" in exported.namelist()
 
 
+def test_professional_archive_preserves_full_material_schedule() -> None:
+    archive = build_tender_analysis_archive(
+        findings_report=b"short-report",
+        findings_schedule=b"findings-csv",
+        scope_schedule=b"works-csv",
+        material_schedule=b"all-source-materials-csv",
+        structure_identity_schedule=b"identity-csv",
+        facility_scope_schedule=b"facility-work-csv",
+        facility_candidate_schedule=b"facility-candidate-csv",
+        document_coverage_schedule=b"coverage-csv",
+        materialization={"state": "partial", "gaps": []},
+        professional=True,
+    )
+    with zipfile.ZipFile(io.BytesIO(archive)) as exported:
+        assert exported.read("20_project_material_observations.csv") == b"all-source-materials-csv"
+        manifest = json.loads(exported.read("09_delivery_manifest.json"))
+    assert any(
+        item["path"] == "20_project_material_observations.csv" for item in manifest["entries"]
+    )
+
+
 def test_professional_archive_includes_exact_source_revised_contract() -> None:
     archive = build_tender_analysis_archive(
         findings_report=b"engineering-report",
@@ -542,6 +564,9 @@ def test_application_service_returns_editable_schedule_from_scoped_project_view(
     service = object.__new__(ProductSpineService)
     service._repository = cast(SpinePostgresRepository, Repository())
     service._tender_contract_analysis = ContractAnalysisRepository()  # type: ignore[assignment]
+    service._contract_revision_reviews = SimpleNamespace(  # type: ignore[assignment]
+        latest_decisions=lambda **_kwargs: []
+    )
     result = service.tender_findings_schedule(
         owner_identity_id="owner-1", workspace_id=expected_workspace_id
     )

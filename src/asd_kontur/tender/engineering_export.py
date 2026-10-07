@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import csv
 import io
+import json
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
 from xml.sax.saxutils import escape
@@ -70,6 +72,58 @@ def render_engineering_work_schedule_csv(model: Mapping[str, Any]) -> bytes:
                         ),
                     }
                 )
+    return ("\ufeff" + output.getvalue()).encode("utf-8")
+
+
+def render_engineering_material_schedule_csv(model: Mapping[str, Any]) -> bytes:
+    """Keep every source-bound material observation outside the short main report."""
+
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(
+        output,
+        fieldnames=(
+            "Место",
+            "Работа",
+            "Материал",
+            "Вид материала",
+            "Свойства",
+            "Количество",
+            "Единица",
+            "Роль документа",
+            "Документ",
+            "Версия",
+            "Страница / лист",
+            "Статус интерпретации",
+            "source_locator_id",
+            "work_scope_id",
+        ),
+    )
+    writer.writeheader()
+    for raw in model.get("materials") or ():
+        if not isinstance(raw, Mapping):
+            continue
+        row = dict(raw)
+        source = dict(row.get("source") or {})
+        writer.writerow(
+            {
+                "Место": row.get("facility") or "Требует уточнения",
+                "Работа": row.get("work") or "",
+                "Материал": row.get("name") or "",
+                "Вид материала": row.get("material_kind") or "",
+                "Свойства": json.dumps(
+                    row.get("properties") or {}, ensure_ascii=False, sort_keys=True
+                ),
+                "Количество": row.get("quantity") if row.get("quantity") is not None else "",
+                "Единица": row.get("unit") or "",
+                "Роль документа": row.get("document_role") or "",
+                "Документ": source.get("document") or "",
+                "Версия": source.get("version") or "",
+                "Страница / лист": source.get("page") or "",
+                "Статус интерпретации": row.get("interpretation_reason") or "",
+                "source_locator_id": row.get("source_locator_id") or "",
+                "work_scope_id": row.get("work_scope_id") or "",
+            }
+        )
     return ("\ufeff" + output.getvalue()).encode("utf-8")
 
 
@@ -248,44 +302,161 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                 )
             ],
         )
-    works = list(model.get("works") or ())
+    works = [dict(row) for row in model.get("works") or () if isinstance(row, Mapping)]
     if works:
+        work_groups: defaultdict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+        for row in works:
+            work_groups[
+                (
+                    str(
+                        row.get("facility_id")
+                        or row.get("location_scope_id")
+                        or row.get("facility")
+                        or ""
+                    ),
+                    str(
+                        row.get("family_key")
+                        or row.get("work_family")
+                        or row.get("work_name")
+                        or ""
+                    ),
+                )
+            ].append(row)
+        ordered_groups = sorted(
+            work_groups.values(),
+            key=lambda group: (
+                -len(group),
+                str(group[0].get("facility") or "").casefold(),
+                str(group[0].get("work_family") or group[0].get("work_name") or "").casefold(),
+            ),
+        )
+        visible_groups = ordered_groups[:120]
+        work_rows = []
+        for group in visible_groups:
+            representative = max(
+                group,
+                key=lambda row: (
+                    bool(row.get("quantities_semantically_validated")),
+                    len(row.get("document_roles") or ()),
+                    len(row.get("source_locator_ids") or ()),
+                ),
+            )
+            grouped = len(group) > 1
+            work_rows.append(
+                (
+                    str(representative.get("facility") or "Требует уточнения"),
+                    str(
+                        (representative.get("work_family") or representative.get("work_name"))
+                        if grouped
+                        else (representative.get("work_name") or "")
+                    ),
+                    (
+                        f"{len(group)} позиции; значения по каждой позиции — в ведомости"
+                        if grouped
+                        else (
+                            "Объём требует смысловой проверки"
+                            if representative.get("quantities_semantically_validated") is False
+                            else _role_values(representative.get("quantities_by_document"))
+                        )
+                    ),
+                    (
+                        "По позициям — в ведомости"
+                        if grouped
+                        else _role_materials(representative.get("materials_by_document"))
+                    ),
+                )
+            )
         add_section(
             "Основные виды работ",
             [
+                _paragraph(
+                    f"Установлено {len(works)} позиций в {len(ordered_groups)} группах "
+                    "места и вида работ. Группы не суммируются как объёмы; "
+                    "полная построчная ведомость включена в экспорт Tender."
+                ),
                 _simple_table(
                     ("Место", "Работа", "Объёмы по документам", "Материалы"),
+                    work_rows,
+                ),
+                *(
                     [
-                        (
-                            str(row.get("facility") or "Требует уточнения"),
-                            str(row.get("work_name") or ""),
-                            _role_values(row.get("quantities_by_document")),
-                            _role_materials(row.get("materials_by_document")),
+                        _paragraph(
+                            f"Ещё {len(ordered_groups) - len(visible_groups)} групп — в ведомости."
                         )
-                        for row in works
-                    ],
-                )
+                    ]
+                    if len(ordered_groups) > len(visible_groups)
+                    else []
+                ),
             ],
         )
-    quantity_rows = [
+    compared_scopes = {
+        (str(row.get("facility") or ""), str(row.get("work") or ""))
+        for row in model.get("quantity_comparisons") or ()
+        if isinstance(row, Mapping)
+    }
+    quantity_candidates = [
         (
-            str(work.get("facility") or "Требует привязки"),
-            str(work.get("work_name") or ""),
-            str(role),
-            " ".join(
-                str(part)
-                for part in (quantity.get("value"), quantity.get("unit"))
-                if part not in (None, "")
+            (
+                0
+                if (str(work.get("facility") or ""), str(work.get("work_name") or ""))
+                in compared_scopes
+                else 1
+            ),
+            (
+                str(work.get("facility") or "Требует привязки"),
+                str(work.get("work_name") or ""),
+                str(role),
+                " ".join(
+                    str(part)
+                    for part in (quantity.get("value"), quantity.get("unit"))
+                    if part not in (None, "")
+                ),
             ),
         )
         for work in works
+        if work.get("quantities_semantically_validated") is not False
         for role, quantities in dict(work.get("quantities_by_document") or {}).items()
         for quantity in quantities or ()
     ]
-    if quantity_rows:
+    quantity_candidates.sort(key=lambda item: item[0])
+    quantity_rows = [row for _, row in quantity_candidates[:80]]
+    unreviewed_quantity_rows = sum(
+        len(quantities or ())
+        for work in works
+        if work.get("quantities_semantically_validated") is False
+        for quantities in dict(work.get("quantities_by_document") or {}).values()
+    )
+    if quantity_rows or unreviewed_quantity_rows:
         add_section(
             "Основные объёмы",
-            [_simple_table(("Место", "Работа", "Документ", "Объём"), quantity_rows)],
+            [
+                *(
+                    [_simple_table(("Место", "Работа", "Документ", "Объём"), quantity_rows)]
+                    if quantity_rows
+                    else []
+                ),
+                *(
+                    [
+                        _paragraph(
+                            f"В основном отчёте показано {len(quantity_rows)} из "
+                            f"{len(quantity_candidates)} проверенных по смыслу значений; "
+                            "полная ведомость находится в экспорте Tender."
+                        )
+                    ]
+                    if len(quantity_candidates) > len(quantity_rows)
+                    else []
+                ),
+                *(
+                    [
+                        _paragraph(
+                            f"Ещё {unreviewed_quantity_rows} значений не прошли смысловую "
+                            "проверку и не представлены как основные объёмы."
+                        )
+                    ]
+                    if unreviewed_quantity_rows
+                    else []
+                ),
+            ],
         )
     sheet_pile_schedule = list(model.get("sheet_pile_schedule") or ())
     if sheet_pile_schedule:
@@ -318,11 +489,31 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                 )
             ],
         )
-    materials = list(model.get("materials") or ())
+    materials = [dict(row) for row in model.get("materials") or () if isinstance(row, Mapping)]
     if materials:
+        compared_materials = {
+            str(row.get("material") or "").casefold()
+            for row in model.get("material_comparisons") or ()
+            if isinstance(row, Mapping)
+        }
+        ordered_materials = sorted(
+            materials,
+            key=lambda row: (
+                0 if str(row.get("name") or "").casefold() in compared_materials else 1,
+                0 if row.get("quantity") not in (None, "") else 1,
+                str(row.get("facility") or "").casefold(),
+                str(row.get("name") or "").casefold(),
+            ),
+        )
+        visible_materials = ordered_materials[:60]
         add_section(
             "Материалы",
             [
+                _paragraph(
+                    f"В документах установлено {len(materials)} наблюдений о материалах; "
+                    "полная ведомость с источниками включена в экспорт Tender. "
+                    "Повторные упоминания не суммируются."
+                ),
                 _simple_table(
                     ("Место", "Работа", "Документ", "Материал"),
                     [
@@ -336,10 +527,20 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                                 if value not in (None, "")
                             ),
                         )
-                        for row in materials
+                        for row in visible_materials
                     ],
                     empty="Материалы по установленным работам не найдены.",
-                )
+                ),
+                *(
+                    [
+                        _paragraph(
+                            f"Ещё {len(materials) - len(visible_materials)} наблюдений "
+                            "— в ведомости."
+                        )
+                    ]
+                    if len(materials) > len(visible_materials)
+                    else []
+                ),
             ],
         )
     comparison_rows = _engineering_comparison_rows(model)

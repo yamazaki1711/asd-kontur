@@ -64,6 +64,7 @@ from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_
 from asd_kontur.tender.engineering_export import (
     render_engineering_disagreement_protocol_docx,
     render_engineering_findings_csv,
+    render_engineering_material_schedule_csv,
     render_engineering_tender_report_docx,
     render_engineering_work_schedule_csv,
 )
@@ -1394,6 +1395,9 @@ class ProductSpineService:
                     view.get("work_packages", []),
                     **common,
                 )
+            ),
+            material_schedule=(
+                render_engineering_material_schedule_csv(engineering) if professional else None
             ),
             structure_identity_schedule=render_tender_structure_identity_schedule_csv(
                 view.get("structure_identity_candidates", []),

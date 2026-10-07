@@ -23,6 +23,7 @@ def build_tender_analysis_archive(
     document_coverage_schedule: bytes,
     materialization: Mapping[str, Any],
     professional: bool = False,
+    material_schedule: bytes | None = None,
     disagreement_protocol: bytes | None = None,
     revised_contract: bytes | None = None,
 ) -> bytes:
@@ -86,6 +87,11 @@ def build_tender_analysis_archive(
                 if professional
                 else "07_document_processing_coverage.csv",
                 document_coverage_schedule,
+            ),
+            *(
+                (("20_project_material_observations.csv", material_schedule),)
+                if professional and material_schedule is not None
+                else ()
             ),
         )
         manifest = _delivery_manifest(entries, materialization)

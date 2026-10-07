@@ -9,6 +9,7 @@ import zipfile
 from asd_kontur.tender.engineering_export import (
     render_engineering_disagreement_protocol_docx,
     render_engineering_findings_csv,
+    render_engineering_material_schedule_csv,
     render_engineering_tender_report_docx,
     render_engineering_work_schedule_csv,
 )
@@ -170,6 +171,58 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert "<w:tblHeader/>" in xml
     assert "<w:tblBorders>" in xml
     assert '<w:tblLayout w:type="fixed"/>' in xml
+
+
+def test_large_tender_report_summarizes_without_promoting_unreviewed_quantities() -> None:
+    works = [
+        {
+            "facility": f"Area {index % 4}",
+            "family_key": f"family-{index % 12}",
+            "work_family": f"Work family {index % 12}",
+            "work_name": f"Work {index}",
+            "quantities_semantically_validated": index != 199,
+            "quantities_by_document": {
+                "RD": [{"value": "999999" if index == 199 else str(index + 1), "unit": "m"}]
+            },
+            "document_roles": ["RD"],
+        }
+        for index in range(200)
+    ]
+    materials = [
+        {
+            "facility": f"Area {index % 4}",
+            "work": f"Work {index % 200}",
+            "name": f"Material {index}",
+            "quantity": str(index + 1),
+            "unit": "kg",
+            "document_role": "RD",
+            "source_locator_id": f"locator-{index}",
+            "source": {"document": "drawing.pdf", "version": 2, "page": index + 1},
+        }
+        for index in range(300)
+    ]
+    model = {
+        "project": {"name": {"value": "Changed sample project"}},
+        "works": works,
+        "materials": materials,
+    }
+    report = render_engineering_tender_report_docx(model)
+    with zipfile.ZipFile(io.BytesIO(report)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert xml.count("<w:tr>") < 300
+    assert "200 позиций" in xml
+    assert "300 наблюдений" in xml
+    assert "999999" not in xml
+    assert "не прошли смысловую проверку" in xml
+
+    material_rows = list(
+        csv.DictReader(
+            io.StringIO(render_engineering_material_schedule_csv(model).decode("utf-8-sig"))
+        )
+    )
+    assert len(material_rows) == 300
+    assert material_rows[-1]["source_locator_id"] == "locator-299"
+    assert material_rows[-1]["Документ"] == "drawing.pdf"
 
 
 def test_tender_report_omits_sections_without_project_inputs() -> None:
