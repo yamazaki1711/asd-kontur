@@ -69,6 +69,10 @@ from asd_kontur.support.material_admission_postgres import (
     MaterialAdmissionError,
     MaterialAdmissionService,
 )
+from asd_kontur.support.material_application_postgres import (
+    MaterialApplicationError,
+    MaterialApplicationService,
+)
 from asd_kontur.support.production_postgres import SupportProductionError
 from asd_kontur.support.release_readiness import (
     SupportReleaseReadinessService,
@@ -127,6 +131,8 @@ from .schemas import (
     MaterialAdmissionContextView,
     MaterialAdmissionRequest,
     MaterialAdmissionView,
+    MaterialApplicationRequest,
+    MaterialApplicationView,
     ModeView,
     NtdSeedStatusView,
     PackageBackupManifestView,
@@ -220,6 +226,12 @@ class ApplicationContainer:
         self.incoming_inspections = IncomingInspectionRepository(engine)
         self.material_admissions = (
             MaterialAdmissionService(engine, self.support_command_engine)
+            if self.support_command_engine is not None
+            and self.support_command_writer_status["role_valid"]
+            else None
+        )
+        self.material_applications = (
+            MaterialApplicationService(engine, self.support_command_engine)
             if self.support_command_engine is not None
             and self.support_command_writer_status["role_valid"]
             else None
@@ -396,6 +408,13 @@ def _install_middleware(app: FastAPI) -> None:
     @app.exception_handler(MaterialAdmissionError)
     async def material_admission_error(
         request: Request, exc: MaterialAdmissionError
+    ) -> JSONResponse:
+        status_code = 404 if str(exc) == "workspace_not_found" else 409
+        return _error(request, str(exc), status_code)
+
+    @app.exception_handler(MaterialApplicationError)
+    async def material_application_error(
+        request: Request, exc: MaterialApplicationError
     ) -> JSONResponse:
         status_code = 404 if str(exc) == "workspace_not_found" else 409
         return _error(request, str(exc), status_code)
@@ -1758,6 +1777,28 @@ def _api_router() -> APIRouter:
             **payload.model_dump(),
         )
         return MaterialAdmissionView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/material-applications",
+        response_model=MaterialApplicationView,
+        status_code=201,
+        tags=["support-production"],
+    )
+    def record_material_application(
+        request: Request,
+        workspace_id: UUID,
+        payload: MaterialApplicationRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> MaterialApplicationView:
+        service = _container(request).material_applications
+        if service is None:
+            raise HTTPException(status_code=503, detail="support_material_writer_unavailable")
+        value = service.record(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            **payload.model_dump(),
+        )
+        return MaterialApplicationView(**jsonable_encoder(value))
 
     @router.get(
         "/workspaces/{workspace_id}/support/contract-execution-conditions.csv",

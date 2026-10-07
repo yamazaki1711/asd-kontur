@@ -573,8 +573,30 @@ class MaterialAdmissionContextView(ApiModel):
     preflights: list[dict[str, Any]]
     evidence: list[dict[str, Any]]
     grants: list[dict[str, Any]]
+    application_grants: list[dict[str, Any]]
+    application_evidence: list[dict[str, Any]]
+    applications: list[dict[str, Any]]
     decisions: list[dict[str, Any]]
     truncated_sections: list[str]
+
+
+class MaterialApplicationRequest(ApiModel):
+    admission_id: UUID
+    evidence_link_id: UUID
+    quantity: Decimal = Field(gt=0)
+    unit_code: str = Field(min_length=1, max_length=32)
+    decision_basis: str = Field(min_length=3, max_length=1000)
+    professional_grant_id: UUID
+    professional_grant_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=200)
+
+
+class MaterialApplicationView(ApiModel):
+    material_application_id: UUID
+    quantity: Decimal
+    unit_code: str
+    application_digest: str
+    recorded_at: datetime
 
 
 class ContractObligationReviewRequest(ApiModel):

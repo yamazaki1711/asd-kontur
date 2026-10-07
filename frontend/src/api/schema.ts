@@ -1320,6 +1320,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/support/material-applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Material Application */
+        post: operations["record_material_application_api_v1_workspaces__workspace_id__support_material_applications_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/processes": {
         parameters: {
             query?: never;
@@ -2235,6 +2252,18 @@ export interface components {
         };
         /** MaterialAdmissionContextView */
         MaterialAdmissionContextView: {
+            /** Application Evidence */
+            application_evidence: {
+                [key: string]: unknown;
+            }[];
+            /** Application Grants */
+            application_grants: {
+                [key: string]: unknown;
+            }[];
+            /** Applications */
+            applications: {
+                [key: string]: unknown;
+            }[];
             /** Batches */
             batches: {
                 [key: string]: unknown;
@@ -2350,6 +2379,53 @@ export interface components {
             outcome: "admitted" | "quarantined" | "waiting_for_documents" | "rejected";
             /** Reason Codes */
             reason_codes: string[];
+        };
+        /** MaterialApplicationRequest */
+        MaterialApplicationRequest: {
+            /**
+             * Admission Id
+             * Format: uuid
+             */
+            admission_id: string;
+            /** Decision Basis */
+            decision_basis: string;
+            /**
+             * Evidence Link Id
+             * Format: uuid
+             */
+            evidence_link_id: string;
+            /** Idempotency Key */
+            idempotency_key: string;
+            /**
+             * Professional Grant Id
+             * Format: uuid
+             */
+            professional_grant_id: string;
+            /** Professional Grant Version */
+            professional_grant_version: number;
+            /** Quantity */
+            quantity: number | string;
+            /** Unit Code */
+            unit_code: string;
+        };
+        /** MaterialApplicationView */
+        MaterialApplicationView: {
+            /** Application Digest */
+            application_digest: string;
+            /**
+             * Material Application Id
+             * Format: uuid
+             */
+            material_application_id: string;
+            /** Quantity */
+            quantity: string;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /** Unit Code */
+            unit_code: string;
         };
         /**
          * ModeName
@@ -6303,6 +6379,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MaterialAdmissionContextView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_material_application_api_v1_workspaces__workspace_id__support_material_applications_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialApplicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialApplicationView"];
                 };
             };
             /** @description Validation Error */

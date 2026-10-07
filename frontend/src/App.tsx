@@ -3585,7 +3585,292 @@ function MaterialAdmissionPanel({ workspaceId }: { workspaceId: string }) {
           </ul>
         </div>
       ) : null}
+      <MaterialApplicationPanel workspaceId={workspaceId} context={data} />
     </section>
+  );
+}
+
+function MaterialApplicationPanel({
+  workspaceId,
+  context,
+}: {
+  workspaceId: string;
+  context:
+    | components["schemas"]["MaterialAdmissionContextView"]
+    | undefined;
+}) {
+  const queryClient = useQueryClient();
+  const [admissionId, setAdmissionId] = useState("");
+  const [evidenceId, setEvidenceId] = useState("");
+  const [grantId, setGrantId] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [basis, setBasis] = useState("");
+  const [requestKey, setRequestKey] = useState(() =>
+    globalThis.crypto.randomUUID(),
+  );
+  const currentAdmissions = (context?.decisions ?? []).filter(
+    (item) => item.current_decision === true && item.outcome === "admitted",
+  );
+  const selected = currentAdmissions.find(
+    (item) => String(item.admission_id) === admissionId,
+  );
+  const selectedEvidence = (context?.application_evidence ?? []).filter(
+    (item) =>
+      selected &&
+      String(item.work_instance_id) === String(selected.work_instance_id) &&
+      Number(item.work_instance_version) ===
+        Number(selected.work_instance_version),
+  );
+  const grant = (context?.application_grants ?? []).find(
+    (item) => String(item.grant_id) === grantId,
+  );
+  const submit = useMutation({
+    mutationFn: async () => {
+      if (!selected || !grant || !evidenceId) {
+        throw new Error("Не хватает допуска, подтверждения работы или полномочия");
+      }
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/material-applications",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: {
+            admission_id: String(selected.admission_id),
+            evidence_link_id: evidenceId,
+            quantity,
+            unit_code: String(selected.delivered_unit),
+            decision_basis: basis,
+            professional_grant_id: grantId,
+            professional_grant_version: Number(grant.grant_version),
+            idempotency_key: requestKey,
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      setRequestKey(globalThis.crypto.randomUUID());
+      setQuantity("");
+      await queryClient.invalidateQueries({
+        queryKey: ["support-material-admission-context", workspaceId],
+      });
+    },
+  });
+  const canSubmit = Boolean(
+    selected &&
+      grant &&
+      evidenceId &&
+      quantity &&
+      basis.trim().length >= 3 &&
+      !context?.truncated_sections.length,
+  );
+  return (
+    <div>
+      <h3>Фактическое применение материала</h3>
+      <p>
+        Допуск партии не означает её применение. Укажите подтверждённое
+        количество для конкретной работы. Система не позволит учесть больше
+        поставленного количества по партии; это ещё не готовность объёма к КС.
+      </p>
+      {context && !currentAdmissions.length ? (
+        <p>Нет действующего допуска партии к работе.</p>
+      ) : null}
+      {context && !context.application_grants.length ? (
+        <p>Нет действующего полномочия на подтверждение применения материала.</p>
+      ) : null}
+      {context ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            submit.mutate();
+          }}
+        >
+          <div className="form-row">
+            <label>
+              Допущенная партия и работа
+              <select
+                value={admissionId}
+                onChange={(event) => {
+                  setAdmissionId(event.target.value);
+                  setEvidenceId("");
+                  setRequestKey(globalThis.crypto.randomUUID());
+                }}
+              >
+                <option value="">Выберите действующий допуск</option>
+                {currentAdmissions.map((item) => {
+                  const work = context.works.find(
+                    (candidate) =>
+                      String(candidate.work_instance_id) ===
+                      String(item.work_instance_id),
+                  );
+                  const batch = context.batches.find(
+                    (candidate) =>
+                      String(candidate.material_batch_id) ===
+                      String(item.material_batch_id),
+                  );
+                  return (
+                    <option
+                      key={String(item.admission_id)}
+                      value={String(item.admission_id)}
+                    >
+                      {displayValue(batch?.batch_reference, "Партия")} —{" "}
+                      {displayValue(work?.work_name, "работа")} ({displayValue(item.delivered_quantity)}{" "}
+                      {displayValue(item.delivered_unit)})
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <label>
+              Подтверждение фактического применения
+              <select
+                value={evidenceId}
+                onChange={(event) => {
+                  setEvidenceId(event.target.value);
+                  setRequestKey(globalThis.crypto.randomUUID());
+                }}
+              >
+                <option value="">Выберите проверенный источник</option>
+                {selectedEvidence.map((item) => (
+                  <option
+                    key={String(item.evidence_link_id)}
+                    value={String(item.evidence_link_id)}
+                  >
+                    {String(item.source_title)} — {String(item.locator_key)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Полномочие специалиста
+              <select
+                value={grantId}
+                onChange={(event) => {
+                  setGrantId(event.target.value);
+                  setRequestKey(globalThis.crypto.randomUUID());
+                }}
+              >
+                <option value="">Выберите полномочие</option>
+                {context.application_grants.map((item) => (
+                  <option key={String(item.grant_id)} value={String(item.grant_id)}>
+                    {String(item.professional_qualification_ref)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {selected && !selectedEvidence.length ? (
+            <p role="alert">
+              Нет проверенного свидетельства фактического применения для этой
+              версии работы. Документ о поставке его не заменяет.
+            </p>
+          ) : null}
+          <div className="form-row">
+            <label>
+              Фактически применено ({displayValue(selected?.delivered_unit, "ед.")})
+              <input
+                required
+                type="number"
+                min="0.000001"
+                step="any"
+                value={quantity}
+                onChange={(event) => {
+                  setQuantity(event.target.value);
+                  setRequestKey(globalThis.crypto.randomUUID());
+                }}
+              />
+            </label>
+            <label>
+              Основание подтверждения
+              <textarea
+                required
+                minLength={3}
+                maxLength={1000}
+                value={basis}
+                onChange={(event) => {
+                  setBasis(event.target.value);
+                  setRequestKey(globalThis.crypto.randomUUID());
+                }}
+              />
+            </label>
+          </div>
+          <button type="submit" disabled={!canSubmit || submit.isPending}>
+            Записать фактическое применение
+          </button>
+          {submit.error ? (
+            <p role="alert">Применение не сохранено: {String(submit.error)}</p>
+          ) : null}
+          {submit.data ? (
+            <p role="status">
+              Записано {displayValue(submit.data.quantity)}{" "}
+              {displayValue(submit.data.unit_code)}.
+            </p>
+          ) : null}
+        </form>
+      ) : null}
+      {context?.applications.length ? (
+        <div className="table-wrap">
+          <h4>Учтённое применение</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>Работа</th>
+                <th>Количество</th>
+                <th>Источник</th>
+                <th>Основание допуска</th>
+                <th>Дата записи</th>
+              </tr>
+            </thead>
+            <tbody>
+              {context.applications.map((item) => {
+                const work = context.works.find(
+                  (candidate) =>
+                    String(candidate.work_instance_id) ===
+                    String(item.work_instance_id),
+                );
+                const source = context.application_evidence.find(
+                  (candidate) =>
+                    String(candidate.evidence_link_id) ===
+                    String(item.evidence_link_id),
+                );
+                const linkedAdmission = context.decisions.find(
+                  (candidate) =>
+                    String(candidate.admission_id) === String(item.admission_id),
+                );
+                return (
+                  <tr key={String(item.material_application_id)}>
+                    <td>{displayValue(work?.work_name, "Работа требует проверки")}</td>
+                    <td>
+                      {displayValue(item.quantity)} {displayValue(item.unit_code)}
+                    </td>
+                    <td>
+                      {source ? (
+                        <Link
+                          to={workspaceRoute(
+                            "Support",
+                            workspaceId,
+                            `/evidence/locators/${String(source.source_locator_id)}`,
+                          )}
+                        >
+                          {String(source.source_title)}: {String(source.locator_key)}
+                        </Link>
+                      ) : (
+                        "Источник требует проверки"
+                      )}
+                    </td>
+                    <td>
+                      {linkedAdmission?.current_decision === true
+                        ? "Действующее основание"
+                        : "Основание изменилось — проверить применение"}
+                    </td>
+                    <td>{displayValue(item.recorded_at)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

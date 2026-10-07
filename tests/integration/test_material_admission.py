@@ -21,6 +21,10 @@ from asd_kontur.support.material_admission_postgres import (
     MaterialAdmissionError,
     MaterialAdmissionService,
 )
+from asd_kontur.support.material_application_postgres import (
+    MaterialApplicationError,
+    MaterialApplicationService,
+)
 from asd_kontur.web_app import create_app
 
 from .conftest import PostgreSQLEnvironment, run_migration
@@ -52,7 +56,7 @@ def test_material_admission_migration_roundtrip_on_disposable_database(
     run_migration(str(repository_root), url, "head")
     with postgres_environment.owner_engine.connect() as connection:
         assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
-            "0136_support_material_admission_basis"
+            "0137_support_material_application_basis"
         )
     run_migration(str(repository_root), url, "0135_support_incoming_inspection_preflights")
     with postgres_environment.owner_engine.connect() as connection:
@@ -88,9 +92,9 @@ def _seed_batch_and_work(
         connection.execute(
             sa.text(
                 "INSERT INTO platform.work_types VALUES "
-                "(:id,'test.admission.work','1.0.0','human:synthetic',CURRENT_TIMESTAMP)"
+                "(:id,:key,'1.0.0','human:synthetic',CURRENT_TIMESTAMP)"
             ),
-            {"id": ids["work_type"]},
+            {"id": ids["work_type"], "key": f"test.admission.work.{tenant.workspace_id}"},
         )
         connection.execute(
             sa.text(
@@ -102,9 +106,9 @@ def _seed_batch_and_work(
         connection.execute(
             sa.text(
                 "INSERT INTO platform.material_classes VALUES "
-                "(:id,'test.admission.material','human:synthetic',CURRENT_TIMESTAMP)"
+                "(:id,:key,'human:synthetic',CURRENT_TIMESTAMP)"
             ),
-            {"id": ids["material"]},
+            {"id": ids["material"], "key": f"test.admission.material.{tenant.workspace_id}"},
         )
         connection.execute(
             sa.text(
@@ -408,3 +412,233 @@ def test_material_admission_requires_bound_basis_and_survives_api_reload(
     )
     with pytest.raises(MaterialAdmissionError, match="support_workspace_not_active"):
         service.record(**{**command, "idempotency_key": "material-after-freeze"})
+
+
+def test_material_application_requires_actual_use_and_caps_batch_total(
+    postgres_environment: PostgreSQLEnvironment, tmp_path: Path
+) -> None:
+    tenant = create_tenant(postgres_environment)
+    _support, process_id, _scope_grant = _start_support(postgres_environment, tenant)
+    batch_id, work_id, source, locator = _seed_batch_and_work(postgres_environment, tenant)
+    certificate, passport, quantity_evidence = _evidence(
+        postgres_environment, tenant, batch_id, source, locator
+    )
+    settings = SpineSettings(
+        database_url=postgres_environment.application_engine.url.render_as_string(
+            hide_password=False
+        ),
+        lifecycle_database_url=postgres_environment.lifecycle_engine.url.render_as_string(
+            hide_password=False
+        ),
+        worker_database_url=postgres_environment.document_worker_engine.url.render_as_string(
+            hide_password=False
+        ),
+        destruction_database_url=postgres_environment.destruction_engine.url.render_as_string(
+            hide_password=False
+        ),
+        support_command_database_url=postgres_environment.support_engine.url.render_as_string(
+            hide_password=False
+        ),
+        object_store_root=tmp_path / "objects",
+        archive_store_root=tmp_path / "archives",
+        session_profile=SessionProfile.DEVELOPMENT_LOOPBACK,
+        audit_pepper="synthetic-material-application-pepper",
+    )
+    settings.object_store_root.mkdir()
+    settings.archive_store_root.mkdir()
+    owner = OwnerAuthService(postgres_environment.application_engine, settings).bootstrap_owner(
+        username="material-application-owner",
+        password="Synthetic-Material-Application-42!",
+        display_name="Material application owner",
+    )
+    with postgres_environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO application.owner_organization_grants VALUES "
+                "(:owner,:o,ARRAY['workspace.read','workspace.write'],1,CURRENT_TIMESTAMP)"
+            ),
+            {"owner": owner, "o": tenant.organization_id},
+        )
+    admit_grant = _grant(postgres_environment, tenant, "support.material.admit", owner)
+    apply_grant = _grant(postgres_environment, tenant, "support.material.apply", owner)
+    inspection = IncomingInspectionRepository(postgres_environment.application_engine)
+    checks = [
+        {"key": key, "state": "passed", "basis": f"Confirmed evidence for {key}"}
+        for key, _label, _kind in INCOMING_CHECKS
+    ]
+    preflight = inspection.submit(
+        owner_identity_id=owner,
+        workspace_id=tenant.workspace_id,
+        material_name="Test material",
+        batch_reference="delivery-42",
+        material_batch_id=batch_id,
+        material_batch_version=1,
+        checks=checks,
+        idempotency_key="application-preflight-42",
+    )
+    admission = MaterialAdmissionService(
+        postgres_environment.application_engine, postgres_environment.support_engine
+    ).record(
+        owner_identity_id=owner,
+        workspace_id=tenant.workspace_id,
+        support_process_id=process_id,
+        material_batch_id=batch_id,
+        material_batch_version=1,
+        work_instance_id=work_id,
+        work_instance_version=1,
+        incoming_preflight_id=preflight["preflight_id"],
+        certificate_evidence_ids=[certificate],
+        passport_evidence_ids=[passport],
+        quantity_evidence_link_id=quantity_evidence,
+        delivered_quantity=Decimal("12.500"),
+        delivered_unit="kg",
+        manufacturer_ref="Factory A",
+        supplier_ref="Supplier B",
+        custody_complete=True,
+        applicable_to_work=True,
+        decision_basis="Verified delivery and inspection",
+        professional_grant_id=admit_grant.grant_id,
+        professional_grant_version=admit_grant.grant_version,
+        idempotency_key="application-admission-42",
+    )
+    use_evidence = uuid7()
+    with postgres_environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "UPDATE workspace.source_artifacts SET source_kind='field_document' WHERE "
+                "organization_id=:o AND workspace_id=:w AND source_artifact_id=(SELECT "
+                "source_artifact_id FROM workspace.source_versions WHERE organization_id=:o "
+                "AND workspace_id=:w AND source_version_id=:source)"
+            ),
+            {"o": tenant.organization_id, "w": tenant.workspace_id, "source": source},
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.evidence_links "
+                "(organization_id,workspace_id,evidence_link_id,subject_type,subject_id,"
+                "subject_version,source_version_id,source_locator_id,evidence_role,"
+                "validity_status,decision_ref) VALUES "
+                "(:o,:w,:evidence,'work_instance',:work,'1',:source,:locator,"
+                "'material_application','verified','decision:synthetic-field-confirmation')"
+            ),
+            {
+                "o": tenant.organization_id,
+                "w": tenant.workspace_id,
+                "evidence": use_evidence,
+                "work": work_id,
+                "source": source,
+                "locator": locator,
+            },
+        )
+    service = MaterialApplicationService(
+        postgres_environment.application_engine, postgres_environment.support_engine
+    )
+    command = {
+        "owner_identity_id": owner,
+        "workspace_id": tenant.workspace_id,
+        "admission_id": admission["admission_id"],
+        "evidence_link_id": use_evidence,
+        "quantity": Decimal("5.250"),
+        "unit_code": "kg",
+        "decision_basis": "Confirmed actual use on the selected work",
+        "professional_grant_id": apply_grant.grant_id,
+        "professional_grant_version": apply_grant.grant_version,
+        "idempotency_key": "material-application-first",
+    }
+    first = service.record(**command)
+    assert first["quantity"] == Decimal("5.250")
+    assert service.record(**command)["material_application_id"] == first["material_application_id"]
+    with pytest.raises(MaterialApplicationError, match="idempotency_conflict"):
+        service.record(**{**command, "quantity": Decimal("5.251")})
+    with pytest.raises(MaterialApplicationError, match="exceeds_delivery"):
+        service.record(
+            **{
+                **command,
+                "quantity": Decimal("7.251"),
+                "idempotency_key": "material-application-over-delivery",
+            }
+        )
+    with pytest.raises(MaterialApplicationError, match="unit_incompatible"):
+        service.record(
+            **{**command, "unit_code": "t", "idempotency_key": "material-application-wrong-unit"}
+        )
+    with pytest.raises(MaterialApplicationError, match="evidence_unverified"):
+        service.record(
+            **{
+                **command,
+                "evidence_link_id": certificate,
+                "idempotency_key": "material-application-delivery-not-use",
+            }
+        )
+    second = service.record(
+        **{
+            **command,
+            "quantity": Decimal("7.250"),
+            "idempotency_key": "material-application-second",
+        }
+    )
+    assert second["quantity"] == Decimal("7.250")
+    context = MaterialAdmissionService(
+        postgres_environment.application_engine, postgres_environment.support_engine
+    ).context(owner_identity_id=owner, workspace_id=tenant.workspace_id)
+    assert len(context["applications"]) == 2
+    assert context["application_grants"][0]["grant_id"] == apply_grant.grant_id
+    assert context["application_evidence"][0]["evidence_link_id"] == use_evidence
+
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    with TestClient(app) as client:
+        login = client.post(
+            "/api/v1/session/login",
+            json={
+                "username": "material-application-owner",
+                "password": "Synthetic-Material-Application-42!",
+            },
+        )
+        assert login.status_code == 200
+        csrf = client.cookies.get("asd_csrf")
+        response = client.post(
+            f"/api/v1/workspaces/{tenant.workspace_id}/support/material-applications",
+            json={
+                key: str(value) if isinstance(value, (Decimal, type(batch_id))) else value
+                for key, value in command.items()
+                if key not in {"owner_identity_id", "workspace_id"}
+            },
+            headers={"X-CSRF-Token": csrf or ""},
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["material_application_id"] == str(first["material_application_id"])
+
+    inspection.submit(
+        owner_identity_id=owner,
+        workspace_id=tenant.workspace_id,
+        material_name="Test material",
+        batch_reference="delivery-42",
+        material_batch_id=batch_id,
+        material_batch_version=1,
+        checks=checks,
+        idempotency_key="application-newer-preflight-42",
+    )
+    with pytest.raises(MaterialApplicationError, match="admission_stale"):
+        service.record(
+            **{
+                **command,
+                "quantity": Decimal("0.100"),
+                "idempotency_key": "material-application-stale-admission",
+            }
+        )
+
+    transition(
+        PostgresLifecycleRepository(postgres_environment.lifecycle_engine),
+        tenant,
+        2,
+        LifecycleState.FREEZING,
+        "material-application-freeze",
+    )
+    with pytest.raises(MaterialApplicationError, match="support_workspace_not_active"):
+        service.record(
+            **{
+                **command,
+                "quantity": Decimal("0.100"),
+                "idempotency_key": "material-application-after-freeze",
+            }
+        )

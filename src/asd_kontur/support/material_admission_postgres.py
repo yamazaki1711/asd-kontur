@@ -137,9 +137,48 @@ class MaterialAdmissionService:
                     "AND v.workspace_id=g.workspace_id AND v.grant_id=g.grant_id) "
                     "ORDER BY g.grant_id LIMIT 201"
                 ),
+                "application_grants": (
+                    "SELECT g.grant_id,g.grant_version,g.professional_qualification_ref "
+                    "FROM workspace.support_professional_grants g WHERE "
+                    "g.organization_id=:o AND g.workspace_id=:w AND "
+                    "g.human_identity_id=:owner AND g.capability='support.material.apply' "
+                    "AND g.status='active' AND g.effective_from<=CURRENT_TIMESTAMP "
+                    "AND (g.effective_until IS NULL OR g.effective_until>CURRENT_TIMESTAMP) "
+                    "AND g.grant_version=(SELECT max(v.grant_version) FROM "
+                    "workspace.support_professional_grants v WHERE "
+                    "v.organization_id=g.organization_id AND v.workspace_id=g.workspace_id "
+                    "AND v.grant_id=g.grant_id) ORDER BY g.grant_id LIMIT 201"
+                ),
+                "application_evidence": (
+                    "SELECT e.evidence_link_id,e.subject_id AS work_instance_id,"
+                    "e.subject_version AS work_instance_version,e.source_locator_id,"
+                    "l.locator_kind,l.locator_key,a.title AS source_title FROM "
+                    "workspace.evidence_links e JOIN workspace.source_locators l ON "
+                    "l.organization_id=e.organization_id AND l.workspace_id=e.workspace_id "
+                    "AND l.source_locator_id=e.source_locator_id JOIN "
+                    "workspace.source_versions s ON s.organization_id=e.organization_id "
+                    "AND s.workspace_id=e.workspace_id AND "
+                    "s.source_version_id=e.source_version_id JOIN workspace.source_artifacts a "
+                    "ON a.organization_id=s.organization_id AND a.workspace_id=s.workspace_id "
+                    "AND a.source_artifact_id=s.source_artifact_id WHERE "
+                    "e.organization_id=:o AND e.workspace_id=:w AND "
+                    "e.subject_type='work_instance' AND "
+                    "e.evidence_role='material_application' AND "
+                    "e.validity_status='verified' AND a.source_kind='field_document' "
+                    "AND a.status='active' ORDER BY e.created_at DESC LIMIT 201"
+                ),
+                "applications": (
+                    "SELECT material_application_id,admission_id,material_batch_id,"
+                    "material_batch_version,work_instance_id,work_instance_version,"
+                    "quantity,unit_code,evidence_link_id,recorded_at FROM "
+                    "workspace.material_applications WHERE organization_id=:o AND "
+                    "workspace_id=:w ORDER BY recorded_at DESC,material_application_id DESC "
+                    "LIMIT 201"
+                ),
                 "decisions": (
                     "SELECT a.admission_id,a.material_batch_id,a.material_batch_version,"
                     "a.work_instance_id,a.work_instance_version,a.outcome,a.reason_codes,"
+                    "a.delivered_quantity,a.delivered_unit,"
                     "a.admitted_at AS decided_at,"
                     "(a.material_batch_version=(SELECT max(b.version) FROM "
                     "workspace.material_batch_versions b WHERE b.organization_id=a.organization_id "
@@ -517,8 +556,12 @@ class MaterialAdmissionService:
                     "(SELECT max(version) FROM workspace.work_instance_versions WHERE "
                     "organization_id=:o AND workspace_id=:w AND work_instance_id=:work)"
                 ),
-                {"o": organization_id, "w": workspace_id, "batch": material_batch_id,
-                 "work": work_instance_id},
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "batch": material_batch_id,
+                    "work": work_instance_id,
+                },
             ).one()
             if (
                 latest_versions[0] != material_batch_version

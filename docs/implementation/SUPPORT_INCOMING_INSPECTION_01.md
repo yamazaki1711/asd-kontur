@@ -284,3 +284,28 @@ The prior four launchd plists are backed up privately under
 Focused exact-release tests passed 35/35; frontend typecheck, lint and build
 passed. Authenticated owner-screen acceptance and real field-material evidence
 remain unavailable, so Support and `ProductReady` remain incomplete.
+
+## Actual material application — source checkpoint
+
+The next Support capability records the *actual use* of an admitted batch on a
+specific work. It is deliberately separate from delivery, incoming inspection
+and admission. A qualified `support.material.apply` human must supply a
+verified, work-version-bound `material_application` evidence link from an
+active field document (design/delivery papers cannot stand in for actual use), exact
+quantity/unit and reason. The writer rechecks the latest batch/work/preflight,
+current admission, current work-material requirement and grant. It serializes
+each batch's quantity budget and rejects a cumulative application above the
+documented delivery; incompatible units and conflicting delivery bases fail
+closed. Idempotent replay returns the same record, and a workspace fence
+rejects late writes. The Support screen shows the source-linked actual-use
+records and warns when their admission basis later becomes historical.
+
+Migration `0137_support_material_application_basis` adds the admission and
+authority links and scoped writer/read policies to the existing kernel
+material-application table. Isolated PostgreSQL/API qualification covers
+idempotency, over-application, wrong units, delivery evidence used as a false
+work-use source, superseded preflight, reload and write fencing. This is a
+source checkpoint until an exact release is cut over; no public material
+application or owner field fact was created. A verified material-use evidence
+link must already exist, and material balance, work acceptance and KS/payment
+readiness are **not** established by this slice. `ProductReady=false`.
