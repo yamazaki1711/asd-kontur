@@ -47,12 +47,15 @@ def test_reset_archive_is_scoped_purged_and_verified(tmp_path):
         workspace_id=deleted_workspace, item_id="reset.zip", operation_id=uuid4()
     )
     assert receipt.outcome == AdapterOutcome.DELETED
-    assert adapter.find_residue(
-        workspace_id=deleted_workspace,
-        known_ids=frozenset({"reset.zip"}),
-        known_digests=frozenset(),
-        known_fragments=frozenset(),
-    ) == ()
+    assert (
+        adapter.find_residue(
+            workspace_id=deleted_workspace,
+            known_ids=frozenset({"reset.zip"}),
+            known_digests=frozenset(),
+            known_fragments=frozenset(),
+        )
+        == ()
+    )
     assert not deleted_dir.exists()
     assert (other_dir / "other.zip").read_bytes() == b"project B"
 

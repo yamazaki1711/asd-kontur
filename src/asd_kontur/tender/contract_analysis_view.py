@@ -441,9 +441,7 @@ class TenderContractAnalysisRepository:
             str(job["state"]) in {"queued", "leased", "running"} for job in reference_jobs
         )
         accepted_reference_digests = {
-            str(job["input_digest"])
-            for job in reference_jobs
-            if str(job["state"]) == "succeeded"
+            str(job["input_digest"]) for job in reference_jobs if str(job["state"]) == "succeeded"
         }
         reference_failed = any(
             str(job["state"]) in {"failed", "reconciliation_required"}
@@ -506,7 +504,9 @@ class TenderContractAnalysisRepository:
                 quote = str(raw.get("source_quote") or "")
                 if not locator_id or not quote:
                     continue
-                reference_id = str(uuid5(workspace_id, f"contract-reference:{source_id}:{locator_id}:{quote}"))
+                reference_id = str(
+                    uuid5(workspace_id, f"contract-reference:{source_id}:{locator_id}:{quote}")
+                )
                 if reference_id in seen_references:
                     continue
                 seen_references.add(reference_id)
@@ -1047,7 +1047,12 @@ def _empty_candidate_projection(*, status: str, gaps: list[str]) -> dict[str, An
         "assessment": None,
         "clauses": [],
         "attachment_references": [],
-        "reference_review": {"status": "not_routed", "reviewed_batches": 0, "scheduled_batches": 0, "unresolved_references": 0},
+        "reference_review": {
+            "status": "not_routed",
+            "reviewed_batches": 0,
+            "scheduled_batches": 0,
+            "unresolved_references": 0,
+        },
         "issues": [],
         "protocols": [],
         "disagreement_items": [],

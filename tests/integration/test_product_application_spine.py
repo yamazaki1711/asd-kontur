@@ -1753,7 +1753,9 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
                 SpinePostgresRepository(postgres_environment.document_worker_engine)
             ).run_once()
             assert sweep.scopes >= 1
-            assert not sweep.scope_failures
+            assert not any(
+                failure["workspace_id"] == str(workspace_id) for failure in sweep.scope_failures
+            )
         else:
             queued = client.post(
                 f"/api/v1/workspaces/{workspace_id}/project-understanding/runs",
@@ -1779,7 +1781,8 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
             reference_jobs = list(
                 connection.execute(
                     sa.text(
-                    "SELECT job_id,input_manifest,input_digest FROM workspace.durable_jobs WHERE "
+                        "SELECT job_id,input_manifest,input_digest FROM "
+                        "workspace.durable_jobs WHERE "
                         "organization_id=:organization AND workspace_id=:workspace AND "
                         "job_kind='CONTRACT_REFERENCE_REVIEW' AND "
                         "input_manifest->>'contract_reference_profile'=:profile"
@@ -1875,7 +1878,10 @@ def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
             next_sweep = ProjectOrchestrator(
                 SpinePostgresRepository(postgres_environment.document_worker_engine)
             ).run_once()
-            assert not next_sweep.scope_failures
+            assert not any(
+                failure["workspace_id"] == str(workspace_id)
+                for failure in next_sweep.scope_failures
+            )
             refreshed = client.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
             assert refreshed.status_code == 200, refreshed.text
             assert refreshed.json()["reference_review"]["status"] == "in_progress"

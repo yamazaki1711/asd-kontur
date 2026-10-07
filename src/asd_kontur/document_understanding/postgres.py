@@ -561,7 +561,11 @@ class IndustrialUnderstandingRepository:
                         "SELECT input_digest,result_digest FROM workspace.contract_analysis_results "
                         "WHERE organization_id=:o AND workspace_id=:w AND job_id=:job"
                     ),
-                    {"o": claimed.organization_id, "w": claimed.workspace_id, "job": claimed.job_id},
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "job": claimed.job_id,
+                    },
                 ).one()
                 if (
                     str(existing.input_digest) != claimed.input_digest

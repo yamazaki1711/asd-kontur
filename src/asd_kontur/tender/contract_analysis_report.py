@@ -365,9 +365,7 @@ def _gap_summary(value: Any) -> str:
         "CONTRACT_ANALYSIS_SOURCE_COVERAGE_INCOMPLETE": (
             "не весь исходный текст договора обработан"
         ),
-        "CONTRACT_REFERENCE_REVIEW_IN_PROGRESS": (
-            "ссылки на договорные документы ещё проверяются"
-        ),
+        "CONTRACT_REFERENCE_REVIEW_IN_PROGRESS": ("ссылки на договорные документы ещё проверяются"),
         "CONTRACT_REFERENCE_REVIEW_FAILED": (
             "часть ссылок на договорные документы не удалось проверить"
         ),

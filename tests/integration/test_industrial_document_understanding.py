@@ -278,6 +278,13 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
             "process": None,
             "assessment": None,
             "clauses": [],
+            "attachment_references": [],
+            "reference_review": {
+                "status": "not_routed",
+                "reviewed_batches": 0,
+                "scheduled_batches": 0,
+                "unresolved_references": 0,
+            },
             "issues": [],
             "protocols": [],
             "disagreement_items": [],

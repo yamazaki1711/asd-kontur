@@ -64,6 +64,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "DROP FUNCTION application.redact_destroyed_construction_object(uuid,uuid,uuid)"
-    )
+    op.execute("DROP FUNCTION application.redact_destroyed_construction_object(uuid,uuid,uuid)")

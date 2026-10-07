@@ -93,8 +93,7 @@ def _assert_inventory(
     if retain not in actual or not actual <= expected:
         raise RuntimeError("cleanup_authorized_inventory_conflict")
     if not allow_partial and (
-        actual != expected
-        or len(actual) != manifest["expected_authorized_workspace_count_before"]
+        actual != expected or len(actual) != manifest["expected_authorized_workspace_count_before"]
     ):
         raise RuntimeError("cleanup_authorized_inventory_not_exact")
     retained = next(row for row in rows if str(row.workspace_id) == retain)
@@ -137,15 +136,14 @@ def main() -> int:
         if key not in deployed:
             raise RuntimeError(f"cleanup_deployed_configuration_missing:{key}")
     environment = {
-        str(key): str(value)
-        for key, value in deployed.items()
-        if str(key).startswith("ASD_")
+        str(key): str(value) for key, value in deployed.items() if str(key).startswith("ASD_")
     }
     if make_url(environment["ASD_DATABASE_URL"]).database != manifest["database_name"]:
         raise RuntimeError("cleanup_deployed_database_mismatch")
-    if Path(environment["ASD_OBJECT_STORE_ROOT"]).resolve() != Path(
-        str(manifest["object_store_root"])
-    ).resolve():
+    if (
+        Path(environment["ASD_OBJECT_STORE_ROOT"]).resolve()
+        != Path(str(manifest["object_store_root"])).resolve()
+    ):
         raise RuntimeError("cleanup_deployed_object_root_mismatch")
     # Construct settings from the pinned service configuration, never from an
     # operator shell that might point at another database or storage root.

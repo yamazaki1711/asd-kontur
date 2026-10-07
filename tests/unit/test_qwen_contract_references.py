@@ -51,9 +51,7 @@ def test_reviewer_persists_only_exact_citation_and_admitted_match(
             }
         )
 
-    monkeypatch.setattr(
-        "asd_kontur.tender.qwen_contract_references._complete", complete
-    )
+    monkeypatch.setattr("asd_kontur.tender.qwen_contract_references._complete", complete)
     result = QwenContractReferenceReviewer("http://127.0.0.1:8765/v1").review(
         [
             {

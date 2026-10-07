@@ -81,9 +81,7 @@ def test_search_carries_bounded_same_row_context_without_crossing_source(
 
     monkeypatch.setattr(gateway, "Session", Session)
     query = gateway.ProfessionalAssistantKnowledgeQuery(cast(Engine, object()))
-    items = query._workspace_search(
-        organization_id, workspace_id, "Tender", "service pipe", 3
-    )
+    items = query._workspace_search(organization_id, workspace_id, "Tender", "service pipe", 3)
 
     assert [item["source"]["source_id"] for item in items] == [
         str(description_id),

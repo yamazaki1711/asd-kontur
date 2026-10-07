@@ -297,11 +297,11 @@ def test_revised_contract_preserves_unedited_run_styles_across_split_clause() ->
     document = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         f'<w:document xmlns:w="{_WORD_NS}"><w:body><w:p>'
-        f'<w:r><w:rPr><w:b/></w:rPr><w:t>{prefix}</w:t></w:r>'
-        '<w:r><w:t>оплата по </w:t></w:r>'
-        '<w:r><w:t>решению Заказчика</w:t></w:r>'
-        f'<w:r><w:rPr><w:i/></w:rPr><w:t>{suffix}</w:t></w:r>'
-        '</w:p></w:body></w:document>'
+        f"<w:r><w:rPr><w:b/></w:rPr><w:t>{prefix}</w:t></w:r>"
+        "<w:r><w:t>оплата по </w:t></w:r>"
+        "<w:r><w:t>решению Заказчика</w:t></w:r>"
+        f"<w:r><w:rPr><w:i/></w:rPr><w:t>{suffix}</w:t></w:r>"
+        "</w:p></w:body></w:document>"
     ).encode()
     source_buffer = io.BytesIO()
     with zipfile.ZipFile(source_buffer, "w") as package:

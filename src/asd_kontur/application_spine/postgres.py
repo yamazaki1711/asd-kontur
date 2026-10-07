@@ -6533,9 +6533,7 @@ class SpinePostgresRepository:
         current_contract_source_ids = [
             str(source["source_version_id"])
             for source in sources
-            if "contract" in {
-                str(value) for value in source.get("current_document_roles", ())
-            }
+            if "contract" in {str(value) for value in source.get("current_document_roles", ())}
         ]
         self._supersede_queued_contract_reference_inventories(
             session,
@@ -6548,9 +6546,10 @@ class SpinePostgresRepository:
             return []
         scheduled: list[dict[str, object]] = []
         for source in sources:
-            if "contract" not in {
-                str(value) for value in source.get("current_document_roles", ())
-            } or int(source["native_locator_count"]) < 1:
+            if (
+                "contract" not in {str(value) for value in source.get("current_document_roles", ())}
+                or int(source["native_locator_count"]) < 1
+            ):
                 continue
             source_version_id = UUID(str(source["source_version_id"]))
             rows = [
@@ -6598,13 +6597,17 @@ class SpinePostgresRepository:
                     f"contract-references:{source_version_id}:"
                     f"{CONTRACT_REFERENCE_PROFILE}:{batch_digest}"
                 )
-                existing = session.execute(
-                    sa.text(
-                        "SELECT job_id,state FROM workspace.durable_jobs WHERE "
-                        "organization_id=:o AND workspace_id=:w AND idempotency_key=:key"
-                    ),
-                    {"o": organization_id, "w": workspace_id, "key": key},
-                ).mappings().one_or_none()
+                existing = (
+                    session.execute(
+                        sa.text(
+                            "SELECT job_id,state FROM workspace.durable_jobs WHERE "
+                            "organization_id=:o AND workspace_id=:w AND idempotency_key=:key"
+                        ),
+                        {"o": organization_id, "w": workspace_id, "key": key},
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
                 if existing is not None:
                     scheduled.append(
                         {"job_id": str(existing["job_id"]), "state": str(existing["state"])}
